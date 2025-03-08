@@ -31,6 +31,7 @@ let requiredModules = [ // services + layout views + system views
   'menuicons',
   'filePanel',
   'terminal',
+  'statusBar',
   'settings',
   'pluginManager',
   'tabs',
@@ -71,13 +72,15 @@ let requiredModules = [ // services + layout views + system views
   'vyperCompilationDetails',
   'contractflattener',
   'solidity-script',
-  'openaigpt',
   'solcoder',
   'home',
   'doc-viewer',
   'doc-gen',
   'remix-templates',
-  'solhint'
+  'solhint',
+  'pinnedPanel',
+  'pluginStateLogger',
+  'remixGuide'
 ]
 
 
@@ -102,7 +105,7 @@ const isVM = (name) => {
 }
 
 export function isNative(name) {
-  
+
   // nativePlugin allows to bypass the permission request
   const nativePlugins = [
     'vyper',
@@ -116,6 +119,7 @@ export function isNative(name) {
     'solhint',
     'solidityUnitTesting',
     'layout',
+    'statusBar',
     'notification',
     'hardhat-provider',
     'ganache-provider',
@@ -156,7 +160,6 @@ export class RemixAppManager extends PluginManager {
     if (Registry.getInstance().get('platform').api.isDesktop()) {
       requiredModules = [...requiredModules, 'fs', 'electronTemplates', 'isogit', 'remix-templates', 'electronconfig', 'xterm', 'compilerloader', 'ripgrep']
     }
-
   }
 
   async canActivatePlugin(from, to) {

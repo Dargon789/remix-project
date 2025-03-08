@@ -1,5 +1,6 @@
 // eslint-disable-next-line no-use-before-define
 import React, { Fragment, useEffect, useReducer, useState } from 'react'
+import semver from 'semver'
 import { FormattedMessage } from 'react-intl'
 import { ModalDialog } from '@remix-ui/modal-dialog'
 // eslint-disable-next-line no-unused-vars
@@ -74,18 +75,42 @@ export function RunTabUI(props: RunTabProps) {
     storage: null,
     contract: null
   })
-  runTabInitialState.selectExEnv = plugin.blockchain.getProvider()
-  const [runTab, dispatch] = useReducer(runTabReducer, runTabInitialState)
+  const initialState = props.initialState || runTabInitialState
+
+  initialState.selectExEnv = plugin.blockchain.getProvider()
+  const [runTab, dispatch] = useReducer(runTabReducer, initialState)
   const REACT_API = { runTab }
   const currentfile = plugin.config.get('currentFile')
+  const [solcVersion, setSolcVersion] = useState<{version: string, canReceive: boolean}>({ version: '', canReceive: true })
+
+  const getVersion = () => {
+    let version = '0.8.25'
+    try {
+      const regVersion = window.location.href.match(/soljson-v(.*)\+commit/g)
+      if (regVersion && regVersion[1]) version = regVersion[1]
+      if (semver.lt(version, '0.6.0')) {
+        setSolcVersion({ version: version, canReceive: false })
+      } else {
+        setSolcVersion({ version: version, canReceive: true })
+      }
+    } catch (e) {
+      setSolcVersion({ version, canReceive: true })
+      console.log(e)
+    }
+  }
 
   useEffect(() => {
-    initRunTab(plugin)(dispatch)
-    plugin.onInitDone()
+    if (!props.initialState) {
+      initRunTab(plugin, true)(dispatch)
+      plugin.onInitDone()
+    } else {
+      initRunTab(plugin, false)(dispatch)
+    }
   }, [plugin])
 
   useEffect(() => {
     plugin.onReady(runTab)
+    plugin.call('pluginStateLogger', 'logPluginState', 'udapp', runTab)
   }, [REACT_API])
 
   useEffect(() => {
@@ -299,6 +324,9 @@ export function RunTabUI(props: RunTabProps) {
             isValidProxyAddress={isValidProxyAddress}
             isValidProxyUpgrade={isValidProxyUpgrade}
             proxy={runTab.proxy}
+            solCompilerVersion={solcVersion}
+            setCompilerVersion={setSolcVersion}
+            getCompilerVersion={getVersion}
           />
           <RecorderUI
             plugin={plugin}
@@ -323,6 +351,8 @@ export function RunTabUI(props: RunTabProps) {
             mainnetPrompt={mainnetPrompt}
             runTransactions={executeTransactions}
             sendValue={runTab.sendValue}
+            solcVersion={solcVersion}
+            getVersion={getVersion}
             getFuncABIInputs={getFuncABIValues}
             exEnvironment={runTab.selectExEnv}
             editInstance={(instance) => {
