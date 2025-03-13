@@ -52,7 +52,7 @@
     "axios": "^1.7.7",
     "byline": "^5.0.0",
     "chokidar": "^3.5.3",
-    "express": "^4.21.1",
+    "express": "^5.0.0",
     "isomorphic-git": "^1.24.2",
     "node-pty": "^1.0.0",
     "semver": "^7.6.1"
