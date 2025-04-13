@@ -565,6 +565,14 @@
     "@remixproject/plugin-api" "0.3.41"
     "@remixproject/plugin-utils" "0.3.41"
 
+"@remixproject/engine@0.3.208":
+  version "0.3.208"
+  resolved "https://registry.yarnpkg.com/@remixproject/engine/-/engine-0.3.208.tgz#b2495dabb347075a15a1c2f7a61b8ad0b71e8a25"
+  integrity sha512-kEWHrkQZUbik4uAVotFRVWA1+Za5m1EUYsKYaFLdroQHIUzuiWZjgYfxDixFb/hGYUZy2GPLzwTkNfJnRmSSaQ==
+  dependencies:
+    "@remixproject/plugin-api" "0.3.208"
+    "@remixproject/plugin-utils" "0.3.208"
+
 "@remixproject/engine@0.3.41":
   version "0.3.41"
   resolved "https://registry.yarnpkg.com/@remixproject/engine/-/engine-0.3.41.tgz#71b447d07dd52ec7645c6538f64caa638f3d9702"
