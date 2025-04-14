@@ -37,7 +37,7 @@
     "deep-equal": "^2.2.3",
     "ethers": "^5.4.2",
     "ethjs-util": "^0.1.6",
-    "express-ws": "^4.0.0",
+    "express-ws": "^5.0.2",
     "merge": "^2.1.1",
     "string-similarity": "^4.0.4",
     "time-stamp": "^2.2.0",
