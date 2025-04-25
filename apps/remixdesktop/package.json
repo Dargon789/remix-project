@@ -47,7 +47,7 @@
     "@remixproject/plugin": "0.3.208",
     "@remixproject/plugin-api": "^0.3.38",
     "@remixproject/plugin-electron": "0.3.41",
-    "@vscode/ripgrep": "^1.15.6",
+    "@vscode/ripgrep": "^1.15.11",
     "add": "^2.0.6",
     "axios": "^1.8.3",
     "byline": "^5.0.0",
