@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@ethereumjs/util": "9.0.3",
-    "async": "^2.1.2",
+    "async": "^3.2.6",
     "create-hash": "^1.2.0",
     "ethers": "^6.13.6",
     "ethjs-util": "^0.1.6",
