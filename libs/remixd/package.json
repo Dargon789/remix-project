@@ -29,7 +29,7 @@
   "dependencies": {
     "@remixproject/plugin": "0.3.33",
     "@remixproject/plugin-api": "0.3.33",
-    "@remixproject/plugin-utils": "0.3.33",
+    "@remixproject/plugin-utils": "0.3.208",
     "@remixproject/plugin-ws": "0.3.33",
     "@remix-project/remix-solidity": "^0.5.36",
     "axios": "1.8.3",
