@@ -16,6 +16,6 @@
   },
   "devDependencies": {
     "http-server": "^14.1.1",
-    "nightwatch": "2.3"
+    "nightwatch": "3.8.0"
   }
 }
