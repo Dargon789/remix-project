@@ -21,7 +21,7 @@
   "devDependencies": {
     "@remix-project/remix-solidity": "^0.5.36",
     "@types/chai": "^4.3.4",
-    "typescript": "^4.9.3"
+    "typescript": "^5.8.3"
   },
   "dependencies": {
     "@ethereum-waffle/chai": "^3.4.4",
