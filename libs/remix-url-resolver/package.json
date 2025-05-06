@@ -32,13 +32,13 @@
   "devDependencies": {
     "@types/chai": "^4.1.7",
     "@types/mocha": "^5.2.5",
-    "@types/node": "^18.16.1",
+    "@types/node": "^22.14.1",
     "chai": "^4.2.0",
     "mocha": "^5.1.0",
     "remix-plugin": "0.0.1-alpha.2",
     "ts-node": "^7.0.1",
     "tslint": "^5.11.0",
-    "typescript": "^3.1.6"
+    "typescript": "^5.8.3"
   },
   "typings": "src/index.d.ts",
   "gitHead": "326585ffcef3a8846f2a1badf10beab1f73ee986"
