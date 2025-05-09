@@ -24,7 +24,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@ethereum-waffle/chai": "^3.4.4",
+    "@ethereum-waffle/chai": "^4.0.8",
     "@remix-project/remix-simulator": "^0.2.50",
     "chai": "^5.1.2",
     "ethers": "^6.13.6",
