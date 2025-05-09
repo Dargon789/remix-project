@@ -34,7 +34,7 @@
     "@types/mocha": "^5.2.5",
     "@types/node": "^22.14.1",
     "chai": "^4.2.0",
-    "mocha": "^5.1.0",
+    "mocha": "^11.2.1",
     "remix-plugin": "0.0.1-alpha.2",
     "ts-node": "^10.9.2",
     "tslint": "^5.11.0",
