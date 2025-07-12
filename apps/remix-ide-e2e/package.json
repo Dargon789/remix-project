@@ -11,13 +11,13 @@
     "@openzeppelin/contracts-upgradeable": "^5.0.2",
     "@openzeppelin/upgrades-core": "^1.30.0",
     "@openzeppelin/wizard": "^0.4.0",
-    "@remix-project/remixd": "../../dist/libs/remixd",
+    "@remix-project/remixd": "0.6.47",
     "deep-equal": "^1.0.1",
     "tree-kill": "^1.2.2",
     "adm-zip": "^0.5.16"
   },
   "devDependencies": {
     "http-server": "^14.1.1",
-    "nightwatch": "2.3"
+    "nightwatch": "3.3.8"
   }
 }
