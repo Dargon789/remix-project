@@ -48,7 +48,7 @@
     "electron": "^30.0.0",
     "electron-builder": "^26.0.12",
     "electron-devtools-installer": "^4",
-    "esbuild": "^0.23.1",
+    "esbuild": "^0.25.0",
     "nightwatch": "2.3",
     "node-abi": "^4.9.0",
     "node-loader": "^2.0.0",
@@ -73,7 +73,7 @@
     "@types/ws": "^8.5.13",
     "@vscode/ripgrep": "^1.15.6",
     "add": "^2.0.6",
-    "axios": "^1.8.2",
+    "axios": "^1.8.3",
     "byline": "^5.0.0",
     "cbor": "^10.0.3",
     "chokidar": "^3.5.3",
@@ -88,8 +88,8 @@
     "node-pty-prebuilt-multiarch": "^0.10.1-pre.5",
     "octokit": "^3.1.2",
     "puppeteer": "^24.3.0",
-    "semver": "^7.5.4",
-    "ws": "^8.18.0"
+    "semver": "^7.6.0",
+    "ws": "^8.18.1"
   },
   "optionalDependencies": {
     "@remix-project/remix-ws-templates": "^1.0.27"
