@@ -35,7 +35,7 @@
     "ethjs-util": "^0.1.6",
     "express": "^4.16.3",
     "express-ws": "^4.0.0",
-    "merge": "^1.2.0",
+    "merge": "^2.1.1",
     "rlp": "^3.0.0",
     "string-similarity": "^4.0.4",
     "time-stamp": "^2.0.0",
@@ -50,9 +50,9 @@
     "@babel/preset-es2015": "latest",
     "@babel/preset-es2017": "latest",
     "@babel/preset-stage-0": "^7.0.0",
-    "babel-eslint": "^7.1.1",
+    "babel-eslint": "^10.1.0",
     "babelify": "^10.0.0",
-    "mocha": "^5.2.0"
+    "mocha": "^11.0.1"
   },
   "publishConfig": {
     "access": "public"
