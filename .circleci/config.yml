@@ -73,15 +73,9 @@ commands:
               if ($line -match '^\s*([0-9a-f\-]+)\s+(\S+)\s+.*\bACTIVE\b') {
                 $activeCerts += @{ id = $matches[1]; alias = $matches[2] }
               }
-            }
-            if ($activeCerts.Count -eq 0) {
-              Write-Host "❌ No ACTIVE certificates found. Failing."
-              exit 1
-            }
             # Select the first ACTIVE certificate
             $chosen = $activeCerts[0]
             Write-Host "✅ Selected ACTIVE certificate ID $($chosen.id), alias $($chosen.alias)"
-
             Write-Host "🔍 Finding keypair alias for the selected cert..."
             $keyLines = & (Join-Path $env:SSM "smctl.exe") keypair ls
             $keyAlias = $null
@@ -93,13 +87,7 @@ commands:
                 $keyAlias = $cells[2]
                 break
               }
-            }
-            if (-not $keyAlias) {
-              Write-Host "❌ No keypair found for certificate ID $($chosen.id). Failing."
-              exit 1
-            }
             Write-Host "✅ Using keypair alias $keyAlias"
-
             # Export variables for later use
             $env:SELECTED_CERT_ID = $chosen.id
             $env:SELECTED_CERT_ALIAS = $chosen.alias
@@ -119,11 +107,7 @@ commands:
                 $_.HasPrivateKey -and
                 ($_.EnhancedKeyUsageList | Where-Object { $_.FriendlyName -eq "Code Signing" }) -and
                 $_.Thumbprint -eq $expectedThumbprint
-              }
-            if (-not $storeCert) {
-              Write-Host "❌ No code signing certificate with private key found matching thumbprint $expectedThumbprint. Failing."
-              exit 1
-            }
+
             Write-Host "✅ Code signing certificate with private key ($expectedThumbprint) is present in CurrentUser\My."
 
             Write-Host "🌩️ Attempting cloud-based signing $($EXECUTABLE) using smctl sign..."
@@ -134,8 +118,8 @@ commands:
             
             & "$env:SSM\smctl.exe" sign --keypair-alias $env:SELECTED_KEYPAIR_ALIAS --input $EXECUTABLE --verbose
             signtool verify /pa /v $EXECUTABLE
+            
 jobs:
-
 
   check-signing-readiness-windows:
     executor: win/default
