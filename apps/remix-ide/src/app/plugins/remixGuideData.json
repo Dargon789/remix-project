@@ -1,44 +1,377 @@
 {
-  "logo": "/assets/img/YouTubeLogo.webp",
   "title": "Remix Guide",
-  "description": "Streamlined access to categorized video tutorials for mastering Remix IDE. From fundamentals to advanced techniques, level up your development skills with ease.",
+  "description": "Watch videos to learn Remix and Solidity!",
+ 
   "sections": [
     {
-      "title": "Basics",
-      "hScrollable": "true",
+      "title": "Remix Essentials",
+      "hScrollable": "false",
       "cells": [
         {
-          "title": "first item",
+          "title": "Intro to Remix's Interface",
+          "titleTooltip":  "Learn how Remix is organized and some essential features",
           "tagList": [
-            "L2",
-            "AI" 
+            "Remix",
+            "Beginner" 
           ],
-          "authorURL": "EatTheBlocks",
+          "authorURL": "",
           "expandViewElement": {
-            "videoID": "vH8T3In6ZkE",
-            "logo": "https://yt3.ggpht.com/9NFZbC9mkA152sSWJJgNBls6GlBdknsF-9gi6ZVk_xsHjmc82j3q1Pd5a--GCnOKUrP-YtNbHls=s48-c-k-c0x00ffffff-no-rj"
+            "videoID": "XqxIsdWbaZY"
           }
         },
         {
-          "title": "second item",
+          "title": "Basic Workflows",
+          "titleTooltip": "Learn about choosing a template, checking compiler errors, grabbing the ABI, deploying to local and public chains, and making a basic DApp.",
           "tagList": [
-            "solidity",
-            "AI" 
+            "Remix",
+            "Beginner"
           ],
           "expandViewElement": {
-            "videoID": "vH8T3In6ZkE",
-            "logo": "https://yt3.ggpht.com/9NFZbC9mkA152sSWJJgNBls6GlBdknsF-9gi6ZVk_xsHjmc82j3q1Pd5a--GCnOKUrP-YtNbHls=s48-c-k-c0x00ffffff-no-rj"
+            "videoID": "BeudEn6XTvQ"
           }
         },
         {
-          "title": "third item",
+          "title": "Using AI Tools in Remix",
+          "titleTooltip": "Find out how RemixAI can help you code.",
           "tagList": [
-            "vyper",
-            "AI" 
+            "Remix",
+            "Beginner",
+            "AI"
           ],
           "expandViewElement": {
-            "videoID": "vH8T3In6ZkE",
-            "logo": "https://yt3.ggpht.com/9NFZbC9mkA152sSWJJgNBls6GlBdknsF-9gi6ZVk_xsHjmc82j3q1Pd5a--GCnOKUrP-YtNbHls=s48-c-k-c0x00ffffff-no-rj"
+            "videoID": "wz9obdmCvVo"
+          }
+        },
+        {
+          "title": "Debugger",
+          "titleTooltip": "Learn to use the Remix Debugger.",
+          "tagList": [
+            "Remix",
+            "Plugins"
+          ],
+          "expandViewElement": {
+            "videoID": "kn16HOJbKKQ"
+          }
+        },
+        {
+          "title": "Running Scripts in Remix",
+          "titleTooltip": "Automate Remix with JS/TS scripts.",
+          "tagList": [
+            "Remix",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "kc7GJzgi4HU"
+          }
+        }
+      ]
+    },
+    {
+      "title": "File Management and Version Control",
+      "hScrollable": "false",
+      "cells": [
+        {
+          "title": "Loading Files for Editing",
+          "titleTooltip": "Learn how to clone repos, import files, and more file loading tricks.",
+          "tagList": [
+            "Remix",
+            "Beginner" 
+          ],
+          "authorURL": "",
+          "expandViewElement": {
+            "videoID": "QMS2-mDI-vw"
+          }
+        },
+        {
+          "title": "Opening Dependencies",
+          "titleTooltip": "Learn the best practices of loading dependencies in Remix.",
+          "tagList": [
+            "Remix",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "WNeNJcIFSws"
+          }
+        },
+        {
+          "title": "Using the Remix Editor",
+          "titleTooltip": "Learn the tricks of the Remix Editor: autocomplete, quickfixes, importing, gas estimates, and more.",
+          "tagList": [
+            "Remix",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "K2H3Lx9hTlk"
+          }
+        },
+        {
+          "title": "Git & Version Control",
+          "titleTooltip": "Its important to use an external Repo to back up your work.  Learn about Git, Github integration and version control in Remix.",
+          "tagList": [
+            "Remix",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "LNKv3ysoVeE"
+          }
+        },
+        {
+          "title": "Connect to the Filesystem",
+          "titleTooltip": "Connect Remix to a specific folder on your hard drive. ",
+          "tagList": [
+            "Remix"
+          ],
+          "expandViewElement": {
+            "videoID": "Sa3KXUxPJ9s"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Deploying, Verifying &  Debugging",
+      "hScrollable": "false",
+      "cells": [
+        {
+          "title": "Deploy & Run",
+          "titleTooltip": "Learn to use the Deploy & Run plugin including using the AtAddress feature, use of low level interactions and pinning contracts.",
+          "tagList": [
+            "Solidity",
+            "Plugins"
+          ],
+          "expandViewElement": {
+            "videoID": "f8DnHN0v4fw"
+          }
+        },
+        {
+          "title": "Verifying Contracts",
+          "titleTooltip": "Learn how to use the Contract Verification plugin.",
+          "tagList": [
+            "Beginner",
+            "Plugins"
+          ],
+          "expandViewElement": {
+            "videoID": "fupWp7ONeKY"
+          }
+        },
+        {
+          "title": "Generate a Frontend",
+          "titleTooltip": "QuickDapp is a tool for quickly making a simple front end to a smart contract. A great tool for hackathons!",
+          "tagList": [
+            "Beginner",
+            "Plugins"
+          ],
+          "expandViewElement": {
+            "videoID": "l5qVj1xLm8s"
+          }
+        },
+        {
+          "title": "Remix VM & Forking",
+          "titleTooltip": "The Remix VM is the local in-browser test blockchain.  Learn about its features and how to fork and how to share the chain's state.",
+          "tagList": [
+            "Solidity",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "oYkXApf36wk"
+          }
+        },
+        {
+          "title": "Transaction Recorder",
+          "titleTooltip": "Learn how to record and replay transactions.",
+          "tagList": [
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "GchvmIRSxUo"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Advanced",
+      "hScrollable": "false",
+      "cells": [
+        {
+          "title": "Upgradeable Proxy",
+          "titleTooltip": "Learn how to deploy and upgrade contracts that use the UUPS pattern. ",
+          "tagList": [
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "t0__aGWSaT0"
+          }
+        },
+        {
+          "title": "Static Analysis",
+          "titleTooltip": "Use Slither and Solhint in Remix.",
+          "tagList": [
+            "Solidity",
+            "Plugins"
+          ],
+          "expandViewElement": {
+            "videoID": "1CigVWCw7dI"
+          }
+        },
+        {
+          "title": "HardHat and Foundry",
+          "titleTooltip": "Use Remix on a HardHat or Foundry project and a local Hardhat or Anvil node.",
+          "tagList": [
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "ZN7CTfy4BDg"
+          }
+        },
+        {
+          "title": "Circom",
+          "titleTooltip": "Learn how to use the Circom compiler plugin so you can begin your journey into writing circuits for Zero Knowledge Proofs (ZKP).",
+          "tagList": [
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "oRTpBhMf3iE"
+          }
+        },
+        {
+          "title": "Vyper and Others",
+          "titleTooltip": "Learn to use the Vyper compiler.  Also introduces the Cairo compiler and Stylus for Rust contracts.",
+          "tagList": [
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "vC7alvMe8vY"
+          }
+        }
+      ]
+    },
+
+    {
+      "title": "Solidity Basics",
+      "hScrollable": "false",
+      "cells": [
+        {
+          "title": "Hello World",
+          "tagList": [
+            "Solidity",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "g_t0Td4Kr6M"
+          }
+        },
+        {
+          "title": "Events",
+          "tagList": [
+            "Solidity",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "nopo9KwwRg4"
+          }
+        },
+        {
+          "title": "Functions",
+          "tagList": [
+            "Solidity",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "71cmPaD_AnQ"
+          }
+        },
+        {
+          "title": "Payable Functions",
+          "tagList": [
+            "Solidity",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "yD9EL1QN40Q"
+          }
+        },
+        {
+          "title": "State Variables",
+          "tagList": [
+            "Solidity",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "4XQsHBJScEk"
+          }
+        },
+        {
+          "title": "Gas & Gas Price",
+          "tagList": [
+            "Solidity",
+            "Beginner"
+          ],
+          "expandViewElement": {
+            "videoID": "oTS9uxU6cAM"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Low Level Solidity Videos",
+      "hScrollable": "false",
+      "cells": [
+        {
+          "title": "EVM Storage",
+          "tagList": [
+            "EVM",
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "vTeav5Rinco"
+          }
+        },
+        {
+          "title": "Transient Storage",
+          "tagList": [
+            "EVM",
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "0-hiB5I39Mk"
+          }
+        },
+        {
+          "title": "Bit Masking",
+          "tagList": [
+            "EVM",
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "luCjY2IQEuw"
+          }
+        },
+        {
+          "title": "Structs in Storage",
+          "tagList": [
+            "EVM",
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "xWkOlxerVJw"
+          }
+        },
+        {
+          "title": "Arrays in Storage",
+          "tagList": [
+            "EVM",
+            "Solidity",
+            "Advanced"
+          ],
+          "expandViewElement": {
+            "videoID": "74vyHBD_L1E"
           }
         }
       ]

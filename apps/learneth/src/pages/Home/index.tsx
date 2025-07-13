@@ -1,9 +1,9 @@
-import React, {useEffect} from 'react'
-import {Link} from 'react-router-dom'
+import React from 'react'
+import { Link } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
-import {useAppDispatch, useAppSelector} from '../../redux/hooks'
+import { useAppSelector } from '../../redux/hooks'
 import RepoImporter from '../../components/RepoImporter'
 import './index.css'
 
@@ -15,8 +15,7 @@ function HomePage(): JSX.Element {
     setOpenKeys(isOpen(key) ? openKeys.filter((item) => item !== key) : [...openKeys, key])
   }
 
-  const dispatch = useAppDispatch()
-  const {list, detail, selectedId} = useAppSelector((state) => state.workshop)
+  const { list, detail, selectedId } = useAppSelector((state) => state.workshop)
 
   const selectedRepo = detail[selectedId]
 
@@ -25,12 +24,6 @@ function HomePage(): JSX.Element {
     2: 'Intermediate',
     3: 'Advanced',
   }
-
-  useEffect(() => {
-    dispatch({
-      type: 'workshop/init',
-    })
-  }, [])
 
   return (
     <div className="App">
@@ -59,7 +52,7 @@ function HomePage(): JSX.Element {
                     >
                       {selectedRepo.entities[item.id].name}
                     </span>
-                    <Link to={`/list?id=${item.id}`} className="text-decoration-none float-right">
+                    <Link onClick={() => (window as any)._paq.push(['trackEvent', 'learneth', 'start_workshop', selectedRepo.entities[item.id].name])} to={`/list?id=${item.id}`} className="text-decoration-none float-right">
                       <i className="fas fa-play-circle fa-lg" />
                     </Link>
                   </div>

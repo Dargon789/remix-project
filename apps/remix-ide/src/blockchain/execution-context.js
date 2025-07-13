@@ -1,6 +1,6 @@
 /* global ethereum */
 'use strict'
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 import { execution } from '@remix-project/remix-lib'
 import EventManager from '../lib/events'
 import { bytesToHex } from '@ethereumjs/util'
@@ -23,21 +23,22 @@ web3.eth.setConfig(config)
 export class ExecutionContext {
   constructor () {
     this.event = new EventManager()
-    this.executionContext = 'vm-cancun'
+    this.executionContext = 'vm-prague'
     this.lastBlock = null
     this.blockGasLimitDefault = 4300000
     this.blockGasLimit = this.blockGasLimitDefault
-    this.currentFork = 'cancun'
+    this.currentFork = 'prague'
     this.mainNetGenesisHash = '0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3'
     this.customNetWorks = {}
     this.blocks = {}
     this.latestBlockNumber = 0
     this.txs = {}
     this.customWeb3 = {} // mapping between a context name and a web3.js instance
+    this.isConnected = false
   }
 
   init (config) {
-    this.executionContext = 'vm-cancun'
+    this.executionContext = 'vm-prague'
     this.event.trigger('contextChanged', [this.executionContext])
   }
 
@@ -47,10 +48,6 @@ export class ExecutionContext {
 
   getProviderObject () {
     return this.customNetWorks[this.executionContext]
-  }
-
-  getSelectedAddress () {
-    return injectedProvider ? injectedProvider.selectedAddress : null
   }
 
   getCurrentFork () {
@@ -81,40 +78,58 @@ export class ExecutionContext {
           callback && callback('No provider set')
           return reject('No provider set')
         }
-        const cb = (err, id) => {
-          let name = null
+        const cb = async (err, id) => {
+          let name = 'Custom'
+          let networkNativeCurrency = { name: "Ether", symbol: "ETH", decimals: 18 }
           if (err) name = 'Unknown'
           // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md
           else if (id === 1) name = 'Main'
-          else if (id === 3) name = 'Ropsten'
-          else if (id === 4) name = 'Rinkeby'
-          else if (id === 5) name = 'Goerli'
-          else if (id === 42) name = 'Kovan'
           else if (id === 11155111) name = 'Sepolia'
-          else name = 'Custom'
-  
+          else {
+            let networkDetails = localStorage.getItem('networkDetails')
+            if (!networkDetails) networkDetails = '{}'
+            networkDetails = JSON.parse(networkDetails)
+            if (networkDetails[id]) {
+              name = networkDetails[id].name
+              networkNativeCurrency = networkDetails[id].nativeCurrency
+            } else {
+              const response = await fetch('https://chainid.network/chains.json')
+              if (response.ok) {
+                const networks = await response.json()
+                const connectedNetwork = networks.find((n) => n.chainId === id)
+                if (connectedNetwork) {
+                  name = connectedNetwork.name
+                  networkNativeCurrency = connectedNetwork.nativeCurrency
+                  networkDetails[id] = { name, nativeCurrency:  networkNativeCurrency}
+                  localStorage.setItem('networkDetails', JSON.stringify(networkDetails))
+                }
+              }
+            }
+          }
+        
           if (id === 1) {
             web3.eth.getBlock(0).then((block) => {
               if (block && block.hash !== this.mainNetGenesisHash) name = 'Custom'
-              callback && callback(err, { id, name, lastBlock: this.lastBlock, currentFork: this.currentFork })
-              return resolve({ id, name, lastBlock: this.lastBlock, currentFork: this.currentFork })
+              callback && callback(err, { id, name, lastBlock: this.lastBlock, currentFork: this.currentFork, networkNativeCurrency })
+              return resolve({ id, name, lastBlock: this.lastBlock, currentFork: this.currentFork, networkNativeCurrency })
             }).catch((error) => {
-              callback && callback(error)
-              return reject(error)
+              // Rabby wallet throws an error at this point. We are in that case unable to check the genesis hash.
+              callback && callback(err, { id, name, lastBlock: this.lastBlock, currentFork: this.currentFork, networkNativeCurrency })
+              return resolve({ id, name, lastBlock: this.lastBlock, currentFork: this.currentFork, networkNativeCurrency })
             })
           } else {
-            callback && callback(err, { id, name, lastBlock: this.lastBlock, currentFork: this.currentFork })
-            return resolve({ id, name, lastBlock: this.lastBlock, currentFork: this.currentFork })
+            callback && callback(err, { id, name, lastBlock: this.lastBlock, currentFork: this.currentFork, networkNativeCurrency })
+            return resolve({ id, name, lastBlock: this.lastBlock, currentFork: this.currentFork, networkNativeCurrency })
           }
         }
-        web3.eth.net.getId().then(id=>cb(null,parseInt(id))).catch(err=>cb(err))
+        web3.eth.net.getId().then(async (id) => await cb(null, parseInt(id))).catch(err => cb(err))
       }
     })
   }
 
   removeProvider (name) {
     if (name && this.customNetWorks[name]) {
-      if (this.executionContext === name) this.setContext('vm-cancun', null, null, null)
+      if (this.executionContext === name) this.setContext('vm-prague', null, null, null)
       delete this.customNetWorks[name]
       this.event.trigger('removeProvider', [name])
     }
@@ -123,8 +138,11 @@ export class ExecutionContext {
   addProvider (network) {
     if (network && network.name && !this.customNetWorks[network.name]) {
       this.customNetWorks[network.name] = network
-      this.event.trigger('addProvider', [network])
     }
+  }
+
+  getAllProviders () {
+    return this.customNetWorks
   }
 
   internalWeb3 () {
@@ -143,15 +161,21 @@ export class ExecutionContext {
     if (!confirmCb) confirmCb = () => { /* Do nothing. */ }
     if (!infoCb) infoCb = () => { /* Do nothing. */ }
     if (this.customNetWorks[context]) {
+      this.isConnected = false
       var network = this.customNetWorks[context]
-      await network.init()
-      this.currentFork = network.fork
-      this.executionContext = context
-      // injected
-      web3.setProvider(network.provider)
-      await this._updateChainContext()
-      this.event.trigger('contextChanged', [context])
-      cb()
+      try {
+        await network.init()
+        this.currentFork = network.config.fork
+        // injected
+        web3.setProvider(network.provider)
+        this.executionContext = context
+        this.isConnected = await this._updateChainContext()
+        this.event.trigger('contextChanged', [context])
+        cb()
+      } catch (e) {
+        console.error(e)
+        cb(false)
+      }
     }
   }
 
@@ -174,15 +198,17 @@ export class ExecutionContext {
         try {
           this.currentFork = execution.forkAt(await web3.eth.net.getId(), block.number)
         } catch (e) {
-          this.currentFork = 'cancun'
+          this.currentFork = 'prague'
           console.log(`unable to detect fork, defaulting to ${this.currentFork}..`)
           console.error(e)
         }
       } catch (e) {
         console.error(e)
         this.blockGasLimit = this.blockGasLimitDefault
+        return false
       }
     }
+    return true
   }
 
   listenOnLastBlock () {
@@ -212,7 +238,8 @@ export class ExecutionContext {
     const state = {
       db: Object.fromEntries(stateDb.db._database),
       blocks: blocksData.blocks,
-      latestBlockNumber: blocksData.latestBlockNumber
+      latestBlockNumber: blocksData.latestBlockNumber,
+      baseBlockNumber: blocksData.baseBlockNumber
     }
     const stringifyed = JSON.stringify(state, (key, value) => {
       if (key === 'db') {

@@ -81,6 +81,13 @@ export const contextMenuActions: MenuItems = [{
   label: '',
   group: 3
 }, {
+  id: 'signTypedData',
+  name: 'Sign Typed Data',
+  extension: ['.json'],
+  multiselect: false,
+  label: '',
+  group: 3
+}, {
   id: 'publishFolderToGist',
   name: 'Publish folder to gist',
   type: ['folder'],
@@ -97,6 +104,15 @@ export const contextMenuActions: MenuItems = [{
   group: 4,
   platform: appPlatformTypes.web
 }, {
+  id: 'publishFilesToGist',
+  name: 'Publish files to gist',
+  type: ['file'],
+  multiselect: true,
+  label: '',
+  group: 4,
+  platform: appPlatformTypes.web
+}
+, {
   id: 'uploadFile',
   name: 'Load a Local File',
   type: ['folder', 'workspace'],

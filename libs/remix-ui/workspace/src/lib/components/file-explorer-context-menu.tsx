@@ -40,6 +40,8 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
     focus,
     downloadPath,
     uploadFile,
+    publishManyFilesToGist,
+    signTypedData,
     ...otherProps
   } = props
   const contextMenuRef = useRef(null)
@@ -70,7 +72,7 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
       return !(el.key === '' && el.type === 'folder')
     })
 
-    if (focus[0].key === 'contextMenu') {
+    if (focus?.length && focus[0].key === 'contextMenu') {
       return true
     }
 
@@ -197,6 +199,10 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
                 _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'publishFileToGist'])
                 publishFileToGist(path)
                 break
+              case 'Publish files to gist':
+                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'publishFilesToGist'])
+                publishManyFilesToGist()
+                break
               case 'Run':
                 _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'runScript'])
                 runScript(path)
@@ -228,6 +234,10 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
               case 'Publish Workspace to Gist':
                 _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'publishWorkspace'])
                 publishFolderToGist(path)
+                break
+              case 'Sign Typed Data':
+                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'signTypedData'])
+                signTypedData(path)
                 break
               default:
                 _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', `${item.id}/${item.name}`])

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react' // eslint-disable-line
+import React, { useContext, useEffect, useState } from 'react' // eslint-disable-line
 import { CompileErrors, ContractsFile, SolidityCompilerProps } from './types'
 import { CompilerContainer } from './compiler-container' // eslint-disable-line
 import { ContractSelection } from './contract-selection' // eslint-disable-line
@@ -9,6 +9,7 @@ import { baseURLBin, baseURLWasm, pathToURL } from '@remix-project/remix-solidit
 import * as packageJson from '../../../../../package.json'
 import './css/style.css'
 import { iSolJsonBinData, iSolJsonBinDataBuild } from '@remix-project/remix-lib'
+import { appPlatformTypes, platformContext } from '@remix-ui/app'
 
 export const SolidityCompiler = (props: SolidityCompilerProps) => {
   const {
@@ -47,6 +48,7 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
   const [compileErrors, setCompileErrors] = useState<Record<string, CompileErrors>>({ [currentFile]: api.compileErrors })
   const [badgeStatus, setBadgeStatus] = useState<Record<string, { key: string; title?: string; type?: string }>>({})
   const [contractsFile, setContractsFile] = useState<ContractsFile>({})
+  const platform = useContext(platformContext)
 
   useEffect(() => {
     ; (async () => {
@@ -77,9 +79,12 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
   }
 
   api.onSetWorkspace = async (isLocalhost: boolean, workspaceName: string) => {
-    const isHardhat = isLocalhost && (await compileTabLogic.isHardhatProject())
-    const isTruffle = isLocalhost && (await compileTabLogic.isTruffleProject())
-    const isFoundry = isLocalhost && (await compileTabLogic.isFoundryProject())
+    const isDesktop = platform === appPlatformTypes.desktop
+
+    const isHardhat = (isLocalhost || isDesktop) && (await compileTabLogic.isHardhatProject())
+    const isTruffle = (isLocalhost || isDesktop) && (await compileTabLogic.isTruffleProject())
+    const isFoundry = (isLocalhost || isDesktop) && (await compileTabLogic.isFoundryProject())
+
     setState((prevState) => {
       return {
         ...prevState,
@@ -275,8 +280,11 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
           setConfigFilePath={setConfigFilePath}
           solJsonBinData={state.solJsonBinData}
         />
-
-        {contractsFile[currentFile] && contractsFile[currentFile].contractsDetails && (
+        {/* "compileErrors[currentFile]['contracts']" field will not be there in case of compilation errors */}
+        {contractsFile && contractsFile[currentFile] && contractsFile[currentFile].contractsDetails
+          && compileErrors
+          && compileErrors[currentFile]
+          && compileErrors[currentFile]['contracts'] && (
           <ContractSelection
             api={api}
             compiledFileName={currentFile}
@@ -286,7 +294,7 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
             modal={modal}
           />
         )}
-        {compileErrors[currentFile] && (
+        {compileErrors && compileErrors[currentFile] && (
           <div className="remixui_errorBlobs p-4" data-id="compiledErrors">
             <>
               <span data-id={`compilationFinishedWith_${currentVersion}`}></span>
@@ -294,6 +302,7 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
                 <Renderer
                   message={compileErrors[currentFile].error.formattedMessage || compileErrors[currentFile].error}
                   plugin={api}
+                  context='solidity'
                   opt={{
                     type: compileErrors[currentFile].error.severity || 'error',
                     errorType: compileErrors[currentFile].error.type
@@ -304,14 +313,14 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
                 compileErrors[currentFile].error.mode === 'panic' &&
                 modal('Error', panicMessage(compileErrors[currentFile].error.formattedMessage), 'Close', null, false)}
               {compileErrors[currentFile].errors &&
-                compileErrors[currentFile].errors.length &&
+                compileErrors[currentFile].errors.length > 0 &&
                 compileErrors[currentFile].errors.map((err, index) => {
                   if (hideWarnings) {
                     if (err.severity !== 'warning') {
-                      return <Renderer key={index} message={err.formattedMessage} plugin={api} opt={{ type: err.severity, errorType: err.type }} />
+                      return <Renderer context='solidity' key={index} message={err.formattedMessage} plugin={api} opt={{ type: err.severity, errorType: err.type }} />
                     }
                   } else {
-                    return <Renderer key={index} message={err.formattedMessage} plugin={api} opt={{ type: err.severity, errorType: err.type }} />
+                    return <Renderer context='solidity' key={index} message={err.formattedMessage} plugin={api} opt={{ type: err.severity, errorType: err.type }} />
                   }
                 })}
             </>

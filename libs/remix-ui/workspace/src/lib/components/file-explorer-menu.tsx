@@ -1,5 +1,5 @@
 import { CustomTooltip } from '@remix-ui/helper'
-import React, {useState, useEffect, useContext} from 'react' //eslint-disable-line
+import React, {useState, useEffect, useContext, useRef, useReducer} from 'react' //eslint-disable-line
 import { FormattedMessage } from 'react-intl'
 import { Placement } from 'react-bootstrap/esm/Overlay'
 import { FileExplorerMenuProps } from '../types'
@@ -39,6 +39,27 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
         icon: 'far fa-folder-upload',
         placement: 'top',
         platforms:[appPlatformTypes.web]
+      },
+      {
+        action: 'importFromIpfs',
+        title: 'Import files from ipfs',
+        icon: 'fa-regular fa-cube',
+        placement: 'top',
+        platforms: [appPlatformTypes.web, appPlatformTypes.desktop]
+      },
+      {
+        action: 'importFromHttps',
+        title: 'Import files with https',
+        icon: 'fa-solid fa-link',
+        placement: 'top',
+        platforms: [appPlatformTypes.web, appPlatformTypes.desktop]
+      },
+      {
+        action: 'initializeWorkspaceAsGitRepo',
+        title: 'Initialize workspace as a git repository',
+        icon: 'fa-brands fa-git-alt',
+        placement: 'top',
+        platforms: [appPlatformTypes.web, appPlatformTypes.desktop]
       }
     ].filter(
       (item) =>
@@ -49,6 +70,7 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
     ),
     actions: {}
   })
+
   const enableDirUpload = { directory: '', webkitdirectory: '' }
 
   return (
@@ -121,6 +143,29 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
                   </label>
                 </CustomTooltip>
               )
+            } else if (action === 'initializeWorkspaceAsGitRepo') {
+              return (
+                <CustomTooltip
+                  placement={placement as Placement}
+                  tooltipId="initializeWorkspaceAsGitRepoTooltip"
+                  tooltipClasses="text-nowrap"
+                  tooltipText={<FormattedMessage id={`filePanel.${action}`} defaultMessage={title} />}
+                  key={`index-${action}-${placement}-${icon}`}
+                >
+                  <label
+                    id={action}
+                    style={{ fontSize: '1.1rem', cursor: 'pointer' }}
+                    data-id={'fileExplorerInitializeWorkspaceAsGitRepo' + action}
+                    className={icon + ' mx-1 remixui_menuItem'}
+                    key={`index-${action}-${placement}-${icon}`}
+                    onClick={() => {
+                      _paq.push(['trackEvent', 'fileExplorer', 'fileAction', action])
+                      props.handleGitInit()
+                    }}
+                  >
+                  </label>
+                </CustomTooltip>
+              )
             } else {
               return (
                 <CustomTooltip
@@ -143,6 +188,12 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
                         props.createNewFolder()
                       } else if (action === 'publishToGist' || action == 'updateGist') {
                         props.publishToGist()
+                      } else if (action === 'importFromIpfs') {
+                        _paq.push(['trackEvent', 'fileExplorer', 'fileAction', action])
+                        props.importFromIpfs('Ipfs', 'ipfs hash', ['ipfs://QmQQfBMkpDgmxKzYaoAtqfaybzfgGm9b2LWYyT56Chv6xH'], 'ipfs://')
+                      } else if (action === 'importFromHttps') {
+                        _paq.push(['trackEvent', 'fileExplorer', 'fileAction', action])
+                        props.importFromHttps('Https', 'http/https raw content', ['https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/master/contracts/token/ERC20/ERC20.sol'])
                       } else {
                         state.actions[action]()
                       }

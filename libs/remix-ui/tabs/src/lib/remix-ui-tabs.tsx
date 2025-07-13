@@ -1,11 +1,14 @@
 import { fileDecoration, FileDecorationIcons } from '@remix-ui/file-decorators'
 import { CustomTooltip } from '@remix-ui/helper'
 import { Plugin } from '@remixproject/engine'
-import React, {useState, useRef, useEffect, useReducer} from 'react' // eslint-disable-line
+import React, { useState, useRef, useEffect, useReducer, useContext } from 'react' // eslint-disable-line
 import { FormattedMessage } from 'react-intl'
 import { Tab, Tabs, TabList, TabPanel } from 'react-tabs'
 import './remix-ui-tabs.css'
 import { values } from 'lodash'
+import { AppContext } from '@remix-ui/app'
+import { desktopConnectionType } from '@remix-api'
+import { SupportedFileExtensions } from '@remix/remix-ai-core'
 const _paq = (window._paq = window._paq || [])
 
 /* eslint-disable-next-line */
@@ -66,6 +69,7 @@ const tabsReducer = (state: ITabsState, action: ITabsAction) => {
     return state
   }
 }
+const PlayExtList = ['js', 'ts', 'sol', 'circom', 'vy', 'nr']
 
 export const TabsUI = (props: TabsUIProps) => {
   const [tabsState, dispatch] = useReducer(tabsReducer, initialTabsState)
@@ -73,9 +77,10 @@ export const TabsUI = (props: TabsUIProps) => {
   const [explaining, setExplaining] = useState<boolean>(false)
   const tabsRef = useRef({})
   const tabsElement = useRef(null)
-  const [ai_switch, setAI_switch] = useState<boolean>(false)
+  const [ai_switch, setAI_switch] = useState<boolean>(true)
   const tabs = useRef(props.tabs)
   tabs.current = props.tabs // we do this to pass the tabs list to the onReady callbacks
+  const appContext = useContext(AppContext)
 
   useEffect(() => {
     if (props.tabs[tabsState.selectedIndex]) {
@@ -85,11 +90,25 @@ export const TabsUI = (props: TabsUIProps) => {
       })
     }
   }, [tabsState.selectedIndex])
+  // Toggle the copilot in editor when clicked to update in status bar
+  useEffect(() => {
+    const run = async () => {
+      props.plugin.on('settings', 'copilotChoiceUpdated', async (isChecked) => {
+        setAI_switch(isChecked)
+      })
+    }
+    if (tabsState.currentExt === 'sol') run()
+  }, [tabsState.currentExt])
 
-  const getAI = async() => {
+  const getAI = async () => {
     try {
-      return await props.plugin.call('settings', 'getCopilotSetting')
-    } catch (e){
+      const init_state = await props.plugin.call('settings', 'getCopilotSetting')
+      if (init_state === undefined || init_state === null) {
+        await props.plugin.call('settings', 'updateCopilotChoice', ai_switch)
+        return ai_switch
+      }
+      return init_state
+    } catch (e) {
       return false
     }
   }
@@ -106,7 +125,6 @@ export const TabsUI = (props: TabsUIProps) => {
   }
 
   const renderTab = (tab: Tab, index) => {
-
     const classNameImg = 'my-1 mr-1 text-dark ' + tab.iconClass
     const classNameTab = 'nav-item nav-link d-flex justify-content-center align-items-center px-2 py-1 tab' + (index === currentIndexRef.current ? ' active' : '')
     const invert = props.themeQuality === 'dark' ? 'invert(1)' : 'invert(0)'
@@ -120,7 +138,7 @@ export const TabsUI = (props: TabsUIProps) => {
           data-id={index === currentIndexRef.current ? 'tab-active' : ''}
           data-path={tab.name}
         >
-          {tab.icon ? <img className="my-1 mr-1 iconImage" style={{ filter: invert }} src={tab.icon} /> : <i className={classNameImg}></i>}
+          {tab.icon ? <img className="my-1 mr-1 iconImage" src={tab.icon} /> : <i className={classNameImg}></i>}
           <span className={`title-tabs ${getFileDecorationClasses(tab)}`}>{tab.title}</span>
           {getFileDecorationIcons(tab)}
           <span
@@ -183,7 +201,12 @@ export const TabsUI = (props: TabsUIProps) => {
   }
 
   return (
-    <div className="remix-ui-tabs d-flex justify-content-between border-0 header nav-tabs" data-id="tabs-component">
+    <div
+      className={`remix-ui-tabs justify-content-between border-0 header nav-tabs ${
+        appContext.appState.connectedToDesktop === desktopConnectionType .disabled ? 'd-flex' : 'd-none'
+      }`}
+      data-id="tabs-component"
+    >
       <div className="d-flex flex-row" style={{ maxWidth: 'fit-content', width: '99%' }}>
         <div className="d-flex flex-row justify-content-center align-items-center m-1 mt-1">
           <CustomTooltip
@@ -204,36 +227,52 @@ export const TabsUI = (props: TabsUIProps) => {
             <button
               data-id="play-editor"
               className="btn text-success pr-0 py-0 d-flex"
-              disabled={!(tabsState.currentExt === 'js' || tabsState.currentExt === 'ts' || tabsState.currentExt === 'sol' || tabsState.currentExt === 'circom' || tabsState.currentExt === 'vy')}
+              disabled={!(PlayExtList.includes(tabsState.currentExt))}
               onClick={async () => {
                 const path = active().substr(active().indexOf('/') + 1, active().length)
                 const content = await props.plugin.call('fileManager', 'readFile', path)
                 if (tabsState.currentExt === 'js' || tabsState.currentExt === 'ts') {
-                  await props.plugin.call('scriptRunner', 'execute', content, path)
-                  _paq.push(['trackEvent', 'editor', 'clickRunFromEditor', tabsState.currentExt])
+                  await props.plugin.call('scriptRunnerBridge', 'execute', content, path)
                 } else if (tabsState.currentExt === 'sol' || tabsState.currentExt === 'yul') {
                   await props.plugin.call('solidity', 'compile', path)
-                  _paq.push(['trackEvent', 'editor', 'clickRunFromEditor', tabsState.currentExt])
                 } else if (tabsState.currentExt === 'circom') {
                   await props.plugin.call('circuit-compiler', 'compile', path)
-                  _paq.push(['trackEvent', 'editor', 'clickRunFromEditor', tabsState.currentExt])
                 } else if (tabsState.currentExt === 'vy') {
                   await props.plugin.call('vyper', 'vyperCompileCustomAction')
-                  _paq.push(['trackEvent', 'editor', 'clickRunFromEditor', tabsState.currentExt])
+                } else if (tabsState.currentExt === 'nr') {
+                  await props.plugin.call('noir-compiler', 'compile', path)
                 }
+                _paq.push(['trackEvent', 'editor', 'clickRunFromEditor', tabsState.currentExt])
               }}
             >
               <i className="fas fa-play"></i>
             </button>
           </CustomTooltip>
 
-          <div className= "d-flex border-left ml-2 align-items-center" style={{ height: "3em" }}>
+          <CustomTooltip
+            placement="bottom"
+            tooltipId="overlay-tooltip-run-script-config"
+            tooltipText={
+              <span>
+                <FormattedMessage id="remixUiTabs.tooltipText9" />
+              </span>
+            }><button
+              data-id="script-config"
+              className="btn text-dark border-left ml-2 pr-0 py-0 d-flex"
+              onClick={async () => {
+                await props.plugin.call('manager', 'activatePlugin', 'UIScriptRunner')
+                await props.plugin.call('tabs', 'focus', 'UIScriptRunner')
+              }}
+            >
+              <i className="fa-kit fa-solid-gear-circle-play"></i>
+            </button></CustomTooltip>
+          <div className="d-flex border-left ml-2 align-items-center" style={{ height: "3em" }}>
             <CustomTooltip
               placement="bottom"
-              tooltipId="overlay-tooltip-explaination"
+              tooltipId="overlay-tooltip-explanation"
               tooltipText={
                 <span>
-                  {tabsState.currentExt === 'sol'? (
+                  {Object.values(SupportedFileExtensions).some(ext => ext === tabsState.currentExt) ? (
                     <FormattedMessage id="remixUiTabs.tooltipText5" />
                   ) : (
                     <FormattedMessage id="remixUiTabs.tooltipText4" />
@@ -245,15 +284,23 @@ export const TabsUI = (props: TabsUIProps) => {
                 data-id="explain-editor"
                 id='explain_btn'
                 className='btn text-ai pl-2 pr-0 py-0'
-                disabled={!(tabsState.currentExt === 'sol') || explaining}
+                disabled={!(Object.values(SupportedFileExtensions).some(ext => ext === tabsState.currentExt)) || explaining}
                 onClick={async () => {
                   const path = active().substr(active().indexOf('/') + 1, active().length)
                   const content = await props.plugin.call('fileManager', 'readFile', path)
-                  if (tabsState.currentExt === 'sol') {
+                  if (Object.values(SupportedFileExtensions).some(ext => ext === tabsState.currentExt) && !explaining) {
                     setExplaining(true)
-                    await props.plugin.call('solcoder', 'code_explaining', content)
+                    try {
+                      await props.plugin.call('sidePanel', 'showContent', 'remixaiassistant')
+                    }
+                    catch (e) {
+                      // do nothing
+                    }
+
+                    await props.plugin.call('remixAI', 'chatPipe', 'code_explaining', content)
+
                     setExplaining(false)
-                    _paq.push(['trackEvent', 'ai', 'solcoder', 'explain_file'])
+                    _paq.push(['trackEvent', 'ai', 'remixAI', 'explain_file'])
                   }
                 }}
               >
@@ -265,7 +312,7 @@ export const TabsUI = (props: TabsUIProps) => {
               tooltipId="overlay-tooltip-copilot"
               tooltipText={
                 <span>
-                  { tabsState.currentExt === 'sol'? (
+                  {Object.values(SupportedFileExtensions).some(ext => ext === tabsState.currentExt) ? (
                     !ai_switch ? (
                       <FormattedMessage id="remixUiTabs.tooltipText6" />
                     ) : (<FormattedMessage id="remixUiTabs.tooltipText7" />)
@@ -279,11 +326,11 @@ export const TabsUI = (props: TabsUIProps) => {
                 data-id="remix_ai_switch"
                 id='remix_ai_switch'
                 className="btn ai-switch text-ai pl-2 pr-0 py-0"
-                disabled={!(tabsState.currentExt === 'sol' )}
+                disabled={!(Object.values(SupportedFileExtensions).some(ext => ext === tabsState.currentExt))}
                 onClick={async () => {
                   await props.plugin.call('settings', 'updateCopilotChoice', !ai_switch)
                   setAI_switch(!ai_switch)
-                  ai_switch ? _paq.push(['trackEvent', 'ai', 'solcoder', 'copilot_enabled']) : _paq.push(['trackEvent', 'ai', 'solcoder', 'copilot_disabled'])
+                  ai_switch ? _paq.push(['trackEvent', 'ai', 'remixAI', 'copilot_enabled']) : _paq.push(['trackEvent', 'ai', 'remixAI', 'copilot_disabled'])
                 }}
               >
                 <i className={ai_switch ? "fas fa-toggle-on fa-lg" : "fas fa-toggle-off fa-lg"}></i>
@@ -291,7 +338,7 @@ export const TabsUI = (props: TabsUIProps) => {
             </CustomTooltip>
           </div>
 
-          <div className= "d-flex border-left ml-2 align-items-center" style={{ height: "3em" }}>
+          <div className="d-flex border-left ml-2 align-items-center" style={{ height: "3em" }}>
             <CustomTooltip placement="bottom" tooltipId="overlay-tooltip-zoom-out" tooltipText={<FormattedMessage id="remixUiTabs.zoomOut" />}>
               <span data-id="tabProxyZoomOut" className="btn fas fa-search-minus text-dark pl-2 pr-0 py-0 d-flex" onClick={() => props.onZoomOut()}></span>
             </CustomTooltip>
@@ -320,7 +367,7 @@ export const TabsUI = (props: TabsUIProps) => {
         >
           <TabList className="d-flex flex-row align-items-center">
             {props.tabs.map((tab, i) => (
-              <Tab className="" key={tab.name}>
+              <Tab className="" key={tab.name} data-id={tab.id}>
                 {renderTab(tab, i)}
               </Tab>
             ))}

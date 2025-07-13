@@ -27,7 +27,7 @@
   --body-bg: #011628;
   --custom-select: #252525;
   --text-bg-mark: #a5a5a5;
-  --custom-select: #011627;
+  --brand-dark-blue: #222496;
   --text-background: #011626;
   --breakpoint-xs: 0;
   --breakpoint-sm: 576px;
@@ -2751,10 +2751,10 @@ input[type="submit"].btn-block {
   padding: 0.5rem 0;
   margin: 0.125rem 0 0;
   font-size: 1rem;
-  color: #fff;
+  color: var(--text);
   text-align: left;
   list-style: none;
-  background-color: #fff;
+  background-color: transparent;
   background-clip: padding-box;
   border: 1px solid rgba(0, 0, 0, 0.15);
   border-radius: 2px;
@@ -2899,10 +2899,10 @@ input[type="submit"].btn-block {
   padding: 0.25rem 1.5rem;
   clear: both;
   font-weight: 400;
-  color: #212529;
+  color: var(--text);
   text-align: inherit;
   white-space: nowrap;
-  background-color: transparent;
+  background-color: var(--text-background);
   border: 0;
 }
 .dropdown-item:focus,
@@ -3252,6 +3252,7 @@ input[type="submit"].btn-block {
   position: relative;
   margin-bottom: 0;
   vertical-align: top;
+  padding-top: 0.15rem;
 }
 .custom-control-label::before {
   position: absolute;
@@ -5092,6 +5093,7 @@ a.close.disabled {
 .modal-header .close {
   padding: 15px;
   margin: -1rem -1rem -1rem auto;
+  cursor: pointer;
 }
 .modal-title {
   margin-bottom: 0;

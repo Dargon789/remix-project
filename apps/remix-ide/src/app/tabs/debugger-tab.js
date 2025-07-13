@@ -1,4 +1,4 @@
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 import { DebuggerUI } from '@remix-ui/debugger-ui' // eslint-disable-line
 import { DebuggerApiMixin } from '@remix-ui/debugger-ui'
 import { ViewPlugin } from '@remixproject/engine-web'
@@ -22,7 +22,7 @@ const profile = {
   maintainedBy: 'Remix'
 }
 
-export class DebuggerTab extends DebuggerApiMixin(ViewPlugin) {
+export default class DebuggerTab extends DebuggerApiMixin(ViewPlugin) {
   constructor () {
     super(profile)
     this.el = document.createElement('div')

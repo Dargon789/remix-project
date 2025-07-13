@@ -133,6 +133,9 @@
             "@remix-ui/toaster": [
               "libs/remix-ui/toaster/src/index.ts"
             ],
+            "@remix-ui/toggle": [
+              "libs/remix-ui/toggle/src/index.ts"
+            ],
             "@remix-ui/tooltip-popup": [
               "libs/remix-ui/tooltip-popup/src/index.ts"
             ],
@@ -175,7 +178,34 @@
             "@remix-ui/xterm": [
               "libs/remix-ui/xterm/src/index.ts"
             ],
+            "@remix-ui/remix-ai": [
+              "libs/remix-ui/remix-ai/src/index.ts"
+            ],
 
+            "@remix/remix-ai-core": [
+              "libs/remix-ai-core/src/index.ts"
+            ],
+            "@remix-ui/git": [
+              "libs/remix-ui/git/src/index.ts"
+            ],
+            "@remix-ui/environment-explorer": [
+              "libs/remix-ui/environment-explorer/src/index.ts"
+          ],
+            "@remix-api": [
+              "libs/remix-api/src/index.ts"
+            ],
+            "@remix-scriptrunner": [
+              "libs/remix-ui/scriptrunner/src/index.ts"
+            ],
+            "@remix-git": [
+              "libs/remix-git/"
+            ],
+            "@remix-endpoints-helper": [
+              "libs/endpoints-helper/src/index.ts"
+            ],
+            "@remix-ui/remix-ai-assistant": [
+              "libs/remix-ui/remix-ai-assistant/src/index.ts"
+            ]
         }
     }
 }

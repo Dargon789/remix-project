@@ -1,12 +1,12 @@
 import { envChangeNotification } from "@remix-ui/helper"
 import { RunTab } from "../types/run-tab"
 import { setExecutionContext, setFinalContext, updateAccountBalances, fillAccountsList } from "./account"
-import { addExternalProvider, addInstance, addPinnedInstance, addNewProxyDeployment, removeExternalProvider, setNetworkNameFromProvider, setPinnedChainId } from "./actions"
-import { addDeployOption, clearAllInstances, clearAllPinnedInstances, clearRecorderCount, fetchContractListSuccess, resetProxyDeployments, resetUdapp, setCurrentContract, setCurrentFile, setLoadType, setRecorderCount, setRemixDActivated, setSendValue, fetchAccountsListSuccess } from "./payload"
+import { addExternalProvider, addInstance, addNewProxyDeployment, removeExternalProvider, setNetworkNameFromProvider, setPinnedChainId, setExecEnv } from "./actions"
+import { addDeployOption, clearAllInstances, clearRecorderCount, fetchContractListSuccess, resetProxyDeployments, resetUdapp, setCurrentContract, setCurrentFile, setLoadType, setRecorderCount, setRemixDActivated, setSendValue, fetchAccountsListSuccess, fetchAccountsListRequest } from "./payload"
 import { updateInstanceBalance } from './deploy'
 import { CompilerAbstract } from '@remix-project/remix-solidity'
 import BN from 'bn.js'
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 import { Plugin } from "@remixproject/engine"
 import { getNetworkProxyAddresses } from "./deploy"
 import { shortenAddress } from "@remix-ui/helper"
@@ -39,19 +39,20 @@ export const setupEvents = (plugin: RunTab) => {
 
   plugin.blockchain.event.register('contextChanged', async (context) => {
     dispatch(resetProxyDeployments())
-    if (!context.startsWith('vm')) getNetworkProxyAddresses(plugin, dispatch)
-    if (context !== 'walletconnect') {
-      (await plugin.call('manager', 'isActive', 'walletconnect')) && plugin.call('manager', 'deactivatePlugin', 'walletconnect')
-    }
+    getNetworkProxyAddresses(plugin, dispatch)
     setFinalContext(plugin, dispatch)
     fillAccountsList(plugin, dispatch)
+    // 'contextChanged' & 'networkStatus' both are triggered on workspace & network change
+    // There is chance that pinned contracts state is overridden by other event
+    // We load pinned contracts for VM environment in this event
+    // and for other environments in 'networkStatus' event
+    if (context.startsWith('vm')) await loadPinnedContracts(plugin, dispatch, context)
   })
 
   plugin.blockchain.event.register('networkStatus', async ({ error, network }) => {
     if (error) {
       const netUI = 'can\'t detect network'
       setNetworkNameFromProvider(dispatch, netUI)
-
       return
     }
     const networkProvider = plugin.networkModule.getNetworkProvider.bind(plugin.networkModule)
@@ -64,14 +65,16 @@ export const setupEvents = (plugin: RunTab) => {
     // Check if provider is changed or network is changed for same provider e.g; Metamask
     if (currentNetwork.provider !== networkProvider() || (!isVM && currentNetwork.chainId !== network.id)) {
       currentNetwork.provider = networkProvider()
-      if (!isVM) currentNetwork.chainId = network.id
-      await loadPinnedContracts(plugin, dispatch, pinnedChainId)
+      if (!isVM) {
+        currentNetwork.chainId = network.id
+        await loadPinnedContracts(plugin, dispatch, pinnedChainId)
+      }
     }
   })
 
-  plugin.blockchain.event.register('addProvider', provider => addExternalProvider(dispatch, provider))
+  plugin.on('blockchain', 'shouldAddProvidertoUdapp', (name, provider) => addExternalProvider(dispatch, provider))
 
-  plugin.blockchain.event.register('removeProvider', name => removeExternalProvider(dispatch, name))
+  plugin.on('blockchain', 'shouldRemoveProviderFromUdapp', (name, provider) => removeExternalProvider(dispatch, name))
 
   plugin.blockchain.events.on('newProxyDeployment', (address, date, contractName) => addNewProxyDeployment(dispatch, address, date, contractName))
 
@@ -91,6 +94,16 @@ export const setupEvents = (plugin: RunTab) => {
 
   plugin.on('truffle', 'compilationFinished', (file, source, languageVersion, data) => broadcastCompilationResult('truffle', plugin, dispatch, file, source, languageVersion, data))
 
+  plugin.on('desktopHost', 'chainChanged', (context) => {
+    //console.log('desktopHost chainChanged', context)
+    fillAccountsList(plugin, dispatch)
+    updateInstanceBalance(plugin, dispatch)
+  })
+
+  plugin.on('desktopHost', 'disconnected', () => {
+    setExecutionContext(plugin, dispatch, { context: 'vm-cancun', fork: '' })
+  })
+
   plugin.on('udapp', 'setEnvironmentModeReducer', (env: { context: string, fork: string }, from: string) => {
     plugin.call('notification', 'toast', envChangeNotification(env, from))
     setExecutionContext(plugin, dispatch, env)
@@ -100,16 +113,8 @@ export const setupEvents = (plugin: RunTab) => {
     dispatch(clearAllInstances())
   })
 
-  plugin.on('udapp', 'clearAllPinnedInstancesReducer', () => {
-    dispatch(clearAllPinnedInstances())
-  })
-
   plugin.on('udapp', 'addInstanceReducer', (address, abi, name, contractData?) => {
     addInstance(dispatch, { contractData, abi, address, name })
-  })
-
-  plugin.on('udapp', 'addPinnedInstanceReducer', (address, abi, name, pinnedAt, filePath) => {
-    addPinnedInstance(dispatch, { abi, address, name, pinnedAt, filePath })
   })
 
   plugin.on('filePanel', 'setWorkspace', async () => {
@@ -154,16 +159,12 @@ export const setupEvents = (plugin: RunTab) => {
   })
 
   plugin.on('fileManager', 'currentFileChanged', (currentFile: string) => {
-    if (/.(.abi)$/.exec(currentFile)) {
-      dispatch(setLoadType('abi'))
-    } else if (/.(.sol)$/.exec(currentFile) ||
-        /.(.vy)$/.exec(currentFile) || // vyper
-        /.(.lex)$/.exec(currentFile) || // lexon
-        /.(.contract)$/.exec(currentFile)) {
-      dispatch(setLoadType('sol'))
-    } else {
-      dispatch(setLoadType('other'))
-    }
+    if (/.(.abi)$/.exec(currentFile)) dispatch(setLoadType('abi'))
+    else if (/.(.sol)$/.exec(currentFile)) dispatch(setLoadType('sol'))
+    else if (/.(.vy)$/.exec(currentFile)) dispatch(setLoadType('vyper'))
+    else if (/.(.lex)$/.exec(currentFile)) dispatch(setLoadType('lexon'))
+    else if (/.(.contract)$/.exec(currentFile)) dispatch(setLoadType('contract'))
+    else dispatch(setLoadType('other'))
     dispatch(setCurrentFile(currentFile))
   })
 
@@ -182,16 +183,29 @@ export const setupEvents = (plugin: RunTab) => {
 }
 
 const loadPinnedContracts = async (plugin, dispatch, dirName) => {
-  await plugin.call('udapp', 'clearAllPinnedInstances')
+  await plugin.call('udapp', 'clearAllInstances')
   const isPinnedAvailable = await plugin.call('fileManager', 'exists', `.deploys/pinned-contracts/${dirName}`)
   if (isPinnedAvailable) {
     try {
       const list = await plugin.call('fileManager', 'readdir', `.deploys/pinned-contracts/${dirName}`)
       const filePaths = Object.keys(list)
+      let codeError = false
       for (const file of filePaths) {
         const pinnedContract = await plugin.call('fileManager', 'readFile', file)
         const pinnedContractObj = JSON.parse(pinnedContract)
-        if (pinnedContractObj) addPinnedInstance(dispatch, pinnedContractObj)
+        const code = await plugin.call('blockchain', 'getCode', pinnedContractObj.address)
+        if (code === '0x') {
+          codeError = true
+          const msg = `Cannot load pinned contract at ${pinnedContractObj.address}: Contract not found at that address.`
+          await plugin.call('terminal', 'log', { type: 'error', value: msg })
+        } else {
+          pinnedContractObj.isPinned = true
+          if (pinnedContractObj) addInstance(dispatch, pinnedContractObj)
+        }
+      }
+      if (codeError) {
+        const msg = `Some pinned contracts cannot be loaded.\nCotracts deployed to a (Mainnet, Custom, Sepolia) fork are not persisted unless there were already on chain.\nDirectly forking one of these forks will enable you to use the pinned contracts feature.`
+        await plugin.call('terminal', 'log', { type: 'log', value: msg })
       }
     } catch (err) {
       console.log(err)
@@ -285,6 +299,11 @@ export const resetAndInit = (plugin: RunTab) => {
       } catch (e) {
         cb(e.message)
       }
+    },
+    isSmartAccount: (address) => {
+      const smartAddresses = Object.keys(plugin.REACT_API.smartAccounts)
+      if (smartAddresses && smartAddresses.includes(address)) return true
+      else return false
     }
   })
 }

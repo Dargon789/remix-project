@@ -3,6 +3,7 @@ import React, {useState, useEffect, useContext, useRef, ReactNode, ReactHTMLElem
 import './remix-ui-grid-cell.css'
 import FiltersContext from "./filtersContext"
 import { CustomTooltip } from '@remix-ui/helper'
+import { ChildCallbackContext } from './remix-ui-grid-section'
 
 declare global {
   interface Window {
@@ -16,35 +17,58 @@ interface RemixUIGridCellProps {
   pinned?: boolean
   pinStateCallback?: any
   logo?: string
+  logos?: string[]
+  logoURL?: string
   title: string
+  titleTooltip?: string
+  hideTitle?: boolean
   tagList?: string[] // max 8, others will be ignored
   classList?: string
   styleList?: any
   children?: ReactNode
   expandViewEl?: any
   handleExpand?: any
+  id: string
+  searchKeywords?: string[]
 }
 
 export const RemixUIGridCell = (props: RemixUIGridCellProps) => {
   const filterCon = useContext(FiltersContext)
+  const callbackContext = useContext(ChildCallbackContext)
   const [anyEnabled, setAnyEnabled] = useState(false)
   const [expand, setExpand] = useState(false)
   const [pinned, setPinned] = useState<boolean>(props.pinned)
 
   useEffect(() => {
-    if (props.tagList) setAnyEnabled(props.tagList.some((key) => filterCon.keyValueMap[key]?.enabled))
-    else setAnyEnabled(filterCon?.keyValueMap['no tag']?.enabled)
-    if (filterCon.filter != '') setAnyEnabled(anyEnabled && props.title.toLowerCase().includes(filterCon.filter))
-    console.log("pin ", pinned)
+    let enabled = false
+    // check for tags
+    if (props.tagList && props.tagList.length != 0) {
+      enabled = props.tagList.some((key) => filterCon.keyValueMap[key]?.enabled)
+    } else if (filterCon?.keyValueMap['no tag']?.enabled || !Object.keys(filterCon?.keyValueMap).length) {
+      enabled = true
+    }
 
+    // check for filter
+    if (filterCon.filter != '')
+      enabled = (props.title?.toLowerCase().includes(filterCon.filter?.toLowerCase()) ||
+        props.searchKeywords?.map(keyword => keyword?.toLowerCase()).some(searchKeyword => searchKeyword?.toLowerCase().includes(filterCon.filter?.toLocaleLowerCase())))
+
+    setAnyEnabled(enabled)
+    if (callbackContext.onChildCallback && (props.id || props.title)) callbackContext.onChildCallback((props.id || props.title), enabled)
   }, [filterCon, props.tagList])
+
+  useEffect(() => {
+    if (props.pinned!== pinned) {
+      setPinned(props.pinned)
+    }
+  },[props.pinned])
 
   /*const listenOnExpand = (key) => {
     if (key === props.key) setExpand(props.toggleExpandView)
     console.log('expand ----> ', key)
   }
 
-  // The expanded widged should go to the grid-segment and be updated based on the expandedItem state variable of the plugin.
+  // The expanded widget should go to the grid-segment and be updated based on the expandedItem state variable of the plugin.
   // The state var will work like theme dispattching is working.
 
   useEffect(() => {
@@ -54,42 +78,59 @@ export const RemixUIGridCell = (props: RemixUIGridCellProps) => {
   */
 
   return (
-    <div className='mr-2 mt-3' onClick={() => {
+    <div data-values='gridCell' className='' onClick={() => {
       if (props.expandViewEl)
         props.handleExpand(!expand)
       else return
     }}>
-      { anyEnabled && <div className='d-flex flex-column'>
+      { anyEnabled && <div className='mr-2 mt-3 pb-1 d-flex flex-column'>
         <div className='d-flex flex-grid'>
-          <div className={"d-flex mx-0 p-2 bg-light border border-secondary remixui_grid_cell_container " + props.classList || ''} data-id={"remixUIGS" + props.title}>
-            <div className="d-flex remixui_grid_cell flex-column">
-              <div className='d-flex flex-row pb-1 align-items-end' style={{ width: '8rem', height: '1rem' }}>
-                { props.logo && <img className='remixui_grid_view_logo mr-1' src={props.logo} style={{ width: '1rem', height: '1rem' }}/> }
-                { props.title && <label
-                  className='m-0 p-0 align-items-left'
-                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'xx-small' }}
-                >
-                  { props.title }
-                </label> }
-              </div>
+          <div className={ `${pinned ? "" : "border-dark "}` + "d-flex mx-0 p-2 bg-light border border-secondary remixui_grid_cell_container " + props.classList || ''} data-id={"remixUIGS" + props.title}>
+            <div className="d-flex remixui_grid_cell w-100 space-between justify-content-between flex-column">
+              { !props.hideTitle && <div className='d-flex flex-row pb-1 my-1 align-items-end' style={{ minWidth: '8rem', height: '1rem' }}>
+                { props.logo ? props.logoURL !== '' ?
+                  <a href={props.logoURL} target="__blank">
+                    <img className='remixui_grid_view_logo mr-1' src={props.logo} style={{ width: '1rem', height: '1rem' }}/>
+                  </a> :
+                  <img className='remixui_grid_view_logo mr-1' src={props.logo} style={{ width: '1rem', height: '1rem' }}/> :
+                  <></>
+                }
+                { props.logos && props.logos.map((logo, index) => <img key={index} className='remixui_grid_view_logo mr-1' src={logo} style={{ width: '1rem', height: '1rem' }}/>)}
+                { props.title &&
+                  <CustomTooltip
+                    placement="top"
+                    tooltipId={`overlay-tooltip-new${props.title}`}
+                    tooltipText={ props.titleTooltip ? props.titleTooltip : props.title }
+                  >
+                    <label
+                      className='m-0 p-0 text-uppercase align-items-left font-weight-bold text-truncate overflow-hidden whitespace-nowrap'
+                    >{ props.title }
+                    </label>
+                  </CustomTooltip>
+                }
+              </div> }
               { props.children }
+              { filterCon.showPin && <button
+                className={`${pinned ? 'fas fa-toggle-on fa-lg text-dark' : 'fas fa-toggle-off fa-lg text-secondary'}` + ` fa-regular border-0 p-0 mt-2 align-self-end mr-1 remixui_grid_cell_pin`}
+                style={{ fontSize: 'large' }}
+                data-id={`${pinned ? `${props.id}-pinned` : `${props.id}-unpinned`}`}
+                onClick={async () => {
+                  if (!props.pinStateCallback) setPinned(!pinned)
+                  if (await props.pinStateCallback(!pinned)) setPinned(!pinned)
+                }}
+              ></button>}
             </div>
           </div>
-          { filterCon.showPin && <button
-            className={`${pinned ? 'fa-duotone' : 'fa-light'}` + ` fa-map-pin text-info border-0 mb-0 remixui_grid_cell_pin`}
-            onClick={() => {
-              setPinned(!pinned)
-              props.pinStateCallback()
-            }}
-          ></button>}
+
           { props.tagList && <div className={`d-flex flex-column align-items-begin ` +`${filterCon.showPin ? 'remixui_grid_cell_tags' : 'remixui_grid_cell_tags_no_pin'}`}>
             { Object.keys(props.tagList).map((key) => (
-              filterCon.keyValueMap[props.tagList[key]].enabled && (
+              filterCon.keyValueMap[props.tagList[key]]?.enabled && (
                 <CustomTooltip
                   placement="right"
                   tooltipId="pluginManagerInactiveTitleLinkToDoc"
                   tooltipClasses="text-nowrap"
                   tooltipText={props.tagList[key]}
+                  key={props.tagList[key]}
                 >
                   <span key={props.tagList[key]}
                     className={'remixui_grid_cell_tag bg-' + filterCon.keyValueMap[props.tagList[key]].color}
@@ -100,7 +141,7 @@ export const RemixUIGridCell = (props: RemixUIGridCellProps) => {
             )) }
           </div> }
           { !props.tagList && <span
-            className={'remixui_grid_cell_tags'}>
+            className={'px-1 remixui_grid_cell_tags'}>
           </span> }
         </div>
         { expand && <div>

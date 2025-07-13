@@ -5,12 +5,23 @@ export const enum ModalTypes {
   password = 'password',
   default = 'default',
   form = 'form',
-  forceChoice = 'forceChoice'
+  forceChoice = 'forceChoice',
+  fixed = 'fixed',
+  textarea = 'textarea'
+}
+
+export const enum AppModalCancelTypes {
+  close = 'close',
+  cancel = 'cancel',
+  blur = 'blur',
+  escape = 'escape',
+  enter = 'enter',
+  click = 'click'
 }
 
 export const enum UsageTypes {
-  Beginner = 1,
-  Prototyper,
-  Advance,
-  Production
+  Beginner = 'beginner',
+  Prototyper = 'prototyper',
+  Advance = 'advanced',
+  Production = 'production'
 }

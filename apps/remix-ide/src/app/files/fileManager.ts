@@ -8,6 +8,7 @@ import { Registry } from '@remix-project/remix-lib'
 import { fileChangedToastMsg, recursivePasteToastMsg, storageFullMessage } from '@remix-ui/helper'
 import helper from '../../lib/helper.js'
 import { RemixAppManager } from '../../remixAppManager'
+import { commitChange } from '@remix-ui/git'
 
 /*
   attach to files event (removed renamed)
@@ -24,7 +25,8 @@ const profile = {
   methods: ['closeAllFiles', 'closeFile', 'file', 'exists', 'open', 'writeFile', 'writeMultipleFiles', 'writeFileNoRewrite',
     'readFile', 'copyFile', 'copyDir', 'rename', 'mkdir', 'readdir', 'dirList', 'fileList', 'remove', 'getCurrentFile', 'getFile',
     'getFolder', 'setFile', 'switchFile', 'refresh', 'getProviderOf', 'getProviderByName', 'getPathFromUrl', 'getUrlFromPath',
-    'saveCurrentFile', 'setBatchFiles', 'isGitRepo', 'isFile', 'isDirectory', 'hasGitSubmodule', 'copyFolderToJson'
+    'saveCurrentFile', 'setBatchFiles', 'isGitRepo', 'isFile', 'isDirectory', 'hasGitSubmodule', 'copyFolderToJson', 'diff',
+    'hasGitSubmodules', 'getOpenedFiles', 'download'
   ],
   kind: 'file-system'
 }
@@ -38,7 +40,7 @@ const errorMsg = {
 const createError = (err) => {
   return new Error(`${errorMsg[err.code]} ${err.message || ''}`)
 }
-class FileManager extends Plugin {
+export default class FileManager extends Plugin {
   mode: string
   openedFiles: any
   editor: any
@@ -269,7 +271,7 @@ class FileManager extends Plugin {
       } else {
         const ret = await this.setFileContent(path, data)
         this.emit('fileAdded', path)
-        return { newContent: ret, newpath: path }
+        return { newContent: ret, newPath: path }
       }
     } catch (e) {
       throw new Error(e)
@@ -310,7 +312,7 @@ class FileManager extends Plugin {
       await this._handleExists(dest, `Cannot paste content into ${dest}. Path does not exist.`)
       await this._handleIsDir(dest, `Cannot paste content into ${dest}. Path is not directory.`)
       const content = await this.readFile(src)
-      let copiedFilePath = dest + (customName ? '/' + customName : '/' + `Copy_${helper.extractNameFromKey(src)}`)
+      let copiedFilePath = dest + (customName ? '/' + customName : '/' + `${helper.extractNameFromKey(src)}`)
       copiedFilePath = await helper.createNonClashingNameAsync(copiedFilePath, this)
 
       await this.writeFile(copiedFilePath, content)
@@ -349,7 +351,7 @@ class FileManager extends Plugin {
 
   async inDepthCopy(src: string, dest: string, customName?: string) {
     const content = await this.readdir(src)
-    let copiedFolderPath = !customName ? dest + '/' + `Copy_${helper.extractNameFromKey(src)}` : dest + '/' + helper.extractNameFromKey(src)
+    let copiedFolderPath = !customName ? dest + '/' + `Copy_${helper.extractNameFromKey(src)}` : dest + '/' + customName
     copiedFolderPath = await helper.createNonClashingDirNameAsync(copiedFolderPath, this)
 
     await this.mkdir(copiedFolderPath)
@@ -404,10 +406,11 @@ class FileManager extends Plugin {
     }
   }
 
-  async zipDir(dirPath, zip) {
+  async zipDir(dirPath, zip, ignoreDirs = []) {
+    if (ignoreDirs.includes(dirPath)) return
     const filesAndFolders = await this.readdir(dirPath)
     for (let path in filesAndFolders) {
-      if (filesAndFolders[path].isDirectory) await this.zipDir(path, zip)
+      if (filesAndFolders[path].isDirectory) await this.zipDir(path, zip, ignoreDirs)
       else {
         path = this.normalize(path)
         const content: any = await this.readFile(path)
@@ -416,18 +419,18 @@ class FileManager extends Plugin {
     }
   }
 
-  async download(path) {
+  async download(path, asZip = true, ignoreDirs = []) {
     try {
       const downloadFileName = helper.extractNameFromKey(path)
       if (await this.isDirectory(path)) {
         const zip = new JSZip()
-        await this.zipDir(path, zip)
+        await this.zipDir(path, zip, ignoreDirs)
         const content = await zip.generateAsync({ type: 'blob' })
-        saveAs(content, `${downloadFileName}.zip`)
+        return asZip ? saveAs(content, `${downloadFileName}.zip`) : content
       } else {
         path = this.normalize(path)
         const content: any = await this.readFile(path)
-        saveAs(new Blob([content]), downloadFileName)
+        return asZip ? saveAs(new Blob([content]), downloadFileName) : new Blob([content])
       }
     } catch (e) {
       throw new Error(e)
@@ -702,6 +705,37 @@ class FileManager extends Plugin {
     this.emit('noFileSelected')
   }
 
+  async diff(change: commitChange) {
+    await this.saveCurrentFile()
+    this._deps.config.set('currentFile', '')
+    // TODO: Only keep `this.emit` (issue#2210)
+    this.emit('noFileSelected')
+
+    if (!change.readonly){
+      let file = this.normalize(change.path)
+      const resolved = this.getPathFromUrl(file)
+      file = resolved.file
+      this._deps.config.set('currentFile', file)
+      this.openedFiles[file] = file
+    }
+
+    await this.editor.openDiff(change)
+    this.emit('openDiff', change)
+  }
+
+  async closeDiff(change: commitChange) {
+    if (!change.readonly){
+      const file = this.normalize(change.path)
+      delete this.openedFiles[file]
+      if (!Object.keys(this.openedFiles).length) {
+        this._deps.config.set('currentFile', '')
+        // TODO: Only keep `this.emit` (issue#2210)
+        this.emit('noFileSelected')
+      }
+    }
+    this.emit('closeDiff', change)
+  }
+
   async openFile(file?: string) {
     if (!file) {
       this.emit('noFileSelected')
@@ -710,16 +744,17 @@ class FileManager extends Plugin {
       const resolved = this.getPathFromUrl(file)
       file = resolved.file
       await this.saveCurrentFile()
-      if (this.currentFile() === file) return
+      // we always open the file in the editor, even if it's the same as the current one if the editor is in diff mode
+      if (this.currentFile() === file && !this.editor.isDiff) return
 
       const provider = resolved.provider
       this._deps.config.set('currentFile', file)
+
       this.openedFiles[file] = file
 
       let content = ''
       try {
         content = await provider.get(file)
-
       } catch (error) {
         console.log(error)
         throw error
@@ -736,6 +771,7 @@ class FileManager extends Plugin {
       } else {
         await this.editor.open(file, content)
       }
+      // TODO: Only keep `this.emit` (issue#2210)
       this.emit('currentFileChanged', file)
       return true
     }
@@ -927,6 +963,12 @@ class FileManager extends Plugin {
     return exists
   }
 
+  /**
+   * Check if a file can be moved
+   * @param src source file
+   * @param dest destination file
+   * @returns {boolean} true if the file is allowed to be moved
+   */
   async moveFileIsAllowed (src: string, dest: string) {
     try {
       src = this.normalize(src)
@@ -949,6 +991,12 @@ class FileManager extends Plugin {
     }
   }
 
+  /**
+   * Check if a folder can be moved
+   * @param src source folder
+   * @param dest destination folder
+   * @returns {boolean} true if the folder is allowed to be moved
+   */
   async moveDirIsAllowed (src: string, dest: string) {
     try {
       src = this.normalize(src)

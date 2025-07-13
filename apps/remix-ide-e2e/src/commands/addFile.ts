@@ -2,9 +2,11 @@ import { NightwatchBrowser, NightwatchContractContent } from 'nightwatch'
 import EventEmitter from 'events'
 
 class AddFile extends EventEmitter {
-  command(this: NightwatchBrowser, name: string, content: NightwatchContractContent): NightwatchBrowser {
+  command(this: NightwatchBrowser, name: string, content: NightwatchContractContent, readMeFile?:string): NightwatchBrowser {
+    if (!readMeFile)
+      readMeFile = 'README.txt'
     this.api.perform((done) => {
-      addFile(this.api, name, content, () => {
+      addFile(this.api, name, content, readMeFile, () => {
         done()
         this.emit('complete')
       })
@@ -13,7 +15,8 @@ class AddFile extends EventEmitter {
   }
 }
 
-function addFile(browser: NightwatchBrowser, name: string, content: NightwatchContractContent, done: VoidFunction) {
+function addFile(browser: NightwatchBrowser, name: string, content: NightwatchContractContent, readMeFile:string, done: VoidFunction) {
+  const readmeSelector = `li[data-id="treeViewLitreeViewItem${readMeFile}"]`
   browser
     .isVisible({
       selector: "//*[@data-id='sidePanelSwapitTitle' and contains(.,'File explorer')]",
@@ -25,9 +28,13 @@ function addFile(browser: NightwatchBrowser, name: string, content: NightwatchCo
         browser.clickLaunchIcon('filePanel')
       }
     })
-    .scrollInto('li[data-id="treeViewLitreeViewItemREADME.txt"]')
-    .waitForElementVisible('li[data-id="treeViewLitreeViewItemREADME.txt"]')
-    .click('li[data-id="treeViewLitreeViewItemREADME.txt"]').pause(1000) // focus on root directory
+    .execute(function () {
+      const container = document.querySelector('[data-test-id="virtuoso-scroller"]');
+      container.scrollTop = container.scrollHeight;
+    })
+    .scrollInto(readmeSelector)
+    .waitForElementVisible(readmeSelector)
+    .click(readmeSelector).pause(1000) // focus on root directory
     .isVisible({
       selector: `//*[@data-id="treeViewLitreeViewItem${name}"]`,
       locateStrategy: 'xpath',
@@ -60,7 +67,7 @@ function addFile(browser: NightwatchBrowser, name: string, content: NightwatchCo
           })
           .setEditorValue(content.content)
           .getEditorValue((result) => {
-            if(result != content.content) {
+            if (result != content.content) {
               browser.setEditorValue(content.content)
             }
           })

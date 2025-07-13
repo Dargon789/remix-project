@@ -20,7 +20,7 @@ export class RemixEngine extends Engine {
 export function isNative(name: any): any
 /**
  * Checks if plugin caller 'from' is allowed to activate plugin 'to'
- * The caller can have 'canActivate' as a optional property in the plugin profile.
+ * The caller can have 'canActivate' as an optional property in the plugin profile.
  * This is an array containing the 'name' property of the plugin it wants to call.
  * canActivate = ['plugin1-to-call','plugin2-to-call',....]
  * or the plugin is allowed by default because it is native
@@ -34,14 +34,11 @@ export class RemixAppManager extends PluginManager {
   event: EventEmitter
   pluginsDirectory: string
   pluginLoader: PluginLoader // eslint-disable-line no-use-before-define
-  permissionHandler: PermissionHandler
   getAll(): import('@remixproject/plugin-utils').Profile<any>[]
   getIds(): string[]
   isDependent(name: any): any
   isRequired(name: any): any
   registeredPlugins(): Promise<any>
-  turnPluginOn(name: string | string[])
-  turnPluginOff(name: string)
 }
 
 export class PluginManagerSettings {
@@ -67,7 +64,7 @@ export type PluginPermissions = {
   }
 }
 
-export class PluginManagerComponent extends ViewPlugin extends Plugin implements PluginBase {
+export class PluginManagerComponent extends ViewPlugin implements PluginBase {
   constructor(appManager: RemixAppManager, engine: Engine)
   appManager: RemixAppManager
   pluginSettings: PluginManagerSettings
@@ -103,9 +100,9 @@ declare class LocalPlugin {
      * @returns {Promise<{api: any, profile: any}>} A promise with the new plugin profile
      */
   open(plugins: any[]): Promise<{
-        api: any
-        profile: any
-    }>
+    api: any
+    profile: any
+  }>
 
   profile: any
   /**
@@ -113,21 +110,21 @@ declare class LocalPlugin {
      */
   create(): any
   updateName({ target }: {
-        target: any
-    }): void
+    target: any
+  }): void
 
   updateUrl({ target }: {
-        target: any
-    }): void
+    target: any
+  }): void
 
   updateDisplayName({ target }: {
-        target: any
-    }): void
+    target: any
+  }): void
 
   updateProfile(key: any, e: any): void
   updateMethods({ target }: {
-        target: any
-    }): void
+    target: any
+  }): void
 
   /** The form to create a local plugin */
   form(): any
@@ -140,10 +137,10 @@ export interface PluginManagerContextProviderProps {
 
 export interface RemixUiPluginManagerProps {
   pluginComponent: PluginManagerComponent
-  pluginManagerSettings: PluginManagerSettings
+  pluginManagerSettings?: PluginManagerSettings
 }
 /** @class Reference loaders.
- *  A loader is a get,set based object which load a workspace from a defined sources.
+ *  A loader is a get, set based object which load a workspace from a defined sources.
  *  (localStorage, queryParams)
  **/
 declare class PluginLoader {
@@ -153,14 +150,6 @@ declare class PluginLoader {
   current: string
   set(plugin: any, actives: any): void
   get(): any
-}
-// eslint-disable-next-line no-redeclare
-export type PluginManagerSettings = {
-  openDialog: () => void
-  onValidation: () => void
-  clearPermission: (from: any, to: any, method: any) => void
-  settings: () => HTMLElement
-  render: () => HTMLElement
 }
 
 export interface DefaultLocalPlugin extends Profile {
@@ -197,15 +186,6 @@ export type PluginManagerProfile = Profile & {
   version: any
   type: 'iframe' | 'ws'
   hash: string
-}
-// eslint-disable-next-line no-redeclare
-export type LocalPlugin = {
-  create: () => Profile
-  updateName: (target: string) => void
-  updateDisplayName: (displayName: string) => void
-  updateProfile: (key: string, e: Event) => void
-  updateMethods: (target: any) => void
-  form: () => HTMLElement
 }
 
 export { }

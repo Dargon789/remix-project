@@ -16,8 +16,6 @@ const profile = {
   events: ['toggleContent', 'showContent']
 }
 
-const toMaximize = ['LearnEth']
-
 export class VerticalIcons extends Plugin {
   events: EventEmitter
   htmlElement: HTMLDivElement
@@ -31,7 +29,7 @@ export class VerticalIcons extends Plugin {
   }
 
   renderComponent() {
-    const fixedOrder = ['filePanel', 'search', 'solidity', 'udapp', 'debugger', 'solidityStaticAnalysis', 'solidityUnitTesting', 'pluginManager']
+    const fixedOrder = ['remixaiassistant', 'filePanel', 'search', 'solidity', 'udapp', 'debugger', 'solidityStaticAnalysis', 'solidityUnitTesting', 'pluginManager']
 
     const divived = Object.values(this.icons)
       .map((value) => {
@@ -128,11 +126,6 @@ export class VerticalIcons extends Plugin {
     // TODO: Only keep `this.emit` (issue#2210)
     this.emit('showContent', name)
     this.events.emit('showContent', name)
-    if (toMaximize.includes(name)) {
-      setTimeout(_ => {
-        this.call('layout', 'maximiseSidePanel')
-      }, 500)
-    }
   }
 
   /**

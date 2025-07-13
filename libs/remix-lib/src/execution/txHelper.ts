@@ -1,5 +1,5 @@
 'use strict'
-import { ethers } from 'ethers'
+import { Interface, AbiCoder } from 'ethers'
 
 export function makeFullTypeDefinition (typeDef) {
   if (typeDef && typeDef.type.indexOf('tuple') === 0 && typeDef.components) {
@@ -28,26 +28,26 @@ export function encodeParams (funABI, args) {
 
   // NOTE: the caller will concatenate the bytecode and this
   //       it could be done here too for consistency
-  const abiCoder = new ethers.utils.AbiCoder()
+  const abiCoder = new AbiCoder()
   return abiCoder.encode(types, args)
 }
 
 export function encodeFunctionId (funABI) {
   if (funABI.type === 'fallback' || funABI.type === 'receive') return '0x'
-  const abi = new ethers.utils.Interface([funABI])
-  return abi.getSighash(funABI.name)
+  const abi = new Interface([funABI])
+  return abi.getFunction(funABI.name).selector
 }
 
-export function getFunctionFragment (funABI): ethers.utils.Interface {
+export function getFunctionFragment (funABI): Interface {
   if (funABI.type === 'fallback' || funABI.type === 'receive') return null
-  return new ethers.utils.Interface([funABI])
+  return new Interface([funABI])
 }
 
 export function sortAbiFunction (contractabi) {
   // Check if function is constant (introduced with Solidity 0.6.0)
   const isConstant = ({ stateMutability }) => stateMutability === 'view' || stateMutability === 'pure'
   // Sorts the list of ABI entries. Constant functions will appear first,
-  // followed by non-constant functions. Within those t wo groupings, functions
+  // followed by non-constant functions. Within those two groupings, functions
   // will be sorted by their names.
   return contractabi.sort(function (a, b) {
     if (isConstant(a) && !isConstant(b)) {

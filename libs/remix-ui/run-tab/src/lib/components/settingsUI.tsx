@@ -1,5 +1,5 @@
 // eslint-disable-next-line no-use-before-define
-import React from 'react'
+import React, { useEffect } from 'react'
 import { SettingsProps } from '../types'
 import { EnvironmentUI } from './environment'
 import { NetworkUI } from './network'
@@ -12,20 +12,35 @@ export function SettingsUI(props: SettingsProps) {
 
   return (
     <div className="udapp_settings">
-      <EnvironmentUI selectedEnv={props.selectExEnv} providers={props.providers} setExecutionContext={props.setExecutionContext} />
+      <EnvironmentUI
+        runTabPlugin={props.runTabPlugin}
+        selectedEnv={props.selectExEnv}
+        providers={props.providers}
+        setExecutionContext={props.setExecutionContext}
+        checkSelectionCorrectness={props.EvaluateEnvironmentSelection}
+        modal={props.modal}
+        config={props.runTabPlugin.config}
+        udappState={props.udappState}
+        envLabel={props.envLabel}
+      />
       <NetworkUI networkName={props.networkName} />
       <AccountUI
+        runTabPlugin={props.runTabPlugin}
+        addFile={props.addFile}
         personalMode={props.personalMode}
         selectExEnv={props.selectExEnv}
         accounts={props.accounts}
         setAccount={props.setAccount}
         createNewBlockchainAccount={props.createNewBlockchainAccount}
+        createNewSmartAccount={props.createNewSmartAccount}
+        delegationAuthorization={props.delegationAuthorization}
         setPassphrase={props.setPassphrase}
         setMatchPassphrase={props.setMatchPassphrase}
         tooltip={props.tooltip}
         modal={props.modal}
         signMessageWithAddress={props.signMessageWithAddress}
         passphrase={props.passphrase}
+        networkName={props.networkName}
       />
       <GasLimitUI gasLimit={props.gasLimit} setGasFee={props.setGasFee} />
       <ValueUI setUnit={props.setUnit} sendValue={props.sendValue} sendUnit={props.sendUnit} setSendValue={props.setSendValue} />

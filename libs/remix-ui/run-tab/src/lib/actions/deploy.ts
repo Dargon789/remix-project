@@ -9,7 +9,7 @@ import { DeployMode, MainnetPrompt } from "../types"
 import { displayNotification, fetchProxyDeploymentsSuccess, setDecodedResponse, updateInstancesBalance } from "./payload"
 import { addInstance } from "./actions"
 import { addressToString, logBuilder } from "@remix-ui/helper"
-import Web3 from "web3"
+import { Web3 } from "web3"
 
 declare global {
   interface Window {
@@ -22,11 +22,12 @@ const txHelper = remixLib.execution.txHelper
 const txFormat = remixLib.execution.txFormat
 
 const loadContractFromAddress = (plugin: RunTab, address, confirmCb, cb) => {
-  if (/.(.abi)$/.exec(plugin.config.get('currentFile'))) {
+  if (/\.(abi)$/.exec(plugin.config.get('currentFile'))) {
     confirmCb(() => {
       let abi
       try {
         abi = JSON.parse(plugin.editor.currentContent())
+        if (!Array.isArray(abi)) return cb('ABI should be an array object.')
       } catch (e) {
         return cb('Failed to parse the current file as JSON ABI.')
       }
@@ -41,7 +42,7 @@ const loadContractFromAddress = (plugin: RunTab, address, confirmCb, cb) => {
 
 export const getSelectedContract = (contractName: string, compiler: CompilerAbstractType): ContractData => {
   if (!contractName) return null
-  // const compiler = plugin.compilersArtefacts[compilerAtributeName]
+  // const compiler = plugin.compilersArtefacts[compilerAttributeName]
 
   if (!compiler) return null
 
@@ -60,9 +61,9 @@ export const getSelectedContract = (contractName: string, compiler: CompilerAbst
       return txHelper.getConstructorInterface(contract.object.abi)
     },
     getConstructorInputs: () => {
-      const constructorInteface = txHelper.getConstructorInterface(contract.object.abi)
+      const constructorInterface = txHelper.getConstructorInterface(contract.object.abi)
 
-      return txHelper.inputParametersDeclarationToString(constructorInteface.inputs)
+      return txHelper.inputParametersDeclarationToString(constructorInterface.inputs)
     },
     isOverSizeLimit: async (args: string) => {
       const encodedParams = await txFormat.encodeParams(args, txHelper.getConstructorInterface(contract.object.abi))
@@ -119,9 +120,18 @@ const getConfirmationCb = (plugin: RunTab, dispatch: React.Dispatch<any>, confir
 
 export const continueHandler = (dispatch: React.Dispatch<any>, gasEstimationPrompt: (msg: string) => JSX.Element, error, continueTxExecution, cancelCb) => {
   if (error) {
-    let msg = typeof error !== 'string' ? error.message : error
+    let msg = ''
+    if (typeof error === 'string') {
+      msg = error
+    }
     if (error && error.innerError) {
       msg += '\n' + error.innerError
+    }
+    if (error && error.message) {
+      msg += '\n' + error.message
+    }
+    if (error && error.error) {
+      msg += '\n' + error.error
     }
 
     if (msg.includes('invalid opcode')) msg += '\nThe EVM version used by the selected environment is not compatible with the compiler EVM version.'
@@ -286,7 +296,6 @@ export const runTransactions = (
   plugin: RunTab,
   dispatch: React.Dispatch<any>,
   instanceIndex: number,
-  isPinnedContract: boolean,
   lookupOnly: boolean,
   funcABI: FuncABI,
   inputsValues: string,
@@ -300,9 +309,9 @@ export const runTransactions = (
   funcIndex?: number) => {
   let callinfo = ''
   if (lookupOnly) callinfo = 'call'
-  else if (funcABI.type === 'fallback' || funcABI.type === 'receive') callinfo = 'lowLevelInteracions'
+  else if (funcABI.type === 'fallback' || funcABI.type === 'receive') callinfo = 'lowLevelinteractions'
   else callinfo = 'transact'
-  _paq.push(['trackEvent', 'udapp', callinfo, plugin.blockchain.getCurrentNetworkStatus().network.name])
+  _paq.push(['trackEvent', 'udapp', callinfo, plugin.REACT_API.networkName])
 
   const params = funcABI.type !== 'fallback' ? inputsValues : ''
   plugin.blockchain.runOrCallContractMethod(
@@ -323,7 +332,7 @@ export const runTransactions = (
     (returnValue) => {
       const response = txFormat.decodeResponse(returnValue, funcABI)
 
-      dispatch(setDecodedResponse(instanceIndex, response, funcIndex, isPinnedContract))
+      dispatch(setDecodedResponse(instanceIndex, response, funcIndex))
     },
     (network, tx, gasEstimation, continueTxExecution, cancelCb) => {
       confirmationHandler(plugin, dispatch, mainnetPrompt, network, tx, gasEstimation, continueTxExecution, cancelCb)
@@ -342,9 +351,8 @@ export const getFuncABIInputs = (plugin: RunTab, funcABI: FuncABI) => {
 }
 
 export const updateInstanceBalance = async (plugin: RunTab, dispatch: React.Dispatch<any>) => {
-  if (plugin.REACT_API?.instances?.instanceList?.length || plugin.REACT_API?.pinnedInstances?.instanceList?.length) {
-    let instances = plugin.REACT_API?.instances?.instanceList?.length ? plugin.REACT_API?.instances?.instanceList : []
-    instances = plugin.REACT_API?.pinnedInstances?.instanceList.length ? instances.concat(plugin.REACT_API.pinnedInstances.instanceList) : instances
+  if (plugin.REACT_API?.instances?.instanceList?.length) {
+    const instances = plugin.REACT_API?.instances?.instanceList?.length ? plugin.REACT_API?.instances?.instanceList : []
     for (const instance of instances) {
       const balInEth = await plugin.blockchain.getBalanceInEther(instance.address)
       instance.balance = balInEth
@@ -391,7 +399,7 @@ export const getNetworkProxyAddresses = async (plugin: RunTab, dispatch: React.D
 export const isValidContractUpgrade = async (plugin: RunTab, proxyAddress: string, newContractName: string, solcInput: SolcInput, solcOutput: SolcOutput, solcVersion: string) => {
   // build current contract first to get artefacts.
   const network = plugin.blockchain.networkStatus.network
-  const identifier = network.name === 'custom' ? network.name + '-' + network.id : network.name
+  const identifier = network.name === 'custom' ? network.name + '-' + network.id : network.name === 'VM' ? plugin.blockchain.getProvider() : network.name
   const networkDeploymentsExists = await plugin.call('fileManager', 'exists', `.deploys/upgradeable-contracts/${identifier}/UUPS.json`)
 
   if (networkDeploymentsExists) {

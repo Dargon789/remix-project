@@ -87,7 +87,7 @@ export class CodeManager {
    * Retrieve the called function for the current vm step for the given @arg address
    *
    * @param {String} stepIndex - vm trace step
-   * @param {String} sourceMap - source map given byt the compilation result
+   * @param {String} sourceMap - source map given by the compilation result
    * @param {Object} ast - ast given by the compilation result
    * @return {Object} return the ast node of the function
    */
@@ -125,7 +125,7 @@ export class CodeManager {
    *
    * @param {String} address - address of the current context (used to resolve instruction index)
    * @param {String} pc - pc that point to the instruction index
-   * @param {String} sourceMap - source map given byt the compilation result
+   * @param {String} sourceMap - source map given by the compilation result
    * @param {Object} ast - ast given by the compilation result
    * @return {Object} return the ast node of the function
    */
@@ -134,25 +134,25 @@ export class CodeManager {
     return findNodeAtInstructionIndex('FunctionDefinition', instIndex, sourceMap, ast)
   }
 
-  private retrieveCodeAndTrigger (codeMananger, address, stepIndex, tx) {
-    codeMananger.getCode(address).then((result) => {
-      this.retrieveIndexAndTrigger(codeMananger, address, stepIndex, result.instructions)
+  private retrieveCodeAndTrigger (codeManager, address, stepIndex, tx) {
+    codeManager.getCode(address).then((result) => {
+      this.retrieveIndexAndTrigger(codeManager, address, stepIndex, result.instructions)
     }).catch((error) => {
       return console.log(error)
     })
   }
 
-  private async retrieveIndexAndTrigger (codeMananger, address, step, code) {
+  private async retrieveIndexAndTrigger (codeManager, address, step, code) {
     let result
     const next = []
     const returnInstructionIndexes = []
     const outOfGasInstructionIndexes = []
 
     try {
-      result = codeMananger.getInstructionIndex(address, step)
+      result = codeManager.getInstructionIndex(address, step)
       for (let i = 1; i < 6; i++) {
         if (this.traceManager.inRange(step + i)) {
-          next.push(codeMananger.getInstructionIndex(address, step + i))
+          next.push(codeManager.getInstructionIndex(address, step + i))
         }
       }
 
@@ -177,7 +177,7 @@ export class CodeManager {
       return console.log(error)
     }
     try {
-      codeMananger.event.trigger('changed', [code, address, result, next, returnInstructionIndexes, outOfGasInstructionIndexes])
+      codeManager.event.trigger('changed', [code, address, result, next, returnInstructionIndexes, outOfGasInstructionIndexes])
     } catch (e) {
       console.log('dispatching event failed', e)
     }

@@ -9,7 +9,7 @@ This document includes the release instructions for:
  - Updating Remix's beta version on remix-beta.ethereum.org
 
 ## Feature Freeze
-Once feature freeze is done, `remix_beta` should be updated latest to the master which will automatically update `remix-beta.ethereum.org` through a CI job.
+Once feature freeze is done, `remix_beta` should be updated to the latest master which will automatically update `remix-beta.ethereum.org` through a CI job.
 
 Use this unified command:
 
@@ -45,11 +45,11 @@ This command will ask for a new version.
 
 ### Other libraries NPM release
 
-  `yarn run publish:libs `
+  `yarn run publish:libs`
  
 This command uses `lerna` and is solely responsible for publishing all the remix libraries. It will ask for a new version of each library. Make sure you are logged in to NPM.
 
-Once these command run successfully, the version for each remix library will be updated to latest in the libs' package.json file.
+Once these commands run successfully, the version for each remix library will be updated to the latest in the libs' package.json file.
 
  - Create and merge bump PR to master
  
@@ -95,7 +95,7 @@ Publish a new release on GitHub using created tag and generate automated changel
 
 ### Part 2. Update the Remix Live
 
-Updating the `remix_live` branch latest to the `remix_beta` runs the CircleCI build which updates liver version of Remix IDE on `remix.ethereum.org`
+Updating the `remix_live` branch latest to the `remix_beta` runs the CircleCI build which updates live version of Remix IDE on `remix.ethereum.org`
 
 Use this unified command:
 

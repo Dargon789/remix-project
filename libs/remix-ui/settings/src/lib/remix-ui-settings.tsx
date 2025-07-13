@@ -14,7 +14,7 @@ import {
   copilotMaxNewToken,
   copilotTemperature,
   textWrapEventAction,
-  useMatomoAnalytics,
+  useMatomoPerfAnalytics,
   saveTokenToast,
   removeTokenToast,
   saveSwarmSettingsToast,
@@ -39,7 +39,7 @@ export interface RemixUiSettingsProps {
   config: any
   editor: any
   _deps: any
-  useMatomoAnalytics: boolean
+  useMatomoPerfAnalytics: boolean
   useCopilot: boolean
   themeModule: ThemeModule
   localeModule: LocaleModule
@@ -125,8 +125,8 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
   }, [themeName, state.message])
 
   useEffect(() => {
-    if (props.useMatomoAnalytics !== null) useMatomoAnalytics(props.config, props.useMatomoAnalytics, dispatch)
-  }, [props.useMatomoAnalytics])
+    if (props.useMatomoPerfAnalytics !== null) useMatomoPerfAnalytics(props.config, props.useMatomoPerfAnalytics, dispatch)
+  }, [props.useMatomoPerfAnalytics])
 
   const onchangeGenerateContractMetadata = (event) => {
     generateContractMetadat(props.config, event.target.checked, dispatch)
@@ -139,13 +139,11 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
   const onchangeCopilotActivate = () => {
     if (!props.useCopilot) {
       copilotActivate(props.config, props.useCopilot, dispatch)
-      props.plugin.call('terminal', 'log', { type: 'typewriterlog', value: `Solidity copilot not activated!` })
       return
     }
 
     const startCopilot = async () => {
       copilotActivate(props.config, props.useCopilot, dispatch)
-      props.plugin.call('terminal', 'log', { type: 'typewriterlog', value: `Solidity copilot activated!` })
     }
 
     startCopilot()
@@ -169,7 +167,7 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
   }
 
   const onchangeMatomoAnalytics = (event) => {
-    useMatomoAnalytics(props.config, event.target.checked, dispatch)
+    useMatomoPerfAnalytics(props.config, event.target.checked, dispatch)
   }
 
   const onchangeUseAutoComplete = (event) => {
@@ -199,7 +197,7 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
     const isMetadataChecked = props.config.get('settings/generate-contract-metadata') || false
     const isEditorWrapChecked = props.config.get('settings/text-wrap') || false
     const isPersonalChecked = props.config.get('settings/personal-mode') || false
-    const isMatomoChecked = props.config.get('settings/matomo-analytics') || false
+    const isMatomoChecked = props.config.get('settings/matomo-perf-analytics') || false
 
     const isAutoCompleteChecked = props.config.get('settings/auto-completion') || false
     const isShowGasInEditorChecked = props.config.get('settings/show-gas') || false
@@ -251,6 +249,13 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
               htmlFor="generatecontractmetadata"
             >
               <FormattedMessage id="settings.generateContractMetadataText" />
+              <CustomTooltip
+                placement="auto"
+                tooltipId="settings-tooltip-metadata"
+                tooltipText={intl.formatMessage({ id: 'settings.generateContractMetadataTooltip' })}
+              >
+                <i className="ml-1 far fa-info-circle"></i>
+              </CustomTooltip>
             </label>
           </div>
           <div className="mt-2 custom-control custom-checkbox mb-1">
@@ -298,27 +303,22 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
           <div className="custom-control custom-checkbox mb-1">
             <input onChange={onchangePersonal} id="personal" type="checkbox" className="custom-control-input" checked={isPersonalChecked} />
             <label className={`form-check-label custom-control-label align-middle ${getTextClass('settings/personal-mode')}`} htmlFor="personal">
-              <i className="fas fa-exclamation-triangle text-warning" aria-hidden="true"></i> <span> </span>
-              <span> </span>
               <FormattedMessage id="settings.enablePersonalModeText" />
-              &nbsp;
-              <FormattedMessage id="settings.warnText" />
+              <CustomTooltip
+                placement="auto"
+                tooltipId="settings-tooltip-personalMode"
+                tooltipText={intl.formatMessage({ id: 'settings.enablePersonalModeTooltip' })}
+              >
+                <i className="ml-1 fas fa-exclamation-triangle text-warning" aria-hidden="true"></i>
+              </CustomTooltip>
             </label>
           </div>
           <div className="custom-control custom-checkbox mb-1">
-            <input onChange={onchangeMatomoAnalytics} id="settingsMatomoAnalytics" type="checkbox" className="custom-control-input" checked={isMatomoChecked} />
-            <label className={`form-check-label custom-control-label align-middle ${getTextClass('settings/matomo-analytics')}`} htmlFor="settingsMatomoAnalytics">
+            <input onChange={onchangeMatomoAnalytics} id="settingsMatomoPerfAnalytics" type="checkbox" className="custom-control-input" checked={isMatomoChecked} />
+            <label data-id="label-matomo-settings" className={`form-check-label custom-control-label align-middle ${getTextClass('settings/matomo-perf-analytics')}`} htmlFor="settingsMatomoPerfAnalytics">
               <span>
-                <FormattedMessage id="settings.matomoAnalytics" />
+                <FormattedMessage id="settings.matomoPerfAnalytics" />
               </span>
-              <a href="https://medium.com/p/66ef69e14931/" target="_blank">
-                {' '}
-                <FormattedMessage id="settings.analyticsInRemix" />
-              </a>{' '}
-              <span>&</span>{' '}
-              <a target="_blank" href="https://matomo.org/free-software">
-                Matomo
-              </a>
             </label>
           </div>
           <div className="custom-control custom-checkbox mb-1">
@@ -458,11 +458,11 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
           <span
             data-id="remix_ai_docs"
             id="remix_ai_docs"
-            className="btn pl-2 pr-0 py-0 d-inline ai-docs"
+            className="btn pl-2 pr-0 py-0 d-inline ai-docs text-dark"
             role='link'
             onClick={()=>{
               window.open("https://remix-ide.readthedocs.io/en/latest/ai.html")
-              _paq.push(['trackEvent', 'ai', 'solcoder', 'documentation'])
+              _paq.push(['trackEvent', 'ai', 'remixAI', 'documentation'])
             }}
           >
             <i aria-hidden="true" className="fas fa-book"></i>

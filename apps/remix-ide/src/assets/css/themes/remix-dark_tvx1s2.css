@@ -21,10 +21,12 @@
   --danger: #b84040;
   --light: #2a2c3f;
   --dark: #222336;
+  --dim: #47485c;
   --text: #babbcc;
   --text-background: #222336;
   --text-bg-mark: #8388b2;
   --custom-select: #35384c;
+  --brand-dark-blue: #222496;
   --runtab: #8A93B0;
   --body-bg: #222336;
   --breakpoint-xs: 0;
@@ -2885,7 +2887,7 @@ input[type="submit"].btn-block {
   padding: 0.25rem 1.5rem;
   clear: both;
   font-weight: 400;
-  color: #212529;
+  color: var(--text);
   text-align: inherit;
   white-space: nowrap;
   background-color: transparent;
@@ -3238,6 +3240,7 @@ input[type="submit"].btn-block {
   position: relative;
   margin-bottom: 0;
   vertical-align: top;
+  padding-top: 0.15rem;
 }
 .custom-control-label::before {
   position: absolute;
@@ -5082,6 +5085,7 @@ a.close.disabled {
 .modal-header .close {
   padding: 15px;
   margin: -1rem -1rem -1rem auto;
+  cursor: pointer;
 }
 .modal-title {
   margin-bottom: 0;
@@ -5663,7 +5667,7 @@ button.bg-success:hover {
   background-color: #27926b !important;
 }
 .bg-info {
-  background-color: #274458 !important;
+  background-color: #35576e !important;
 }
 a.bg-info:focus,
 a.bg-info:hover,

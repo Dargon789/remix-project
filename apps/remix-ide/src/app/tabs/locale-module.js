@@ -38,7 +38,7 @@ export class LocaleModule extends Plugin {
       config: Registry.getInstance().get('config') && Registry.getInstance().get('config').api
     }
     this.locales = {}
-    locales.map((locale) => {
+    locales.forEach((locale) => {
       this.locales[locale.code.toLocaleLowerCase()] = locale
     })
     this._paq = _paq
@@ -77,6 +77,7 @@ export class LocaleModule extends Plugin {
     const next = localeCode || this.active // Name
     if (next === this.active) return // --> exit out of this method
     _paq.push(['trackEvent', 'localeModule', 'switchTo', next])
+    
     const nextLocale = this.locales[next] // Locale
     if (!this.forced) this._deps.config.set('settings/locale', next)
 

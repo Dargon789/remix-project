@@ -24,7 +24,7 @@ const profile = {
   version: packageJson.version
 }
 
-class Terminal extends Plugin {
+export default class Terminal extends Plugin {
   fileImport: CompilerImports
   event: any
   globalRegistry: Registry
@@ -117,10 +117,10 @@ class Terminal extends Plugin {
   }
 
   onDeactivation() {
-    this.off('scriptRunner', 'log')
-    this.off('scriptRunner', 'info')
-    this.off('scriptRunner', 'warn')
-    this.off('scriptRunner', 'error')
+    this.off('scriptRunnerBridge', 'log')
+    this.off('scriptRunnerBridge', 'info')
+    this.off('scriptRunnerBridge', 'warn')
+    this.off('scriptRunnerBridge', 'error')
   }
 
   logHtml(html) {
@@ -163,4 +163,3 @@ class Terminal extends Plugin {
   }
 }
 
-module.exports = Terminal

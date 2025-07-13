@@ -21,6 +21,11 @@ function App() {
 
   useEffect(() => {
     plugin.internalEvents.on('circom_activated', () => {
+      (async () => {
+        const downloadList = await plugin.getCompilerDownloadList()
+
+        dispatch({ type: 'SET_VERSION_DOWNLOAD_LIST', payload: downloadList })
+      })();
       // @ts-ignore
       plugin.on('locale', 'localeChanged', (locale: any) => {
         setLocale(locale)
@@ -47,21 +52,26 @@ function App() {
       signalInputs = (signalInputs || []).filter(input => input)
       dispatch({ type: 'SET_SIGNAL_INPUTS', payload: signalInputs })
       dispatch({ type: 'SET_COMPILER_STATUS', payload: 'idle' })
+      dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: null })
     })
     plugin.internalEvents.on('circuit_compiling_errored', compilerErrored)
-
-    // r1cs events
-    plugin.internalEvents.on('circuit_generating_r1cs_start', () => dispatch({ type: 'SET_COMPILER_STATUS', payload: 'generating' }))
-    plugin.internalEvents.on('circuit_generating_r1cs_done', () => dispatch({ type: 'SET_COMPILER_STATUS', payload: 'idle' }))
-    plugin.internalEvents.on('circuit_generating_r1cs_errored', compilerErrored)
 
     // witness events
     plugin.internalEvents.on('circuit_computing_witness_start', () => dispatch({ type: 'SET_COMPILER_STATUS', payload: 'computing' }))
     plugin.internalEvents.on('circuit_computing_witness_done', () => {
       dispatch({ type: 'SET_COMPILER_STATUS', payload: 'idle' })
-      dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: null })
+      dispatch({ type: 'SET_COMPUTE_FEEDBACK', payload: null })
     })
-    plugin.internalEvents.on('circuit_computing_witness_errored', compilerErrored)
+    plugin.internalEvents.on('circuit_computing_witness_errored', (err) => {
+      dispatch({ type: 'SET_COMPILER_STATUS', payload: 'idle' })
+      try {
+        const report = JSON.parse(err.message)
+  
+        dispatch({ type: 'SET_COMPUTE_FEEDBACK', payload: report })
+      } catch (e) {
+        dispatch({ type: 'SET_COMPUTE_FEEDBACK', payload: err.message })
+      }
+    })
 
     // parsing events
     plugin.internalEvents.on('circuit_parsing_done', (_, filePathToId) => {
@@ -78,6 +88,13 @@ function App() {
       dispatch({ type: 'SET_COMPILER_STATUS', payload: 'warning' })
       dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: report })
     })
+    plugin.internalEvents.on('download_success', (version) => {
+      dispatch({ type: 'REMOVE_VERSION_FROM_DOWNLOAD_LIST', payload: version })
+      dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: null })
+    })
+    plugin.internalEvents.on('download_failed', (error) => {
+      dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: 'Download failed! Please check your internet connection. ' + error.message })
+    })
   }, [])
 
   useEffect(() => {
@@ -86,6 +103,7 @@ function App() {
         if (appState.autoCompile) await compileCircuit(plugin, appState)
       })()
       setIsContentChanged(false)
+      if (appState.setupExportStatus === 'done') dispatch({ type: 'SET_SETUP_EXPORT_STATUS', payload: 'update' })
     }
   }, [appState.autoCompile, isContentChanged])
 
@@ -103,6 +121,12 @@ function App() {
       dispatch({ type: 'SET_SIGNAL_INPUTS', payload: [] })
       dispatch({ type: 'SET_COMPILER_STATUS', payload: 'idle' })
       dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: null })
+      dispatch({ type: 'SET_COMPUTE_FEEDBACK', payload: null })
+      dispatch({ type: 'SET_SETUP_EXPORT_FEEDBACK', payload: null })
+      dispatch({ type: 'SET_PROOF_FEEDBACK', payload: null })
+      dispatch({ type: 'SET_SETUP_EXPORT_STATUS', payload: null })
+      dispatch({ type: 'SET_VERIFICATION_KEY', payload: null })
+      dispatch({ type: 'SET_ZKEY', payload: null })
     }
   }, [appState.filePath])
 
@@ -120,6 +144,7 @@ function App() {
 
       dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: report })
     } catch (e) {
+      if (process.platform === 'win32' && err.message.includes('3221225781')) return dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: 'The compiler failed to start because of some missing dependencies. Please install or repair the Microsoft Visual C++ Redistributable package to resolve this issue.' })
       dispatch({ type: 'SET_COMPILER_FEEDBACK', payload: err.message })
     }
   }

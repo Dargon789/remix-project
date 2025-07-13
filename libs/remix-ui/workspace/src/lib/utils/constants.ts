@@ -1,78 +1,5 @@
 import { TemplateType } from '../types'
 export const ROOT_PATH = '/'
-export const solTestYml = `
-name: Running Solidity Unit Tests
-on: [push]
-
-jobs:
-  run_sol_contracts_job:
-    runs-on: ubuntu-latest
-    name: A job to run solidity unit tests on github actions CI
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Environment Setup
-      uses: actions/setup-node@v3
-      with:
-        node-version: 20.0.0
-    - name: Run SUT Action
-      uses: EthereumRemix/sol-test@v1.1
-      with:
-        test-path: 'tests'
-        compiler-version: '0.8.15'
-//      evm-version: 'paris'
-//      optimize: true
-//      optimizer-runs: 200
-//      node-url: 'https://mainnet.infura.io/v3/08b2a484451e4635a28b3d8234f24332'
-//      block-number: 'latest'
-//      hard-fork: 'merge'
-
-`
-export const tsSolTestYml = `
-name: Running Mocha Chai Solidity Unit Tests
-on: [push]
-
-jobs:
-  run_sample_test_job:
-    runs-on: ubuntu-latest
-    name: A job to run mocha and chai tests for solidity on github actions CI
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Environment Setup
-      uses: actions/setup-node@v3
-      with:
-        node-version: 20.0.0
-    - name: Run Mocha Chai Unit Test Action
-      uses: EthereumRemix/ts-sol-test@v1.3.1
-      with:
-        test-path: 'tests'
-        contract-path: 'contracts'
-        compiler-version: '0.8.7'
-//      evm-version: 'paris'
-//      optimize: true
-//      optimizer-runs: 200
-//      node-url: 'https://mainnet.infura.io/v3/08b2a484451e4635a28b3d8234f24332'
-//      block-number: 'latest'
-//      hard-fork: 'merge'
-`
-export const slitherYml = `
-name: Slither Analysis
-on: [push]
-
-jobs:
-  analyze:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - run: npm install
-    - uses: crytic/slither-action@v0.2.0
-      with:
-        target: 'contracts'
-        slither-args: '--solc-remaps "@openzeppelin/contracts=./node_modules/@openzeppelin/contracts hardhat=./node_modules/hardhat"'
-        fail-on: 'low'
-        solc-version: '0.8.2'
-`
 
 export const TEMPLATE_NAMES = {
   'remixDefault': 'Basic',
@@ -86,27 +13,176 @@ export const TEMPLATE_NAMES = {
   'semaphore': 'Semaphore',
   'hashchecker': 'Hash Checker',
   'rln': 'Rate-Limiting Nullifier',
+  'multNr': 'Simple Multiplier',
+  'stealthDropNr': 'Stealth Drop',
   'breakthroughLabsUniswapv4Hooks': 'Breakthrough-Labs Uniswapv4Hooks',
   'uniswapV4Template': 'Uniswap v4 Template',
   'uniswapV4HookBookMultiSigSwapHook': 'Uniswap V4 HookBook MultiSigSwapHook',
+  'accountAbstraction': 'Account Abstraction Template',
+  'introToEIP7702': 'Intro to EIP-7702',
 }
 
 export const TEMPLATE_METADATA: Record<string, TemplateType> = {
   'breakthroughLabsUniswapv4Hooks': {
     type: 'git',
     url: 'https://github.com/Breakthrough-Labs/Uniswapv4Hooks',
-    branch: 'foundry_pure'
+    branch: 'foundry_pure',
+    forceCreateNewWorkspace: true
+  },
+  'accountAbstraction': {
+    type: 'git',
+    url: 'https://github.com/eth-infinitism/account-abstraction',
+    branch: 'releases/v0.8',
+    forceCreateNewWorkspace: true
   },
   'uniswapV4Template': {
     type: 'git',
     url: 'https://github.com/Breakthrough-Labs/v4-template',
-    branch: 'main'
+    branch: 'main',
+    forceCreateNewWorkspace: true
   },
   'uniswapV4HookBookMultiSigSwapHook': {
     type: 'plugin',
     name: 'cookbookdev',
     endpoint: 'openPattern',
-    params: ['Uniswap-V4-HookBook-MultiSigSwapHook', true]
+    params: ['Uniswap-V4-HookBook-MultiSigSwapHook', true],
+    forceCreateNewWorkspace: true,
+    desktopCompatible: false,
+    disabled: true
+  },
+  'token-sale': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['token-sale'],
+    desktopCompatible: false
+  },
+  'simple-nft-sale': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['simple-nft-sale'],
+    desktopCompatible: false
+  },
+  'Azuki-ERC721A-NFT-Sale': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['Azuki-ERC721A-NFT-Sale'],
+    desktopCompatible: false
+  },
+  'Azuki-ERC721A-NFT-Sale-basic': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['Azuki-ERC721A-NFT-Sale-basic'],
+    desktopCompatible: false
+  },
+  'Azuki-ERC721A-ERC721A': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['Azuki-ERC721A-ERC721A'],
+    desktopCompatible: false
+  },
+  'token-staking-with-infinite-rewards': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['token-staking-with-infinite-rewards'],
+    desktopCompatible: false
+  },
+  'nft-staking-with-infinite-rewards': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['nft-staking-with-infinite-rewards'],
+    desktopCompatible: false
+  },
+  'basic-dao': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['basic-dao'],
+    desktopCompatible: false
+  },
+  'soulbound-nft': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['soulbound-nft'],
+    desktopCompatible: false
+  },
+  'multi-collection-nft-with-burnable-nfts-and-pausable-transfers': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openContract',
+    params: ['multi-collection-nft-with-burnable-nfts-and-pausable-transfers'],
+    desktopCompatible: false
+  },
+  'OpenSea-Seaport': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openProtocol',
+    params: ['OpenSea-Seaport'],
+    desktopCompatible: false
+  },
+  'Ethereum-Name-Service': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openProtocol',
+    params: ['Ethereum-Name-Service'],
+    desktopCompatible: false
+  },
+  'Umbra-Cash': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openProtocol',
+    params: ['Umbra-Cash'],
+    desktopCompatible: false
+  },
+  'Aave-V3': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openProtocol',
+    params: ['Aave-V3'],
+    desktopCompatible: false
+  },
+  'ChainLink': {
+    type: 'plugin',
+    name: 'cookbookdev',
+    endpoint: 'openProtocol',
+    params: ['ChainLink'],
+    desktopCompatible: false
   }
+}
+
+export type TemplateOption = {
+  mintable?: boolean
+  burnable?: boolean
+  pausable?: boolean
+  upgradeable?: 'uups' | 'transparent' | 'uupds'
+}
+
+export type Template = {
+  value: string
+  displayName: string
+  opts?: TemplateOption
+  templateType?: TemplateType
+  tagList?: string[],
+  IsArtefact?: boolean
+  description?: string
+  name?: string
+}
+
+export type TemplateGroup = {
+  name: string
+  items: Array<Template>
+  tooltip?: string
+  onClick?: () => void
+  onClickLabel?: string
+  description?: string
+  IsArtefact?: boolean
+  hasOptions?: boolean
 }
 

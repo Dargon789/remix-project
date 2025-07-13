@@ -7,6 +7,8 @@ import { PluginProfile, StatusBarInterface } from '../../types'
 import { RemixUIStatusBar } from '@remix-ui/statusbar'
 import { FilePanelType } from '@remix-ui/workspace'
 import { VerticalIcons } from './vertical-icons'
+import { CustomRemixApi } from '@remix-api'
+import { AppAction } from '@remix-ui/app'
 
 const statusBarProfile: PluginProfile = {
   name: 'statusBar',
@@ -16,12 +18,13 @@ const statusBarProfile: PluginProfile = {
   version: packageJson.version,
 }
 
-export class StatusBar extends Plugin implements StatusBarInterface {
+export class StatusBar extends Plugin<any, CustomRemixApi> implements StatusBarInterface {
   htmlElement: HTMLDivElement
   events: EventEmitter
   filePanelPlugin: FilePanelType
   verticalIcons: VerticalIcons
-  dispatch: React.Dispatch<any> = () => {}
+  dispatch: React.Dispatch<any> = () => { }
+  appStateDispatch: React.Dispatch<AppAction> = () => { }
   currentWorkspaceName: string = ''
   isGitRepo: boolean = false
   isAiActive: boolean = false
@@ -75,7 +78,7 @@ export class StatusBar extends Plugin implements StatusBarInterface {
       const workspaceName = localStorage.getItem('currentWorkspace')
       workspaceName && workspaceName.length > 0 ? this.currentWorkspaceName = workspaceName : this.currentWorkspaceName = 'error'
     })
-    this.on('settings', 'copilotChoiceChanged', (isAiActive) => {
+    this.on('settings', 'copilotChoiceChanged', (isAiActive: boolean) => {
       this.isAiActive = isAiActive
     })
     this.renderComponent()
@@ -83,6 +86,10 @@ export class StatusBar extends Plugin implements StatusBarInterface {
 
   setDispatch(dispatch: React.Dispatch<any>) {
     this.dispatch = dispatch
+  }
+
+  setAppStateDispatch(appStateDispatch: React.Dispatch<AppAction>) {
+    this.appStateDispatch = appStateDispatch
   }
 
   renderComponent() {
@@ -98,7 +105,7 @@ export class StatusBar extends Plugin implements StatusBarInterface {
   render() {
     return (
       <div data-id="status-bar-container">
-        <PluginViewWrapper plugin={this} />
+        <PluginViewWrapper useAppContext={true} plugin={this} />
       </div>
     )
   }

@@ -17,61 +17,58 @@ module.exports = {
     browser.clickLaunchIcon('pluginManager')
       .scrollAndClick('[data-id="pluginManagerComponentActivateButtonvyper"]')
       .clickLaunchIcon('vyper')
-      .pause(5000)
-      // @ts-ignore
       .frame(0)
   },
 
   'Should clone the Vyper repo #group1': function (browser: NightwatchBrowser) {
-    browser.click('button[data-id="add-repository"]')
+    browser
+      .waitForElementVisible('button[data-id="add-repository"]')
+      .click('button[data-id="add-repository"]')
       .frameParent()
       .clickLaunchIcon('filePanel')
       .waitForElementVisible({
-        selector: "//*[@data-id='workspacesSelect' and contains(.,'vyper-lang')]",
+        selector: "//*[@data-id='workspacesSelect' and contains(.,'vyper')]",
         locateStrategy: 'xpath',
-        timeout: 60000
+        timeout: 120000
       })
-      .currentWorkspaceIs('vyper-lang')
-      // .waitForElementVisible({
-      //   selector: "//*[@data-id='treeViewLitreeViewItemsrc' and contains(.,'src')]",
-      //   locateStrategy: 'xpath',
-      //   timeout: 60000
-      // })
+      .waitForElementVisible({
+        selector: "//*[contains(., 'Vyper repository cloned')]",
+        locateStrategy: 'xpath',
+        timeout: 120000
+      })
+      .pause(2000)
       .openFile('examples')
       .openFile('examples/auctions')
-      .openFile('examples/auctions/simple_open_auction.vy')
+      .openFile('examples/auctions/blind_auction.vy')
   },
 
   // '@sources': () => sources,
   // 'Context menu click to compile blind_auction should succeed #group1': function (browser: NightwatchBrowser) {
   //   browser
-  //     .addFileSnekmate('blind_auction.vy', sources[0]['blindAuction'])
-
-  'Context menu click to compile blind_auction should succeed #group1': function (browser: NightwatchBrowser) {
-    browser
-      .click('*[data-id="treeViewDivtreeViewItemexamples/auctions/blind_auction.vy"]')
-      .rightClick('*[data-id="treeViewDivtreeViewItemexamples/auctions/blind_auction.vy"]')
-      .waitForElementPresent('[data-id="contextMenuItemvyper"]')
-      .click('[data-id="contextMenuItemvyper"]')
-      .clickLaunchIcon('vyper')
-      // @ts-ignore
-      .frame(0)
-      .waitForElementVisible({
-        selector:'[data-id="compilation-details"]',
-        timeout: 120000
-      })
-      .click('[data-id="compilation-details"]')
-      .frameParent()
-      .waitForElementVisible('[data-id="copy-abi"]')
-      .waitForElementVisible({
-        selector: "//*[@class='variable-value' and contains(.,'highestBidder')]",
-        locateStrategy: 'xpath',
-      })
-  },
+  //     // .click('*[data-id="treeViewLitreeViewItemblind_auction.vy"]')
+  //     // .rightClick('*[data-id="treeViewLitreeViewItemblind_auction.vy"]')
+  //     // .waitForElementPresent('[data-id="contextMenuItemvyper"]')
+  //     // .click('[data-id="contextMenuItemvyper"]')
+  //     .clickLaunchIcon('vyper')
+  //     // @ts-ignore
+  //     .frame(0)
+  //     .waitForElementVisible({
+  //       selector:'[data-id="compilation-details"]',
+  //       timeout: 120000
+  //     })
+  //     .click('[data-id="compilation-details"]')
+  //     .frameParent()
+  //     .waitForElementVisible('[data-id="copy-abi"]')
+  //     .waitForElementVisible({
+  //       selector: "//*[@class='variable-value' and contains(.,'highestBidder')]",
+  //       locateStrategy: 'xpath',
+  //     })
+  // },
 
   'Compile blind_auction should success #group1': function (browser: NightwatchBrowser) {
     browser
       // @ts-ignore
+      .clickLaunchIcon('vyper')
       .frame(0)
       .click('[data-id="compile"]')
       .waitForElementVisible({
@@ -118,6 +115,25 @@ module.exports = {
     }
   },
 
+  'Should lead to a compilation error #group1': function (browser: NightwatchBrowser) {
+    browser
+      .clickLaunchIcon('filePanel')
+      .switchWorkspace('default_workspace')
+      .addFile('test_error.vy', { content: wrongContract })
+      .clickLaunchIcon('vyper')
+      // @ts-ignore
+      .frame(0)
+      .waitForElementVisible('[data-id="compile"]')
+      .click('[data-id="compile"]')
+      .waitForElementVisible({
+        selector:'[data-id="test_error.vy"]',
+        timeout: 60000
+      })
+      .waitForElementContainsText('[data-id="test_error.vy"]', 'ERROR')
+      .waitForElementContainsText('[data-id="test_error.vy"]', 'StructureException:Unsupported syntax for module namespace')
+      .frameParent()
+  },
+
   'Compile test contract and deploy to remix VM #group1': function (browser: NightwatchBrowser) {
     let contractAddress
     browser
@@ -127,6 +143,7 @@ module.exports = {
       .clickLaunchIcon('vyper')
       // @ts-ignore
       .frame(0)
+      .waitForElementVisible('[data-id="compile"]')
       .click('[data-id="compile"]')
       .waitForElementVisible({
         selector:'[data-id="compilation-details"]',
@@ -154,7 +171,7 @@ module.exports = {
   //   browser
   //     .frameParent()
   //     .clickLaunchIcon('filePanel')
-  //     .switchWorkspace('snekmate')
+  //     .switchWorkspace('vyper')
   //     .openFile('src')
   //     .openFile('src/snekmate')
   //     .openFile('src/snekmate/auth')
@@ -209,11 +226,44 @@ def _createPokemon(_name: String[32], _dna: uint256, _HP: uint256):
         wins: 0
     })
     self.totalPokemonCount += 1`
+
+const wrongContract = `
+DNA_DIGITS: constant(uint256) = 16
+DNA_MODULUS: constant(uint256) = 10 ** DNA_DIGITS
+# add HP_LIMIT
+ERROR
+struct Pokemon:
+    name: String[32]
+    dna: uint256
+    HP: uint256
+    matches: uint256
+    wins: uint256
+
+totalPokemonCount: public(uint256)
+pokemonList: HashMap[uint256, Pokemon]
+
+@pure
+@internal
+def _generateRandomDNA(_name: String[32]) -> uint256:
+    random: uint256 = convert(keccak256(_name), uint256)
+    return random % DNA_MODULUS
+# modify _createPokemon
+@internal
+def _createPokemon(_name: String[32], _dna: uint256, _HP: uint256):
+    self.pokemonList[self.totalPokemonCount] = Pokemon({
+        name: _name,
+        dna: _dna,
+        HP: _HP,
+        matches: 0,
+        wins: 0
+    })
+    self.totalPokemonCount += 1`
+
 const sources = [{
 
   'blindAuction' : { content: `
 # Blind Auction. Adapted to Vyper from [Solidity by Example](https://github.com/ethereum/solidity/blob/develop/docs/solidity-by-example.rst#blind-auction-1)
-#pragma version ^0.3.10
+#pragma version >0.3.10
 
 struct Bid:
   blindedBid: bytes32

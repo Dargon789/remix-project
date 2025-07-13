@@ -25,7 +25,7 @@ const iconButtons: HometabIconSection[] = [
   {
     textToolip: <FormattedMessage id="home.remixTwitterProfile" />,
     matomoTrackingEntry: ['trackEvent', 'hometab', 'socialMedia', 'twitter'],
-    urlLink: 'https://twitter.com/EthereumRemix',
+    urlLink: 'https://x.com/EthereumRemix',
     iconClass: 'fa-x-twitter',
     placement: 'top'
   },
@@ -46,7 +46,7 @@ const iconButtons: HometabIconSection[] = [
   {
     textToolip: <FormattedMessage id="home.joinUsOnDiscord" />,
     matomoTrackingEntry: ['trackEvent', 'hometab', 'socialmedia', 'discord'],
-    urlLink: 'https://discord.gg/mh9hFCKkEq',
+    urlLink: 'https://discord.gg/7RvvZ4KX9P',
     iconClass: 'fa-discord',
     placement: 'top'
   }
@@ -126,7 +126,7 @@ function HomeTabTitle() {
                   openLink(button.urlLink)
                   _paq.push(button.matomoTrackingEntry)
                 }}
-                className={`border-0 h-100 pl-1 pr-0 btn fab ${button.iconClass}`}
+                className={`border-0 h-100 px-1 btn fab ${button.iconClass}`}
               ></button>
             </CustomTooltip>
           ))}

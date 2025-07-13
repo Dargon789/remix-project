@@ -6,7 +6,6 @@ import { ContractData, FuncABI, OverSizeLimit } from '@remix-project/core-plugin
 import * as ethJSUtil from '@ethereumjs/util'
 import { ContractGUI } from './contractGUI'
 import { CustomTooltip, deployWithProxyMsg, upgradeWithProxyMsg } from '@remix-ui/helper'
-import { title } from 'process'
 const _paq = (window._paq = window._paq || [])
 
 export function ContractDropdownUI(props: ContractDropdownProps) {
@@ -80,6 +79,7 @@ export function ContractDropdownUI(props: ContractDropdownProps) {
         content: '',
       })
       if (!currentContract) enableAtAddress(false)
+      if (currentContract && loadedAddress) enableAtAddress(true)
     } else {
       setAbiLabel({
         display: 'none',
@@ -176,13 +176,13 @@ export function ContractDropdownUI(props: ContractDropdownProps) {
       setContractOptions({
         disabled: true,
         title:
-          loadType === 'sol' ? (
-            <FormattedMessage id="udapp.contractOptionsTitle3" />
-          ) : (
-            <span className="text-start">
-              <FormattedMessage id="udapp.contractOptionsTitle4" values={{ br: <br /> }} />
-            </span>
-          ),
+        ['sol', 'vyper', 'lexon', 'contract'].includes(loadType) ? (
+          <FormattedMessage id="udapp.contractOptionsTitle3" />
+        ) : (
+          <span className="text-start">
+            <FormattedMessage id="udapp.contractOptionsTitle4" values={{ br: <br /> }} />
+          </span>
+        ),
       })
     }
   }
@@ -249,7 +249,7 @@ export function ContractDropdownUI(props: ContractDropdownProps) {
     if (!value) {
       enableAtAddress(false)
     } else {
-      if (loadType === 'sol' || loadType === 'abi') {
+      if (['sol', 'vyper', 'lexon', 'contract', 'abi'].includes(loadType)) {
         enableAtAddress(true)
       } else {
         enableAtAddress(false)
@@ -462,6 +462,7 @@ export function ContractDropdownUI(props: ContractDropdownProps) {
             <div>
               <ContractGUI
                 title={intl.formatMessage({ id: 'udapp.deploy' })}
+                getCompilerDetails={props.getCompilerDetails}
                 isDeploy={true}
                 deployOption={deployOptions[currentFile] && deployOptions[currentFile][currentContract] ? deployOptions[currentFile][currentContract].options : null}
                 initializerOptions={
@@ -481,6 +482,10 @@ export function ContractDropdownUI(props: ContractDropdownProps) {
                 solcVersion={props.solCompilerVersion}
                 setSolcVersion={props.setCompilerVersion}
                 getVersion={props.getCompilerVersion}
+                evmCheckComplete={props.evmCheckComplete}
+                setEvmCheckComplete={props.setEvmCheckComplete}
+                plugin={props.plugin}
+                runTabState={props.runTabState}
               />
               <div className="d-flex py-1 align-items-center custom-control custom-checkbox">
                 <input
@@ -512,10 +517,10 @@ export function ContractDropdownUI(props: ContractDropdownProps) {
         <div className="pt-2 d-flex flex-column sudapp_button udapp_atAddressSect">
           <div className="d-flex flex-row">
             <CustomTooltip placement={'top-end'} tooltipClasses="text-wrap text-left" tooltipId="runAndDeployAddresstooltip" tooltipText={atAddressOptions.title}>
-              <div id="runAndDeployAtAdressButtonContainer" data-title={atAddressOptions.title}>
+              <div id="runAndDeployAtAddressButtonContainer" data-title={atAddressOptions.title}>
                 <button
                   className={atAddressOptions.disabled ? "disabled udapp_atAddress btn btn-sm py-2 btn-primary" : "udapp_atAddress btn btn-sm py-2 btn-primary"}
-                  id="runAndDeployAtAdressButton"
+                  id="runAndDeployAtAddressButton"
                   disabled={atAddressOptions.disabled}
                   style={{ border: 'none' }}
                   onClick={loadFromAddress}

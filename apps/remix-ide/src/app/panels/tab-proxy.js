@@ -10,7 +10,7 @@ const profile = {
   kind: 'other'
 }
 
-export class TabProxy extends Plugin {
+export default class TabProxy extends Plugin {
   constructor (fileManager, editor) {
     super(profile)
     this.event = new EventEmitter()
@@ -146,7 +146,25 @@ export class TabProxy extends Plugin {
       }
     })
 
+    this.on('fileManager', 'openDiff', (commit) => {
+      const hash = commit.hashModified? commit.hashModified.substring(0,6): 'Working Tree'
+      const name =  `${commit.path} (${hash})`
+      this.addTab(name, name, async () => {
+        await this.fileManager.diff(commit)
+        this.event.emit('openDiff', commit)
+        this.emit('openDiff', commit)
+      },
+      async () => {
+        this.removeTab(name)
+        await this.fileManager.closeDiff(commit)
+        this.event.emit('closeDiff', commit)
+        this.emit('closeDiff', commit)
+      })
+      this.tabsApi.activateTab(name)
+    })
+
     this.on('manager', 'pluginActivated', ({ name, location, displayName, icon, description }) => {
+      
       if (location === 'mainPanel') {
         this.addTab(
           name,
@@ -307,6 +325,7 @@ export class TabProxy extends Plugin {
   removeTab (name, currentFileTab) {
     delete this._handlers[name]
     let previous = currentFileTab
+    if(!this.loadedTabs.find(tab => tab.name === name)) return // prevent removing tab that doesn't exist
     this.loadedTabs = this.loadedTabs.filter((tab, index) => {
       if (!previous && tab.name === name) {
         if(index - 1  >= 0 && this.loadedTabs[index - 1])

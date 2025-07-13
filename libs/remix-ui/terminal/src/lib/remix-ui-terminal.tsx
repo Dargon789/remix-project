@@ -27,7 +27,7 @@ import RenderUnKnownTransactions from './components/RenderUnknownTransactions' /
 import RenderCall from './components/RenderCall' // eslint-disable-line
 import RenderKnownTransactions from './components/RenderKnownTransactions' // eslint-disable-line
 import parse from 'html-react-parser'
-import { EMPTY_BLOCK, KNOWN_TRANSACTION, RemixUiTerminalProps, SET_ISVM, UNKNOWN_TRANSACTION } from './types/terminalTypes'
+import { EMPTY_BLOCK, KNOWN_TRANSACTION, RemixUiTerminalProps, SET_ISVM, SET_OPEN, UNKNOWN_TRANSACTION } from './types/terminalTypes'
 import { wrapScript } from './utils/wrapScript'
 import { TerminalContext } from './context'
 const _paq = (window._paq = window._paq || [])
@@ -235,17 +235,12 @@ export const RemixUiTerminal = (props: RemixUiTerminalProps) => {
     try {
       if (script.trim().startsWith('git')) {
         // await this.call('git', 'execute', script) code might be used in the future
-        // TODO: rm gpt or redirect gpt to sol-pgt
-      } else if (script.trim().startsWith('gpt')) {
+      } else if (script.trim().startsWith('gpt') || script.trim().startsWith('sol-gpt')) {
         call('terminal', 'log',{ type: 'warn', value: `> ${script}` })
-        await call('solcoder', 'solidity_answer', script)
-        _paq.push(['trackEvent', 'ai', 'solcoder', 'askFromTerminal'])
-      } else if (script.trim().startsWith('sol-gpt')) {
-        call('terminal', 'log',{ type: 'warn', value: `> ${script}` })
-        await call('solcoder', 'solidity_answer', script)
-        _paq.push(['trackEvent', 'ai', 'solcoder', 'askFromTerminal'])
+        await call('remixAI', 'answer', script) // No streaming supported in terminal
+        _paq.push(['trackEvent', 'ai', 'remixAI', 'askFromTerminal'])
       } else {
-        await call('scriptRunner', 'execute', script)
+        await call('scriptRunnerBridge', 'execute', script)
       }
       done()
     } catch (error) {
@@ -570,6 +565,7 @@ export const RemixUiTerminal = (props: RemixUiTerminalProps) => {
 
     props.plugin.on('layout', 'change', (panels) => {
       setIsOpen(!panels.terminal.minimized)
+      dispatch({ type: SET_OPEN, payload: !panels.terminal.minimized })
     })
 
     return () => {

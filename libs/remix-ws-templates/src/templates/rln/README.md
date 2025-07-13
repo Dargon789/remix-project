@@ -2,10 +2,10 @@
   
 ## What's RLN?
 
- Welcome to the Remix Circom ZKP RLN Workspace.
+Welcome to the Remix Circom ZKP RLN Workspace.
 
 RLN is a zero-knowledge gadget that enables spam prevention in anonymous environments.
-To learn more on RLN and how it works - check out [documentation](https://rate-limiting-nullifier.github.io/rln-docs/).
+To learn more about RLN and how it works - check out [documentation](https://rate-limiting-nullifier.github.io/rln-docs/).
 
 The workspace comprises two main directories:
 
@@ -19,7 +19,7 @@ The workspace comprises two main directories:
 
 #### 2) execute the file `run_setup.ts`:
 
-This step generate a verification key that can be used for generating proof, it will also generate a Solidity contract for on-chain verification.
+This step generates a verification key that can be used for generating proof, it will also generate a Solidity contract for on-chain verification.
 
 Note that this section should only be used for development purposes as this way of running the setup is heavily centralized (although some pieces of this script can be used to achieve that).
 
@@ -29,10 +29,8 @@ This generates a verification key (`./zk/build/verification_key.json`) and artif
 
 This script:
 
-- create a list of identity commitments and add it to a `IncrementalMerkleTree`. The tree is used to generate a merkle proof that a specified identity is actually in the tree (see`tree.createProof(0)`).
+- creates a list of identity commitments and add it to a `IncrementalMerkleTree`. The tree is used to generate a merkle proof that a specified identity is actually in the tree (see`tree.createProof(0)`).
 
 - generate a witness and a proof of execution with `messageId`equal to 0.
 
-- generate a witness and a proof of execution with `messageId`equal to 0.
-
-- generating 2 proofs (two different messages) with the same `messageId` reveal the two points of the polynomial necessary to deduct the `identitySecret` (using `shamirRecovery`).
+- generating 2 proofs (two different messages) with the same `messageId` reveal the two points of the polynomial necessary to deduce the `identitySecret` (using `shamirRecovery`).

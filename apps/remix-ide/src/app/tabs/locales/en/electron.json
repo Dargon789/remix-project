@@ -1,4 +1,7 @@
 {
   "electron.openFolder": "Open Folder",
-  "electron.recentFolders": "Recent Folders"
+  "electron.createProject": "Create New Project", 
+  "electron.recentFolders": "Recent Folders",
+  "electron.gitClone": "Clone a Git Repository",
+  "electron.openFolderMessage": "In order to use Git features, you can open a folder or clone a repository."
 }

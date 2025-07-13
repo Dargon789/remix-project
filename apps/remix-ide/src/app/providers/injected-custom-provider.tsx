@@ -1,20 +1,29 @@
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 import { InjectedProviderDefault } from './injected-provider-default'
 
 export class InjectedCustomProvider extends InjectedProviderDefault {
   chainName: string
   chainId: string
+  pluginName: string
   rpcUrls: Array<string>
   nativeCurrency: Record<string, any>
   blockExplorerUrls: Array<string>
+  parent: string
 
-  constructor(provider: any, chainName: string, chainId: string, rpcUrls: Array<string>, nativeCurrency?: Record<string, any>, blockExplorerUrls?: Array<string>) {
-    super(provider, chainName)
+  constructor(provider: any, pluginName: string, chainName: string, chainId: string, rpcUrls: Array<string>, nativeCurrency?: Record<string, any>, blockExplorerUrls?: Array<string>, parent?: string) {
+    super(provider, pluginName)
+    this.parent = parent
+    this.pluginName = pluginName
     this.chainName = chainName
     this.chainId = chainId
     this.rpcUrls = rpcUrls
     this.nativeCurrency = nativeCurrency
     this.blockExplorerUrls = blockExplorerUrls
+    this.listenerChainChanged = (chainId: number) => {
+      if (chainId !== parseInt(this.chainId)) {
+        this.call('blockchain', 'changeExecutionContext', { context: this.parent })
+      }
+    }
   }
 
   async init() {
@@ -44,8 +53,8 @@ export const setCustomNetwork = async (chainName: string, chainId: string, rpcUr
             chainName: chainName,
             rpcUrls: rpcUrls,
           }
-          if (nativeCurrency) paramsObj.nativeCurrency = nativeCurrency
-          if (blockExplorerUrls) paramsObj.blockExplorerUrls = blockExplorerUrls
+          paramsObj.nativeCurrency = nativeCurrency ? nativeCurrency : null
+          paramsObj.blockExplorerUrls = blockExplorerUrls ? blockExplorerUrls : null
           await (window as any).ethereum.request({
             method: 'wallet_addEthereumChain',
             params: [paramsObj]

@@ -1,4 +1,4 @@
-import {NightwatchBrowser} from 'nightwatch'
+import { NightwatchBrowser } from 'nightwatch'
 import EventEmitter from 'events'
 
 class RefreshPage extends EventEmitter {
@@ -18,6 +18,9 @@ class RefreshPage extends EventEmitter {
 
           addStyle(`
                 .popover {
+                  display:none !important;
+                }
+                #scamDetails {
                   display:none !important;
                 }
                 `)

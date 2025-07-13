@@ -6,10 +6,7 @@ import { FuncABI } from '@remix-project/core-plugin'
 import { CopyToClipboard } from '@remix-ui/clipboard'
 import * as remixLib from '@remix-project/remix-lib'
 import * as ethJSUtil from '@ethereumjs/util'
-import axios from 'axios'
-import { AppModal } from '@remix-ui/app'
 import { ContractGUI } from './contractGUI'
-import { SolScanTable } from './solScanTable'
 import { TreeView, TreeViewItem } from '@remix-ui/tree-view'
 import { BN } from 'bn.js'
 import { CustomTooltip, is0XPrefixed, isHexadecimal, isNumeric, shortenAddress } from '@remix-ui/helper'
@@ -118,20 +115,28 @@ export function UniversalDappUI(props: UdappProps) {
   }
 
   const remove = async() => {
-    if (props.isPinnedContract) {
+    if (props.instance.isPinned) {
       await unsavePinnedContract()
-      _paq.push(['trackEvent', 'udapp', 'pinContracts', 'unpinned'])
+      _paq.push(['trackEvent', 'udapp', 'pinContracts', 'removePinned'])
     }
-    props.removeInstance(props.index, props.isPinnedContract, false)
+    props.removeInstance(props.index)
   }
 
-  const deletePinnedContract = async() => {
+  const unpinContract = async() => {
     await unsavePinnedContract()
-    _paq.push(['trackEvent', 'udapp', 'pinContracts', 'deletePinned'])
-    props.removeInstance(props.index, props.isPinnedContract, true)
+    _paq.push(['trackEvent', 'udapp', 'pinContracts', 'unpinned'])
+    props.unpinInstance(props.index)
   }
 
   const pinContract = async() => {
+    const provider = await props.plugin.call('blockchain', 'getProviderObject')
+    if (!provider.config.statePath && provider.config.isRpcForkedState) {
+      // we can't pin a contract in the following case:
+      // - state is not persisted
+      // - future state is browser stored (e.g it's not just a simple RPC provider)
+      props.plugin.call('notification', 'toast', 'Cannot pin this contract in the current context: state is not persisted. Please fork this provider to start pinning a contract to it.')
+      return
+    }
     const workspace = await props.plugin.call('filePanel', 'getCurrentWorkspace')
     const objToSave = {
       name: props.instance.name,
@@ -141,21 +146,17 @@ export function UniversalDappUI(props: UdappProps) {
       pinnedAt: Date.now()
     }
     await props.plugin.call('fileManager', 'writeFile', `.deploys/pinned-contracts/${props.plugin.REACT_API.chainId}/${props.instance.address}.json`, JSON.stringify(objToSave, null, 2))
-    // Add contract to saved contracts list on UI
-    await props.plugin.call('udapp', 'addPinnedInstance', objToSave.address, objToSave.abi, objToSave.name, objToSave.pinnedAt, objToSave.filePath)
     _paq.push(['trackEvent', 'udapp', 'pinContracts', `pinned at ${props.plugin.REACT_API.chainId}`])
-    // Remove contract from deployed contracts list on UI
-    props.removeInstance(props.index, false, false)
+    props.pinInstance(props.index, objToSave.pinnedAt, objToSave.filePath)
   }
 
   const runTransaction = (lookupOnly, funcABI: FuncABI, valArr, inputsValues, funcIndex?: number) => {
-    if (props.isPinnedContract) _paq.push(['trackEvent', 'udapp', 'pinContracts', 'interactWithPinned'])
+    if (props.instance.isPinned) _paq.push(['trackEvent', 'udapp', 'pinContracts', 'interactWithPinned'])
     const functionName = funcABI.type === 'function' ? funcABI.name : `(${funcABI.type})`
     const logMsg = `${lookupOnly ? 'call' : 'transact'} to ${props.instance.name}.${functionName}`
 
     props.runTransactions(
       props.index,
-      props.isPinnedContract,
       lookupOnly,
       funcABI,
       inputsValues,
@@ -218,109 +219,6 @@ export function UniversalDappUI(props: UdappProps) {
     setCalldataValue(value)
   }
 
-  const handleScanContinue = async () => {
-    await props.plugin.call('notification', 'toast', 'Processing data to scan...')
-    _paq.push(['trackEvent', 'udapp', 'solidityScan', 'initiateScan'])
-    const workspace = await props.plugin.call('filePanel', 'getCurrentWorkspace')
-    const fileName = props.instance.filePath || `${workspace.name}/${props.instance.contractData.contract.file}`
-    const filePath = `.workspaces/${fileName}`
-    const file = await props.plugin.call('fileManager', 'readFile', filePath)
-
-    const urlResponse = await axios.post(`https://solidityscan.remixproject.org/uploadFile`, { file, fileName })
-
-    if (urlResponse.data.status === 'success') {
-      const ws = new WebSocket('wss://solidityscan.remixproject.org/solidityscan')
-
-      ws.addEventListener('error', console.error);
-
-      ws.addEventListener('open', async (event) => {
-        await props.plugin.call('notification', 'toast', 'Initiating scan...')
-      })
-
-      ws.addEventListener('message', async (event) => {
-        const data = JSON.parse(event.data)
-        if (data.type === "auth_token_register" && data.payload.message === "Auth token registered.") {
-          // Message on Bearer token successful registration
-          const reqToInitScan = {
-            "action": "message",
-            "payload": {
-              "type": "private_project_scan_initiate",
-              "body": {
-                "file_urls": [
-                  urlResponse.data.result.url
-                ],
-                "project_name": "RemixProject",
-                "project_type": "new"
-              }
-            }
-          }
-          ws.send(JSON.stringify(reqToInitScan))
-        } else if (data.type === "scan_status" && data.payload.scan_status === "download_failed") {
-          // Message on failed scan
-          _paq.push(['trackEvent', 'udapp', 'solidityScan', 'scanFailed'])
-          const modal: AppModal = {
-            id: 'SolidityScanError',
-            title: <FormattedMessage id="udapp.solScan.errModalTitle" />,
-            message: data.payload.scan_status_err_message,
-            okLabel: 'Close'
-          }
-          await props.plugin.call('notification', 'modal', modal)
-        } else if (data.type === "scan_status" && data.payload.scan_status === "scan_done") {
-          // Message on successful scan
-          _paq.push(['trackEvent', 'udapp', 'solidityScan', 'scanSuccess'])
-          const url = data.payload.scan_details.link
-
-          const { data: scanData } = await axios.post('https://solidityscan.remixproject.org/downloadResult', { url })
-          const scanDetails: Record<string, any>[] = scanData.scan_report.multi_file_scan_details
-
-          let modal: AppModal
-
-          if (scanDetails && scanDetails.length) {
-            modal = {
-              id: 'SolidityScanSuccess',
-              title: <FormattedMessage id="udapp.solScan.successModalTitle" />,
-              message: <SolScanTable scanDetails={scanDetails} fileName={fileName}/>,
-              okLabel: 'Close',
-              modalParentClass: 'modal-xl'
-            }
-          } else {
-            modal = {
-              id: 'SolidityScanError',
-              title: <FormattedMessage id="udapp.solScan.errModalTitle" />,
-              message: "Some error occurred! Please try again",
-              okLabel: 'Close'
-            }
-          }
-          await props.plugin.call('notification', 'modal', modal)
-        }
-      })
-    }
-  }
-
-  const askPermissionToScan = async () => {
-    _paq.push(['trackEvent', 'udapp', 'solidityScan', 'askPermissionToScan'])
-    const modal: AppModal = {
-      id: 'SolidityScanPermissionHandler',
-      title: <FormattedMessage id="udapp.solScan.modalTitle" />,
-      message: <div className='d-flex flex-column'>
-        <span><FormattedMessage id="udapp.solScan.modalMessage" />
-          <a href={'https://solidityscan.com'}
-            target="_blank"
-            onClick={() => _paq.push(['trackEvent', 'udapp', 'solidityScan', 'learnMore'])}>
-              Learn more
-          </a>
-        </span>
-        <br/>
-        <FormattedMessage id="udapp.solScan.likeToContinue" />
-      </div>,
-      okLabel: <FormattedMessage id="udapp.solScan.modalOkLabel" />,
-      okFn: handleScanContinue,
-      cancelLabel: <FormattedMessage id="udapp.solScan.modalCancelLabel" />
-    }
-
-    await props.plugin.call('notification', 'modal', modal)
-  }
-
   const label = (key: string | number, value: string) => {
     return (
       <div className="d-flex mt-2 flex-row label_item">
@@ -354,7 +252,7 @@ export function UniversalDappUI(props: UdappProps) {
       className={`instance udapp_instance udapp_run-instance border-dark ${toggleExpander ? 'udapp_hidesub' : 'bg-light'}`}
       id={`instance${address}`}
       data-shared="universalDappUiInstance"
-      data-id={props.isPinnedContract ? `pinnedInstance${address}` : `unpinnedInstance${address}`}
+      data-id={props.instance.isPinned ? `pinnedInstance${address}` : `unpinnedInstance${address}`}
     >
       <div className="udapp_title pb-0 alert alert-secondary">
         <span data-id={`universalDappUiTitleExpander${props.index}`} className="btn udapp_titleExpander" onClick={toggleClass} style={{ padding: "0.45rem" }}>
@@ -362,7 +260,7 @@ export function UniversalDappUI(props: UdappProps) {
         </span>
         <div className="input-group udapp_nameNbuts">
           <div className="udapp_titleText input-group-prepend">
-            { props.isPinnedContract ? ( <CustomTooltip placement="top" tooltipClasses="text-nowrap" tooltipId="udapp_udappUnpinTooltip" tooltipText={props.isPinnedContract ? `Contract: ${props.instance.name},  Address: ${address}, Pinned at:  ${new Date(props.instance.pinnedAt).toLocaleString()}` : '' }>
+            { props.instance.isPinned ? ( <CustomTooltip placement="top" tooltipClasses="text-nowrap" tooltipId="udapp_udappUnpinTooltip" tooltipText={props.instance.isPinned ? `Pinned for network: ${props.plugin.REACT_API.chainId}, at:  ${new Date(props.instance.pinnedAt).toLocaleString()}` : '' }>
               <span className="input-group-text udapp_spanTitleText">
                 {props.instance.name} at {shortenAddress(address)}
               </span>
@@ -373,9 +271,9 @@ export function UniversalDappUI(props: UdappProps) {
           <div className="btn" style={{ padding: '0.15rem' }}>
             <CopyToClipboard tip={intl.formatMessage({ id: 'udapp.copyAddress' })} content={address} direction={'top'} />
           </div>
-          { props.isPinnedContract ? ( <div className="btn" style={{ padding: '0.15rem', marginLeft: '-0.5rem' }}>
+          { props.instance.isPinned ? ( <div className="btn" style={{ padding: '0.15rem', marginLeft: '-0.5rem' }}>
             <CustomTooltip placement="top" tooltipClasses="text-nowrap" tooltipId="udapp_udappUnpinTooltip" tooltipText={<FormattedMessage id="udapp.tooltipTextUnpin" />}>
-              <i className="fas fa-thumbtack p-2" aria-hidden="true" data-id="universalDappUiUdappUnpin" onClick={remove}></i>
+              <i className="fas fa-thumbtack p-2" aria-hidden="true" data-id="universalDappUiUdappUnpin" onClick={unpinContract}></i>
             </CustomTooltip>
           </div> ) : ( <div className="btn" style={{ padding: '0.15rem', marginLeft: '-0.5rem' }}>
             <CustomTooltip placement="top" tooltipClasses="text-nowrap" tooltipId="udapp_udappPinTooltip" tooltipText={<FormattedMessage id="udapp.tooltipTextPin" />}>
@@ -384,16 +282,11 @@ export function UniversalDappUI(props: UdappProps) {
           </div> )
           }
         </div>
-        { props.isPinnedContract ? ( <div className="btn" style={{ padding: '0.15rem', marginLeft: '-0.5rem' }}>
-          <CustomTooltip placement="top" tooltipClasses="text-nowrap" tooltipId="udapp_udappDeleteTooltip" tooltipText={<FormattedMessage id="udapp.tooltipTextDelete" />}>
-            <i className="far fa-trash p-2" aria-hidden="true" data-id="universalDappUiUdappDelete" onClick={deletePinnedContract}></i>
-          </CustomTooltip>
-        </div> ) : ( <div className="btn" style={{ padding: '0.15rem', marginLeft: '-0.5rem' }}>
+        <div className="btn" style={{ padding: '0.15rem', marginLeft: '-0.5rem' }}>
           <CustomTooltip placement="top" tooltipClasses="text-nowrap" tooltipId="udapp_udappCloseTooltip" tooltipText={<FormattedMessage id="udapp.tooltipTextRemove" />}>
             <i className="fas fa-times p-2" aria-hidden="true" data-id="universalDappUiUdappClose" onClick={remove}></i>
           </CustomTooltip>
-        </div> )
-        }
+        </div>
       </div>
       <div className="udapp_cActionsWrapper" data-id="universalDappUiContractActionWrapper">
         <div className="udapp_contractActionsContainer">
@@ -402,30 +295,28 @@ export function UniversalDappUI(props: UdappProps) {
               <b><FormattedMessage id="udapp.balance" />:</b> {instanceBalance} ETH
             </span>
             <div></div>
-            <div className="d-flex align-self-center">
+            <div className="btn d-flex p-0 align-self-center">
               {props.exEnvironment && props.exEnvironment.startsWith('injected') && (
                 <CustomTooltip placement="top" tooltipClasses="text-nowrap" tooltipId="udapp_udappEditTooltip" tooltipText={<FormattedMessage id="udapp.tooltipTextEdit" />}>
                   <i
-                    className="fas fa-edit pr-3"
+                    data-id="instanceEditIcon"
+                    className="fas fa-sparkles"
                     onClick={() => {
                       props.editInstance(props.instance)
                     }}
                   ></i>
                 </CustomTooltip>
               )}
-              <CustomTooltip placement="top" tooltipClasses="text-nowrap" tooltipId="udapp_udappSolScanTooltip" tooltipText={<FormattedMessage id="udapp.solScan.iconTooltip" />}>
-                <i className="fas fa-qrcode p-0" style={{ padding: "0.15rem" }} onClick={askPermissionToScan}></i>
-              </CustomTooltip>
             </div>
           </div>
-          { props.isPinnedContract && props.instance.pinnedAt ? (
+          { props.instance.isPinned && props.instance.pinnedAt ? (
             <div className="d-flex" data-id="instanceContractPinnedAt">
               <label>
                 <b><FormattedMessage id="udapp.pinnedAt" />:</b> {(new Date(props.instance.pinnedAt)).toLocaleString()}
               </label>
             </div>
           ) : null }
-          { props.isPinnedContract && props.instance.filePath ? (
+          { props.instance.isPinned && props.instance.filePath ? (
             <div className="d-flex" data-id="instanceContractFilePath" style={{ textAlign: "start", lineBreak: "anywhere" }}>
               <label>
                 <b><FormattedMessage id="udapp.filePath" />:</b> {props.instance.filePath}
@@ -443,6 +334,10 @@ export function UniversalDappUI(props: UdappProps) {
                 <div key={index}>
                   <ContractGUI
                     getVersion={props.getVersion}
+                    getCompilerDetails={props.getCompilerDetails}
+                    evmCheckComplete={props.evmCheckComplete}
+                    plugin={props.plugin}
+                    runTabState={props.runTabState}
                     funcABI={funcABI}
                     clickCallBack={(valArray: {name: string; type: string}[], inputsValues: string) => {
                       runTransaction(lookupOnly, funcABI, valArray, inputsValues, index)
@@ -485,10 +380,10 @@ export function UniversalDappUI(props: UdappProps) {
             >
               { // receive method added to solidity v0.6.x. use this as diff.
                 props.solcVersion.canReceive === false ? (
-                  <a href={`https://solidity.readthedocs.io/en/v${props.solcVersion.version}/contracts.html`} target="_blank" rel="noreferrer">
+                  <a href={`https://docs.soliditylang.org/en/v${props.solcVersion.version}/contracts.html`} target="_blank" rel="noreferrer">
                     <i aria-hidden="true" className="fas fa-info my-2 mr-1"></i>
                   </a>
-                ) :<a href={`https://solidity.readthedocs.io/en/v${props.solcVersion.version}/contracts.html#receive-ether-function`} target="_blank" rel="noreferrer">
+                ) :<a href={`https://docs.soliditylang.org/en/v${props.solcVersion.version}/contracts.html#receive-ether-function`} target="_blank" rel="noreferrer">
                   <i aria-hidden="true" className="fas fa-info my-2 mr-1"></i>
                 </a>
               }

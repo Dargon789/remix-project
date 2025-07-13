@@ -6,7 +6,7 @@ self.onmessage = (e: MessageEvent) => {
   switch (data.cmd) {
   case 'init':
   {
-    provider = new Provider({ fork: data.fork, nodeUrl: data.nodeUrl, blockNumber: data.blockNumber, stateDb: data.stateDb, blocks: data.blocks })
+    provider = new Provider({ baseBlockNumber: data.baseBlockNumer, fork: data.fork, nodeUrl: data.nodeUrl, blockNumber: data.blockNumber, stateDb: data.stateDb, blocks: data.blocks })
     provider.init().then(() => {
       self.postMessage({
         cmd: 'initiateResult',
@@ -41,6 +41,37 @@ self.onmessage = (e: MessageEvent) => {
       })
     }
 
+    break
+  }
+  case 'request':
+  {
+    (function (data) {
+      const stamp = data.stamp
+      if (provider) {
+        provider.request(data.query).then((result) => {
+          self.postMessage({
+            cmd: 'requestResult',
+            error: null,
+            result: result,
+            stamp: stamp
+          })
+        }).catch((error) => {
+          self.postMessage({
+            cmd: 'requestResult',
+            error: error,
+            result: null,
+            stamp: stamp
+          })
+        })
+      } else {
+        self.postMessage({
+          cmd: 'requestResult',
+          error: 'Provider not instantiated',
+          result: null,
+          stamp: stamp
+        })
+      }
+    })(data)
     break
   }
   case 'addAccount':

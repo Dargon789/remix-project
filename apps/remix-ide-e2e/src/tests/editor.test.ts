@@ -20,13 +20,13 @@ module.exports = {
       .checkElementStyle('.view-lines', 'font-size', '14px')
       .click('*[data-id="tabProxyZoomIn"]')
       .click('*[data-id="tabProxyZoomIn"]')
-      .checkElementStyle('.view-lines', 'font-size', '16.8px')
+      .checkElementStyle('.view-lines', 'font-size', '19.6px')
   },
 
   'Should zoom out editor #group1': function (browser: NightwatchBrowser) {
     browser
       .waitForElementVisible('#editorView')
-      .checkElementStyle('.view-lines', 'font-size', '16.8px')
+      .checkElementStyle('.view-lines', 'font-size', '19.6px')
       .click('*[data-id="tabProxyZoomOut"]')
       .click('*[data-id="tabProxyZoomOut"]')
       .checkElementStyle('.view-lines', 'font-size', '14px')
@@ -107,9 +107,9 @@ module.exports = {
       .addFile('removeAllSourcehighlightScript.js', removeAllSourcehighlightScript)
       .openFile('sourcehighlight.js')
       .executeScriptInTerminal('remix.exeCurrent()')
-      .scrollToLine(32)
-      .waitForElementPresent('.highlightLine33', 60000)
-      .checkElementStyle('.highlightLine33', 'background-color', 'rgb(52, 152, 219)')
+      .scrollToLine(33)
+      .waitForElementPresent('.highlightLine34', 60000)
+      .checkElementStyle('.highlightLine34', 'background-color', 'rgb(52, 152, 219)')
       .scrollToLine(40)
       .waitForElementPresent('.highlightLine41', 60000)
       .checkElementStyle('.highlightLine41', 'background-color', 'rgb(52, 152, 219)')
@@ -172,11 +172,11 @@ const sourcehighlightScript = {
         await remix.call('fileManager', 'open', 'contracts/3_Ballot.sol')
         const pos = {
             start: {
-                line: 32,
+                line: 33,
                 column: 3
             },
             end: {
-                line: 32,
+                line: 33,
                 column: 20
             }
         }

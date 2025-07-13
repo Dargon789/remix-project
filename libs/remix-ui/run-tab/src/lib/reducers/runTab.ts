@@ -1,6 +1,6 @@
 import { ContractData } from '@remix-project/core-plugin'
 import { ContractList, DeployOptions, RunTabState } from '../types'
-import { ADD_INSTANCE, ADD_PINNED_INSTANCE, UPDATE_INSTANCES_BALANCE, ADD_PROVIDER, CLEAR_INSTANCES, CLEAR_PINNED_INSTANCES, CLEAR_RECORDER_COUNT, DISPLAY_NOTIFICATION, DISPLAY_POPUP_MESSAGE, FETCH_ACCOUNTS_LIST_FAILED, FETCH_ACCOUNTS_LIST_REQUEST, FETCH_ACCOUNTS_LIST_SUCCESS, FETCH_CONTRACT_LIST_FAILED, FETCH_CONTRACT_LIST_REQUEST, FETCH_CONTRACT_LIST_SUCCESS, FETCH_PROVIDER_LIST_FAILED, FETCH_PROVIDER_LIST_REQUEST, FETCH_PROVIDER_LIST_SUCCESS, HIDE_NOTIFICATION, HIDE_POPUP_MESSAGE, REMOVE_INSTANCE, REMOVE_PROVIDER, RESET_STATE, SET_BASE_FEE_PER_GAS, SET_CONFIRM_SETTINGS, SET_CHAIN_ID, SET_CURRENT_CONTRACT, SET_CURRENT_FILE, SET_DECODED_RESPONSE, SET_DEPLOY_OPTIONS, SET_EXECUTION_ENVIRONMENT, SET_EXTERNAL_WEB3_ENDPOINT, SET_GAS_LIMIT, SET_GAS_PRICE, SET_GAS_PRICE_STATUS, SET_IPFS_CHECKED_STATE, SET_LOAD_TYPE, SET_MATCH_PASSPHRASE, SET_MAX_FEE, SET_MAX_PRIORITY_FEE, SET_NETWORK_NAME, SET_PASSPHRASE, SET_PATH_TO_SCENARIO, SET_PERSONAL_MODE, SET_RECORDER_COUNT, SET_SELECTED_ACCOUNT, SET_SEND_UNIT, SET_SEND_VALUE, ADD_DEPLOY_OPTION, REMOVE_DEPLOY_OPTION, SET_REMIXD_ACTIVATED, FETCH_PROXY_DEPLOYMENTS, NEW_PROXY_DEPLOYMENT, RESET_PROXY_DEPLOYMENTS, EXTRACT_COMPILER_VERSION } from '../constants'
+import { ADD_INSTANCE, PIN_INSTANCE, UNPIN_INSTANCE, UPDATE_INSTANCES_BALANCE, ADD_PROVIDER, CLEAR_INSTANCES, CLEAR_RECORDER_COUNT, DISPLAY_NOTIFICATION, DISPLAY_POPUP_MESSAGE, FETCH_ACCOUNTS_LIST_FAILED, FETCH_ACCOUNTS_LIST_REQUEST, FETCH_ACCOUNTS_LIST_SUCCESS, FETCH_CONTRACT_LIST_FAILED, FETCH_CONTRACT_LIST_REQUEST, FETCH_CONTRACT_LIST_SUCCESS, FETCH_PROVIDER_LIST_FAILED, FETCH_PROVIDER_LIST_REQUEST, FETCH_PROVIDER_LIST_SUCCESS, HIDE_NOTIFICATION, HIDE_POPUP_MESSAGE, REMOVE_INSTANCE, REMOVE_PROVIDER, RESET_STATE, SET_BASE_FEE_PER_GAS, SET_CONFIRM_SETTINGS, SET_CHAIN_ID, SET_CURRENT_CONTRACT, SET_CURRENT_FILE, SET_DECODED_RESPONSE, SET_DEPLOY_OPTIONS, SET_EXECUTION_ENVIRONMENT, SET_EXTERNAL_WEB3_ENDPOINT, SET_GAS_LIMIT, SET_GAS_PRICE, SET_GAS_PRICE_STATUS, SET_IPFS_CHECKED_STATE, SET_LOAD_TYPE, SET_MATCH_PASSPHRASE, SET_MAX_FEE, SET_MAX_PRIORITY_FEE, SET_NETWORK_NAME, SET_PASSPHRASE, SET_PATH_TO_SCENARIO, SET_PERSONAL_MODE, SET_RECORDER_COUNT, SET_SELECTED_ACCOUNT, SET_SEND_UNIT, SET_SEND_VALUE, ADD_DEPLOY_OPTION, REMOVE_DEPLOY_OPTION, SET_REMIXD_ACTIVATED, FETCH_PROXY_DEPLOYMENTS, NEW_PROXY_DEPLOYMENT, RESET_PROXY_DEPLOYMENTS, EXTRACT_COMPILER_VERSION } from '../constants'
 
 declare const window: any
 interface Action {
@@ -16,13 +16,15 @@ export const runTabInitialState: RunTabState = {
     error: null,
     selectedAccount: ''
   },
+  smartAccounts: {},
   sendValue: '0',
   sendUnit: 'wei',
   gasLimit: 0,
-  selectExEnv: 'vm-cancun',
+  selectExEnv: 'vm-prague',
   personalMode: false,
   networkName: 'VM',
   chainId:'-',
+  displayName: 'Remix VM (Prague)',
   providers: {
     providerList: [],
     isRequesting: false,
@@ -61,10 +63,6 @@ export const runTabInitialState: RunTabState = {
   baseFeePerGas: '',
   gasPrice: '',
   instances: {
-    instanceList: [],
-    error: null
-  },
-  pinnedInstances: {
     instanceList: [],
     error: null
   },
@@ -166,7 +164,8 @@ export const runTabReducer = (state: RunTabState = runTabInitialState, action: A
     return {
       ...state,
       selectExEnv: payload,
-      networkName: state.selectExEnv === 'vm-cancun' ? 'VM' : state.networkName,
+      networkName: state.selectExEnv === 'vm-prague' ? 'VM' : state.networkName,
+      displayName: state.providers.providerList.find((env) => env.name === state.selectExEnv)?.displayName,
       accounts: {
         ...state.accounts,
         selectedAccount: '',
@@ -190,6 +189,7 @@ export const runTabReducer = (state: RunTabState = runTabInitialState, action: A
     return {
       ...state,
       networkName: payload,
+      displayName: state.providers.providerList.find((env) => env.name === state.selectExEnv)?.displayName,
     }
   }
 
@@ -198,7 +198,8 @@ export const runTabReducer = (state: RunTabState = runTabInitialState, action: A
 
     return {
       ...state,
-      chainId: payload
+      chainId: payload,
+      displayName: state.providers.providerList.find((env) => env.name === state.selectExEnv)?.displayName,
     }
   }
 
@@ -488,24 +489,13 @@ export const runTabReducer = (state: RunTabState = runTabInitialState, action: A
   }
 
   case ADD_INSTANCE: {
-    const payload: { contractData: ContractData, address: string, name: string, abi?: any, decodedResponse?: Record<number, any> } = action.payload
+    const payload: { contractData?: ContractData, address: string, name: string, abi?: any, isPinned?: boolean, pinnedAt?: number } = action.payload
 
     return {
       ...state,
       instances: {
         ...state.instances,
         instanceList: [...state.instances.instanceList, payload]
-      }
-    }
-  }
-
-  case ADD_PINNED_INSTANCE: {
-    const payload: { contractData: ContractData, address: string, name: string, abi?: any, pinnedAt: number, decodedResponse?: Record<number, any> } = action.payload
-    return {
-      ...state,
-      pinnedInstances: {
-        ...state.pinnedInstances,
-        instanceList: [...state.pinnedInstances.instanceList, payload]
       }
     }
   }
@@ -523,32 +513,36 @@ export const runTabReducer = (state: RunTabState = runTabInitialState, action: A
   }
 
   case REMOVE_INSTANCE: {
-    const payload: { index: number, isPinnedContract: boolean, shouldDelete: boolean } = action.payload
-
-    if (payload.isPinnedContract) {
-      if (payload.shouldDelete) return {
-        ...state,
-        pinnedInstances: {
-          ...state.pinnedInstances,
-          instanceList: state.pinnedInstances.instanceList.filter((_, index) => index !== payload.index)
-        }
-      }
-      else return {
-        ...state,
-        pinnedInstances: {
-          ...state.pinnedInstances,
-          instanceList: state.pinnedInstances.instanceList.filter((_, index) => index !== payload.index)
-        },
-        instances: {
-          ...state.instances,
-          instanceList: [...state.instances.instanceList, state.pinnedInstances.instanceList[payload.index]]
-        }
-      }
-    } else return {
+    const payload: { index: number } = action.payload
+    return {
       ...state,
       instances: {
         ...state.instances,
         instanceList: state.instances.instanceList.filter((_, index) => index !== payload.index)
+      }
+    }
+  }
+
+  case PIN_INSTANCE: {
+    const payload: { index: number, pinnedAt: number, filePath: string } = action.payload
+    state.instances.instanceList[payload.index].isPinned = true
+    state.instances.instanceList[payload.index].pinnedAt = payload.pinnedAt
+    state.instances.instanceList[payload.index].filePath = payload.filePath
+    return {
+      ...state,
+      instances: {
+        ...state.instances,
+      }
+    }
+  }
+
+  case UNPIN_INSTANCE: {
+    const payload: { index: number } = action.payload
+    state.instances.instanceList[payload.index].isPinned = false
+    return {
+      ...state,
+      instances: {
+        ...state.instances,
       }
     }
   }
@@ -563,40 +557,18 @@ export const runTabReducer = (state: RunTabState = runTabInitialState, action: A
     }
   }
 
-  case CLEAR_PINNED_INSTANCES: {
+  case SET_DECODED_RESPONSE: {
+    const payload: { instanceIndex: number, funcIndex: number, response: any } = action.payload
     return {
       ...state,
-      pinnedInstances: {
-        instanceList: [],
-        error: null
+      instances: {
+        ...state.instances,
+        instanceList: state.instances.instanceList.map((instance, index) => {
+          if (payload.instanceIndex === index) instance.decodedResponse[payload.funcIndex] = payload.response
+          return instance
+        })
       }
     }
-  }
-
-  case SET_DECODED_RESPONSE: {
-    const payload: { instanceIndex: number, funcIndex: number, response: any, isPinnedContract: boolean } = action.payload
-    if (action.payload.isPinnedContract)
-      return {
-        ...state,
-        pinnedInstances: {
-          ...state.pinnedInstances,
-          instanceList: state.pinnedInstances.instanceList.map((instance, index) => {
-            if (payload.instanceIndex === index) instance.decodedResponse[payload.funcIndex] = payload.response
-            return instance
-          })
-        }
-      }
-    else
-      return {
-        ...state,
-        instances: {
-          ...state.instances,
-          instanceList: state.instances.instanceList.map((instance, index) => {
-            if (payload.instanceIndex === index) instance.decodedResponse[payload.funcIndex] = payload.response
-            return instance
-          })
-        }
-      }
   }
 
   case SET_PATH_TO_SCENARIO: {

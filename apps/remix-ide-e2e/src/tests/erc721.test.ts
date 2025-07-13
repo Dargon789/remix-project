@@ -17,14 +17,14 @@ module.exports = {
       .click('*[data-id="workspacesMenuDropdown"]')
       .click('*[data-id="workspacecreate"]')
       // create contract
+      .waitForElementPresent('*[data-id="create-hashchecker"]')
+      .scrollAndClick('*[data-id="create-ozerc721"]')
       .waitForElementVisible('*[data-id="modalDialogCustomPromptTextCreate"]')
-      .waitForElementVisible('[data-id="fileSystemModalDialogModalFooter-react"] > button')
+      .scrollAndClick('*[data-id="modalDialogCustomPromptTextCreate"]')
+      .setValue('*[data-id="modalDialogCustomPromptTextCreate"]', 'workspace_erc721')
       // eslint-disable-next-line dot-notation
       .execute(function () { document.querySelector('*[data-id="modalDialogCustomPromptTextCreate"]')['value'] = 'workspace_erc721' })
-      .click('select[id="wstemplate"]')
-      .click('select[id="wstemplate"] option[value=ozerc721]')
-      .waitForElementPresent('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok')
-      .execute(function () { (document.querySelector('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok') as HTMLElement).click() })
+      .modalFooterOKClick('TemplatesSelection')
       .pause(100)
       .waitForElementVisible('*[data-id="treeViewLitreeViewItemcontracts"]')
       .waitForElementVisible('*[data-id="treeViewLitreeViewItemcontracts/MyToken.sol"]')
@@ -34,29 +34,10 @@ module.exports = {
       .pause(2000)
       .click('[data-id="compilerContainerCompileBtn"]')
       .clickLaunchIcon('filePanel')
-      .isVisible({
-        selector: '*[data-id="treeViewLitreeViewItem.deps/npm/@openzeppelin/contracts/utils/introspection/IERC165.sol"]',
-        timeout: 120000,
-        suppressNotFoundErrors: true
-      })
-      .clickLaunchIcon('solidity')
-      .click('[data-id="compilerContainerCompileBtn"]')
-      .clickLaunchIcon('filePanel')
-      .isVisible({
-        selector: '*[data-id="treeViewLitreeViewItem.deps/npm/@openzeppelin/contracts/utils/introspection/IERC165.sol"]',
-        timeout: 120000,
-        suppressNotFoundErrors: true
-      })
-      .clickLaunchIcon('solidity')
-      .click('[data-id="compilerContainerCompileBtn"]')
-      .clickLaunchIcon('filePanel')
-      .waitForElementVisible({
-        selector: '*[data-id="treeViewLitreeViewItem.deps/npm/@openzeppelin/contracts/utils/introspection/IERC165.sol"]',
-        timeout: 120000,
-      })
-      .verifyContracts(['MyToken'])
-      // deploy contract
       .clickLaunchIcon('udapp')
+      .verifyContracts(['MyToken'])
+      .clickLaunchIcon('udapp')
+      // deploy contract
       .selectContract('MyToken')
       .createContract('')
       .testFunction('last',

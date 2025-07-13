@@ -12,7 +12,7 @@ const sidePanel = {
   displayName: 'Side Panel',
   description: 'Remix IDE side panel',
   version: packageJson.version,
-  methods: ['addView', 'removeView', 'currentFocus', 'pinView', 'unPinView', 'focus']
+  methods: ['addView', 'removeView', 'currentFocus', 'pinView', 'unPinView', 'focus', 'showContent']
 }
 
 export class SidePanel extends AbstractPanel {
@@ -70,7 +70,7 @@ export class SidePanel extends AbstractPanel {
   }
 
   async pinView (profile) {
-    await this.call('pinnedPanel', 'pinView', profile, this.plugins[profile.name].view)
+    await this.call('pinnedPanel', 'pinView', profile, this.plugins[profile.name]?.view)
     if (this.plugins[profile.name].active) this.call('menuicons', 'select', 'filePanel')
     super.remove(profile.name)
     this.renderComponent()

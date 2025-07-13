@@ -9,9 +9,10 @@ import HomeTabScamAlert from './components/homeTabScamAlert'
 import HomeTabGetStarted from './components/homeTabGetStarted'
 import HomeTabFeatured from './components/homeTabFeatured'
 import HomeTabFeaturedPlugins from './components/homeTabFeaturedPlugins'
-import { appPlatformTypes, platformContext } from '@remix-ui/app'
+import { AppContext, appPlatformTypes, platformContext } from '@remix-ui/app'
 import { HomeTabFileElectron } from './components/homeTabFileElectron'
 import { LanguageOptions } from './components/homeTablangOptions'
+import { desktopConnectionType } from '@remix-api'
 
 declare global {
   interface Window {
@@ -25,6 +26,7 @@ export interface RemixUiHomeTabProps {
 
 export const RemixUiHomeTab = (props: RemixUiHomeTabProps) => {
   const platform = useContext(platformContext)
+  const appContext = useContext(AppContext)
   const { plugin } = props
 
   const [state, setState] = useState<{
@@ -71,12 +73,16 @@ export const RemixUiHomeTab = (props: RemixUiHomeTabProps) => {
     }
   }, [])
 
+  if (appContext.appState.connectedToDesktop != desktopConnectionType .disabled) {
+    return (<></>)
+  }
+
   //  border-right
   return (
-    <div className="d-flex flex-column w-100 h-100" data-id="remixUIHTAll">
+    <div className="d-flex flex-column w-100" data-id="remixUIHTAll">
       <ThemeContext.Provider value={state.themeQuality}>
-        <div className="d-flex flex-row w-100 h-100 custom_home_bg">
-          <div className="px-2 pl-3 justify-content-start border-right d-flex flex-column" id="remixUIHTLeft" style={{ width: `${100 - carouselWidth}%` }}>
+        <div className="d-flex flex-row w-100 custom_home_bg">
+          <div className="px-2 pl-3 justify-content-start border-right d-flex flex-column" id="remixUIHTLeft" style={{ width: 'inherit' }}>
             <HomeTabTitle />
             <HomeTabGetStarted plugin={plugin}></HomeTabGetStarted>
             {!(platform === appPlatformTypes.desktop) ?
@@ -86,7 +92,7 @@ export const RemixUiHomeTab = (props: RemixUiHomeTabProps) => {
           </div>
           <div className="pl-2 pr-3 justify-content-start d-flex flex-column" style={{ width: `${carouselWidth}%` }} id="remixUIHTRight">
             <LanguageOptions plugin={plugin}/>
-            <HomeTabFeatured></HomeTabFeatured>
+            <HomeTabFeatured plugin={plugin}></HomeTabFeatured>
             <HomeTabFeaturedPlugins plugin={plugin}></HomeTabFeaturedPlugins>
           </div>
         </div>

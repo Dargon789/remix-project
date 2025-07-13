@@ -131,3 +131,33 @@ export class CancunVMProvider extends BasicVMProvider {
     this.fork = 'cancun'
   }
 }
+
+export class PectraVMProvider extends BasicVMProvider {
+  constructor(blockchain) {
+    super(
+      {
+        name: 'vm-prague',
+        displayName: 'Remix VM (Pectra)',
+        kind: 'provider',
+        description: 'Remix VM (Pectra)',
+        methods: ['sendAsync', 'init'],
+        version: packageJson.version
+      },
+      blockchain
+    )
+    this.blockchain = blockchain
+    this.fork = 'prague'
+  }
+}
+
+export class ForkedVMStateProvider extends BasicVMProvider {
+  nodeUrl?: string
+  blockNumber?: string
+  constructor(profile, blockchain, fork: string, nodeUrl?: string, blockNumber?: string) {
+    super(profile, blockchain)
+    this.blockchain = blockchain
+    this.fork = fork
+    this.nodeUrl = nodeUrl
+    this.blockNumber = blockNumber
+  }
+}

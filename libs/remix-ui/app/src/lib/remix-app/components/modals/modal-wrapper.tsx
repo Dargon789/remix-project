@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ModalDialog, ModalDialogProps, ValidationResult } from '@remix-ui/modal-dialog'
-import { ModalTypes } from '../../types'
+import { AppModalCancelTypes, ModalTypes } from '../../types'
 
 interface ModalWrapperProps extends ModalDialogProps {
   modalType?: ModalTypes
@@ -8,6 +8,7 @@ interface ModalWrapperProps extends ModalDialogProps {
 }
 
 const ModalWrapper = (props: ModalWrapperProps) => {
+
   const [state, setState] = useState<ModalDialogProps>()
   const ref = useRef()
   const formRef = useRef()
@@ -42,8 +43,8 @@ const ModalWrapper = (props: ModalWrapperProps) => {
     props.okFn ? props.okFn(data.current) : props.resolve(data.current || true)
   }
 
-  const onCancelFn = async () => {
-    props.cancelFn ? props.cancelFn() : props.resolve(false)
+  const onCancelFn = async (reason?: AppModalCancelTypes) => {
+    props.cancelFn ? props.cancelFn(reason) : props.resolve(false)
   }
 
   const onInputChanged = (event) => {
@@ -70,6 +71,23 @@ const ModalWrapper = (props: ModalWrapperProps) => {
           data-id="modalDialogCustomPromp"
           ref={ref}
           className="form-control"
+        />
+        {validation && !validation.valid && <span className="text-warning">{validation.message}</span>}
+      </>
+    )
+  }
+
+  const createFormWithTextArea = (defaultValue: string, placeholderText: string, validation: ValidationResult) => {
+    return (
+      <>
+        {props.message}
+        <textarea
+          onChange={onInputChanged}
+          defaultValue={defaultValue}
+          data-id="modalDialogCustomTextarea"
+          className="form-control"
+          placeholder={placeholderText}
+          ref={ref}
         />
         {validation && !validation.valid && <span className="text-warning">{validation.message}</span>}
       </>
@@ -117,6 +135,25 @@ const ModalWrapper = (props: ModalWrapperProps) => {
           message: createForm({ valid: true })
         })
         break
+      case ModalTypes.fixed:
+        setState({
+          ...props,
+          okFn: null,
+          cancelFn: null,
+          okLabel: null,
+          cancelLabel: null,
+          preventBlur: true,
+          showCancelIcon: false,
+        })
+        break
+      case ModalTypes.textarea:
+        setState({
+          ...props,
+          okFn: onFinishPrompt,
+          cancelFn: onCancelFn,
+          message: createFormWithTextArea(props.defaultValue, props.placeholderText, { valid: true })
+        })
+        break
       default:
         setState({
           ...props,
@@ -142,6 +179,8 @@ const ModalWrapper = (props: ModalWrapperProps) => {
     props.handleHide()
   }
 
-  return <ModalDialog id={props.id} {...state} handleHide={handleHide} />
+  if (!props.id || props.id === '') return null
+
+  return <ModalDialog id={props.id} {...state} handleHide={handleHide} showCancelIcon={props.showCancelIcon} />
 }
 export default ModalWrapper

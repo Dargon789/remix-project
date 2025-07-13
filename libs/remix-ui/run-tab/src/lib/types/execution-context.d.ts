@@ -1,4 +1,4 @@
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 
 export class ExecutionContext {
   event: any;
@@ -14,7 +14,6 @@ export class ExecutionContext {
   txs: any;
   customWeb3: any;
   init(config: any): void;
-  askPermission(): void;
   getProvider(): any;
   getCurrentFork(): string;
   isVM(): boolean;
@@ -30,7 +29,8 @@ export class ExecutionContext {
   stopListenOnLastBlock(): void;
   // eslint-disable-next-line no-undef
   listenOnLastBlockId: NodeJS.Timer;
-  _updateChainContext(): Promise<void>;
+  _updateChainContext(): Promise<boolean>;
   listenOnLastBlock(): void;
   txDetailsLink(network: any, hash: any): any;
+  getStateDetails(): Promise<string>
 }
