@@ -28,7 +28,7 @@
     "@remix-project/remix-astwalker": "^0.0.99",
     "@remix-project/remix-lib": "^0.5.57",
     "async": "^3.2.6",
-    "ethers": "^5.4.2",
+    "ethers": "^6.0.0",
     "ethjs-util": "^0.1.6",
     "string-similarity": "^4.0.4",
     "web3": "^4.1.1"
