@@ -71,7 +71,7 @@
     "@types/color-support": "^1.1.0",
     "@types/colors": "^1.2.1",
     "@types/commander": "^2.12.2",
-    "@types/mocha": "^5.2.5",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^18.16.1",
     "mocha": "^11.0.1",
     "ts-node": "^8.0.2",
