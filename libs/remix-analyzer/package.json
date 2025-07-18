@@ -47,7 +47,7 @@
     "npm-install-version": "^6.0.2",
     "tape": "^4.6.0",
     "ts-node": "^8.6.2",
-    "typescript": "^3.7.5"
+    "typescript": "^5.8.3"
   },
   "typings": "src/index.d.ts",
   "gitHead": "326585ffcef3a8846f2a1badf10beab1f73ee986",
