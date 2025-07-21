@@ -38,7 +38,7 @@
     "@ethereumjs/util": "9.0.3",
     "@ethereumjs/vm": "8.0.0",
     "@remix-project/remix-lib": "^0.5.57",
-    "@types/tape": "^4.2.33",
+    "@types/tape": "^5.8.1",
     "async": "^3.2.6",
     "ethers": "^6.13.5",
     "ethjs-util": "^0.1.6",
