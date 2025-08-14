@@ -20,7 +20,7 @@
   "homepage": "https://github.com/ethereum/remix-project#readme",
   "devDependencies": {
     "@remix-project/remix-solidity": "^0.5.36",
-    "@types/chai": "^4.3.4",
+    "@types/chai": "^5.2.2",
     "typescript": "^5.8.3"
   },
   "dependencies": {
