@@ -101,7 +101,7 @@
     "@ethereumjs/tx": "github:yann300/ethereumjs-vm#fixV10",
     "@ethereumjs/util": "^10.0.0",
     "@ethereumjs/vm": "^10.0.0",
-    "@ethersphere/bee-js": "^8.3.0",
+    "@ethersphere/bee-js": "^9.1.0",
     "@floating-ui/react": "^0.26.15",
     "@fortawesome/fontawesome-svg-core": "^6.5.1",
     "@fortawesome/free-solid-svg-icons": "^6.5.1",
