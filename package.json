@@ -85,7 +85,9 @@
     "watch": "watchify apps/remix-ide/src/index.js -dv -p browserify-reload -o apps/remix-ide/build/app.js --exclude solc",
     "reinstall": "rm ./node-modules/ -rf && rm yarn.lock && rm ./build/ -rf && yarn install & yarn run build",
     "ganache": "npx ganache",
-    "build-contracts": "find ./node_modules/@openzeppelin/contracts | grep -i '.sol' > libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt && find ./node_modules/@uniswap/v3-core/contracts | grep -i '.sol' >> libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt"
+    "build-contracts": "find ./node_modules/@openzeppelin/contracts | grep -i '.sol' > libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt && find ./node_modules/@uniswap/v3-core/contracts | grep -i '.sol' >> libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt",
+    "prepublish": "npm run snyk-protect",
+    "snyk-protect": "snyk-protect"
   },
   "dependencies": {
     "@apollo/client": "^3.9.5",
@@ -137,7 +139,7 @@
     "brace": "^0.8.0",
     "cbor": "^10.0.3",
     "change-case": "^4.1.1",
-    "chokidar": "^2.1.8",
+    "chokidar": "^3.0.0",
     "circom_wasm": "https://github.com/remix-project-org/circom_wasm.git",
     "color-support": "^1.1.3",
     "commander": "^9.4.1",
@@ -231,7 +233,8 @@
     "winston": "^3.3.3",
     "ws": "^8.18.0",
     "xterm": "^5.2.1",
-    "xterm-addon-search": "^0.12.0"
+    "xterm-addon-search": "^0.12.0",
+    "@snyk/protect": "latest"
   },
   "devDependencies": {
     "@babel/cli": "^7.19.3",
@@ -410,5 +413,6 @@
     "@ethereumjs/util": "^10.0.0",
     "@ethereumjs/vm": "^10.0.0",
     "@ethereumjs/binarytree": "^10.0.0"
-  }
+  },
+  "snyk": true
 }
