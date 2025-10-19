@@ -68,9 +68,18 @@ const App = () => {
       .then((data) => setChains(data))
       .catch((error) => console.error('Failed to fetch chains.json:', error))
 
+    const submissionUpdatedListener = () => {
+      const latestSubmissions = window.localStorage.getItem('contract-verification:submitted-contracts')
+      if (latestSubmissions) {
+        setSubmittedContracts(JSON.parse(latestSubmissions))
+      }
+    }
+    plugin.internalEvents.on('submissionUpdated', submissionUpdatedListener)
+
     // Clean up on unmount
     return () => {
       plugin.off('compilerArtefacts' as any, 'compilationSaved')
+      plugin.internalEvents.removeListener('submissionUpdated', submissionUpdatedListener)
     }
   }, [])
 
@@ -152,7 +161,7 @@ const App = () => {
         setSubmittedContracts((prev) => Object.assign({}, prev, changedSubmittedContracts))
       }
 
-      timer.current = setInterval(pollStatus, 1000)
+      timer.current = setInterval(pollStatus, 3000)
     }
   }, [submittedContracts])
 

@@ -1,13 +1,15 @@
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import copy from "copy-to-clipboard"
-import { ChatMessage, assistantAvatar } from "../lib/types"
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
+import copy from 'copy-to-clipboard'
+import { ChatMessage, assistantAvatar } from '../lib/types'
 import React, { useState, useEffect } from 'react'
-import { CustomTooltip } from "@remix-ui/helper"
+import { CustomTooltip } from '@remix-ui/helper'
 import {
   sampleConversationStarters,
   type ConversationStarter
-} from "../lib/conversationStarters"
+} from '../lib/conversationStarters'
 
 // ChatHistory component
 export interface ChatHistoryComponentProps {
@@ -16,10 +18,18 @@ export interface ChatHistoryComponentProps {
   sendPrompt: (prompt: string) => void
   recordFeedback: (msgId: string, next: 'like' | 'dislike' | 'none') => void
   historyRef: React.RefObject<HTMLDivElement>
+  theme: string
 }
 
 interface AiChatIntroProps {
   sendPrompt: (prompt: string) => void
+}
+
+export function normalizeMarkdown(input: string): string {
+  return input
+    .trim()
+    .replace(/\n{2,}/g, "\n\n")
+    .replace(/[ \t]+$/gm, "");
 }
 
 const AiChatIntro: React.FC<AiChatIntroProps> = ({ sendPrompt }) => {
@@ -47,7 +57,6 @@ const AiChatIntro: React.FC<AiChatIntroProps> = ({ sendPrompt }) => {
       {/* Dynamic Conversation Starters */}
       <div className="d-flex flex-column mt-3" style={{ maxWidth: '400px' }}>
         {conversationStarters.map((starter, index) => (
-
           <button
             key={`${starter.level}-${index}`}
             data-id={`remix-ai-assistant-starter-${starter.level}-${index}`}
@@ -62,12 +71,15 @@ const AiChatIntro: React.FC<AiChatIntroProps> = ({ sendPrompt }) => {
   )
 }
 
+const content = []
+
 export const ChatHistoryComponent: React.FC<ChatHistoryComponentProps> = ({
   messages,
   isStreaming,
   sendPrompt,
   recordFeedback,
-  historyRef
+  historyRef,
+  theme
 }) => {
   return (
     <div
@@ -101,62 +113,139 @@ export const ChatHistoryComponent: React.FC<ChatHistoryComponentProps> = ({
                     </small>
                   )}
 
-                  {msg.role === 'assistant' ? (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      linkTarget="_blank"
-                      components={{
-                        code({ node, inline, className, children, ...props }) {
-                          const text = String(children).replace(/\n$/, '')
-
-                          if (inline) {
+                  <div className="aiMarkup lh-base text-wrap">
+                    {msg.role === 'assistant' ? (
+                      <ReactMarkdown
+                        remarkPlugins={[[remarkGfm, { }]]}
+                        remarkRehypeOptions={{
+                        }}
+                        rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                        linkTarget="_blank"
+                        components={{
+                        // Code blocks and inline code
+                          code({ node, inline, className, children, ...props }) {
+                            const text = String(children).replace(/\n$/, '')
+                            const match = /language-(\w+)/.exec(className || '')
+                            const language = match ? match[1] : ''
+                            if (inline) {
+                              return (
+                                <code className="ai-inline-code" {...props}>
+                                  {text}
+                                </code>
+                              )
+                            }
                             return (
-                              <code className={className} {...props}>
-                                {text}
-                              </code>
+                              <div className="ai-code-block-wrapper">
+                                {language && (
+                                  <div className={`ai-code-header ${theme === 'Dark' ? 'text-white' : 'text-dark'}`}>
+                                    <span className="ai-code-language">{language}</span>
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-outline-info border border-info"
+                                      onClick={() => copy(text)}
+                                      title="Copy code"
+                                    >
+                                      <i className="fa-regular fa-copy"></i>
+                                    </button>
+                                  </div>
+                                )}
+                                {!language && (
+                                  <button
+                                    type="button"
+                                    className="ai-copy-btn ai-copy-btn-absolute"
+                                    onClick={() => copy(text)}
+                                    title="Copy code"
+                                  >
+                                    <i className="fa-regular fa-copy"></i>
+                                  </button>
+                                )}
+                                <pre className="ai-code-pre">
+                                  <code className={className}>{text}</code>
+                                </pre>
+                              </div>
                             )
-                          }
-
-                          return (
-                            <div
-                              className="code-block p-2 border border-text d-flex align-items-center"
-                            >
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-light position-absolute copy-btn"
-                                style={{ top: '0.25rem', right: '0.25rem' }}
-                                onClick={() =>
-                                  copy(text)
-                                }
-                              >
-                                <i className="fa-regular fa-copy"></i>
-                              </button>
-                              <pre className={className} {...props}>
-                                <code>{text}</code>
-                              </pre>
+                          },
+                          // Paragraphs
+                          p: ({ node, ...props }) => (
+                            <p className="ai-paragraph" {...props} />
+                          ),
+                          // Headings
+                          h1: ({ node, ...props }) => (
+                            <h1 className="ai-heading ai-h1 fs-5 mb-1" {...props} />
+                          ),
+                          h2: ({ node, ...props }) => (
+                            <h2 className="ai-heading ai-h2 fs-5 mb-1" {...props} />
+                          ),
+                          h3: ({ node, ...props }) => (
+                            <h3 className="ai-heading ai-h3 fs-5 mb-1" {...props} />
+                          ),
+                          h4: ({ node, ...props }) => (
+                            <h4 className="ai-heading ai-h4 fs-6 mb-1" {...props} />
+                          ),
+                          h5: ({ node, ...props }) => (
+                            <h5 className="ai-heading ai-h5 fs-6 mb-1" {...props} />
+                          ),
+                          h6: ({ node, ...props }) => (
+                            <h6 className="ai-heading ai-h6 fs-6 mb-1" {...props} />
+                          ),
+                          // Lists
+                          ul: ({ node, ...props }) => (
+                            <ul className="ai-list ai-list-unordered" {...props} />
+                          ),
+                          ol: ({ node, ...props }) => (
+                            <ol className="ai-list ai-list-ordered" {...props} />
+                          ),
+                          li: ({ node, ...props }) => (
+                            <li className="ai-list-item" {...props} />
+                          ),
+                          // Links
+                          a: ({ node, ...props }) => (
+                            <a className="ai-link" target="_blank" rel="noopener noreferrer" {...props} />
+                          ),
+                          // Blockquotes
+                          blockquote: ({ node, ...props }) => (
+                            <blockquote className="ai-blockquote" {...props} />
+                          ),
+                          // Tables
+                          table: ({ node, ...props }) => (
+                            <div className="ai-table-wrapper">
+                              <table className="ai-table" {...props} />
                             </div>
+                          ),
+                          thead: ({ node, ...props }) => (
+                            <thead className="ai-table-head" {...props} />
+                          ),
+                          tbody: ({ node, ...props }) => (
+                            <tbody className="ai-table-body" {...props} />
+                          ),
+                          tr: ({ node, ...props }) => (
+                            <tr className="ai-table-row" {...props} />
+                          ),
+                          th: ({ node, ...props }) => (
+                            <th className="ai-table-header-cell" {...props} />
+                          ),
+                          td: ({ node, ...props }) => (
+                            <td className="ai-table-cell" {...props} />
+                          ),
+                          // Horizontal rule
+                          hr: ({ node, ...props }) => (
+                            <hr className="ai-divider" {...props} />
+                          ),
+                          // Strong and emphasis
+                          strong: ({ node, ...props }) => (
+                            <strong className="ai-strong" {...props} />
+                          ),
+                          em: ({ node, ...props }) => (
+                            <em className="ai-emphasis" {...props} />
                           )
-                        },
-                        ul: ({ node, ...props }) => (
-                          <ul
-                            {...props}
-                            style={{
-                              listStylePosition: 'inside',
-                              paddingLeft: '0.5rem'
-                            }}
-                          />
-                        ),
-                        li: ({ node, ...props }) => (
-                          <li {...props} style={{ padding: '1px' }} />
-                        )
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  ) : (
-
-                    msg.content
-                  )}
+                        }}
+                      >
+                        {normalizeMarkdown(msg.content)}
+                      </ReactMarkdown>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
                 </div>
 
                 {/* Feedback buttons */}
@@ -197,7 +286,7 @@ export const ChatHistoryComponent: React.FC<ChatHistoryComponentProps> = ({
               </div>
             </div>
           )
-        }) //end of messages render
+        }) //end of messages renderconsole.log(content)
       )}
       {isStreaming && (
         <div className="text-center my-2">

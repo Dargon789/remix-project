@@ -10,6 +10,8 @@ import * as packageJson from '../../../../../package.json'
 import { compilerConfigChangedToastMsg, compileToastMsg } from '@remix-ui/helper'
 import { isNative } from '../../remixAppManager'
 import { Registry } from '@remix-project/remix-lib'
+
+const remixConfigPath = 'remix.config.json'
 const profile = {
   name: 'solidity',
   displayName: 'Solidity compiler',
@@ -118,7 +120,7 @@ export default class CompileTab extends CompilerApiMixin(ViewPlugin) { // implem
 
   compile(fileName) {
     if (!isNative(this.currentRequest.from)) this.call('notification', 'toast', compileToastMsg(this.currentRequest.from, fileName))
-    super.compile(fileName)
+    return super.compile(fileName)
   }
 
   compileFile(event) {
@@ -139,12 +141,12 @@ export default class CompileTab extends CompilerApiMixin(ViewPlugin) { // implem
         group: 6
       })
       this.on('fileManager', 'fileSaved', async (file) => {
-        if(await this.getAppParameter('configFilePath') === file) {
+        if(file === remixConfigPath) {
           this.emit('configFileChanged', file)
         }
       })
       this.on('fileManager', 'fileAdded', async (file) => {
-        if(await this.getAppParameter('configFilePath') === file) {
+        if(file === remixConfigPath) {
           this.emit('configFileChanged', file)
         }
       })

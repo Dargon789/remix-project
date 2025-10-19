@@ -15,6 +15,12 @@ parameters:
   run_flaky_tests:
     type: boolean
     default: false
+  run_lint_only:
+    type: boolean
+    default: false
+  run_build_only:
+    type: boolean
+    default: false
   resource_class:
     type: enum
     enum: ["small", "medium", "medium+", "large", "xlarge", "2xlarge"]
@@ -367,7 +373,7 @@ workflows:
               job: ["nogroup"]
               jobsize: ["1"]
               parallelism: [1]
-              scriptparameter: ["\\.pr"]
+              scriptparameter: ["\\.pr\\.js$"]
 
   run_flaky_tests:
     when: << pipeline.parameters.run_flaky_tests >>
@@ -382,7 +388,7 @@ workflows:
             - build
           matrix:
             parameters:
-              browser: ["chrome", "firefox"]
+              browser: ["chrome"]
               script: ["singletest.sh"]
               job: ["nogroup"]
               jobsize: ["1"]
@@ -433,14 +439,29 @@ workflows:
           requires:
             - build
           matrix:
-            alias: browser-tests
+            alias: chrome-tests
             parameters:
-              browser: ["chrome", "firefox"]
+              browser: ["chrome"]
               script: ["browser_test.sh"]
               job: ["0","1","2","3","4","5","6","7","8","9"]
               jobsize: ["10"]
               parallelism: [15]
               scriptparameter: [""]
+      - remix-ide-browser:
+          requires:
+            - build
+          matrix:
+            alias: firefox-tests
+            parameters:
+              browser: ["firefox"]
+              script: ["browser_test.sh"]
+              job: ["0","1","2","3","4","5","6","7","8","9"]
+              jobsize: ["10"]
+              parallelism: [15]
+              scriptparameter: [""]
+          filters:
+            branches:
+              only: ['master', 'remix_live', 'remix_beta', 'remix_alpha']
       - remix-ide-browser:
           requires:
             - build
@@ -460,7 +481,8 @@ workflows:
           requires:
             - lint
             - remix-libs
-            - browser-tests
+            - chrome-tests
+            - firefox-tests
             - metamask
             - plugins
             
@@ -474,7 +496,8 @@ workflows:
           requires:
             - lint
             - remix-libs
-            - browser-tests
+            - chrome-tests
+            - firefox-tests
             - metamask
             - plugins
             - predeploy
@@ -487,7 +510,8 @@ workflows:
           requires:
             - lint
             - remix-libs
-            - browser-tests
+            - chrome-tests
+            - firefox-tests
             - metamask
             - plugins
             - predeploy
@@ -500,12 +524,23 @@ workflows:
           requires:
             - lint
             - remix-libs
-            - browser-tests
+            - chrome-tests
+            - firefox-tests
             - metamask
             - plugins
             - predeploy
           filters:
             branches:
               only: remix_beta
+
+  lint_only:
+    when: << pipeline.parameters.run_lint_only >>
+    jobs:
+      - lint
+
+  build_only:
+    when: << pipeline.parameters.run_build_only >>
+    jobs:
+      - build
 
 # VS Code Extension Version: 1.5.1
