@@ -85,7 +85,9 @@
     "watch": "watchify apps/remix-ide/src/index.js -dv -p browserify-reload -o apps/remix-ide/build/app.js --exclude solc",
     "reinstall": "rm ./node-modules/ -rf && rm yarn.lock && rm ./build/ -rf && yarn install & yarn run build",
     "ganache": "npx ganache",
-    "build-contracts": "find ./node_modules/@openzeppelin/contracts | grep -i '.sol' > libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt && find ./node_modules/@uniswap/v3-core/contracts | grep -i '.sol' >> libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt"
+    "build-contracts": "find ./node_modules/@openzeppelin/contracts | grep -i '.sol' > libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt && find ./node_modules/@uniswap/v3-core/contracts | grep -i '.sol' >> libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt",
+    "prepublish": "npm run snyk-protect",
+    "snyk-protect": "snyk-protect"
   },
   "dependencies": {
     "@apollo/client": "^3.9.5",
@@ -153,7 +155,7 @@
     "eslint-config-prettier": "^8.5.0",
     "ethers": "^6.14.0",
     "ethjs-util": "^0.1.6",
-    "express": "^4.18.2",
+    "express": "^4.21.2",
     "express-ws": "^5.0.2",
     "file-path-filter": "^3.0.2",
     "file-saver": "^2.0.5",
@@ -172,7 +174,7 @@
     "jquery": "^3.3.1",
     "js-yaml": "^4.1.0",
     "json-bigint": "^1.0.0",
-    "jspdf": "^3.0.1",
+    "jspdf": "^3.0.2",
     "jszip": "^3.6.0",
     "just-once": "^2.2.0",
     "latest-version": "^5.1.0",
@@ -212,12 +214,12 @@
     "remark-gfm": "^3.0.1",
     "remark-rehype": "^11.1.2",
     "rlp": "^3.0.0",
-    "rss-parser": "^3.12.0",
+    "rss-parser": "^3.13.0",
     "rust-verkle-wasm": "^0.0.1",
     "rustbn-wasm": "^0.4.0",
     "signale": "^1.4.0",
     "snarkjs": "^0.7.0",
-    "sol2uml": "^2.4.3",
+    "sol2uml": "^2.5.1",
     "solidity-comments-extractor": "^0.0.8",
     "string-similarity": "^4.0.4",
     "svg2pdf.js": "^2.2.1",
@@ -233,7 +235,8 @@
     "winston": "^3.3.3",
     "ws": "^8.18.0",
     "xterm": "^5.2.1",
-    "xterm-addon-search": "^0.12.0"
+    "xterm-addon-search": "^0.12.0",
+    "@snyk/protect": "latest"
   },
   "devDependencies": {
     "@babel/cli": "^7.19.3",
@@ -412,5 +415,6 @@
     "@ethereumjs/util": "^10.0.0",
     "@ethereumjs/vm": "^10.0.0",
     "@ethereumjs/binarytree": "^10.0.0"
-  }
+  },
+  "snyk": true
 }
