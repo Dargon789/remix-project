@@ -292,7 +292,7 @@ export function RemixUiTopbar() {
 
   const loginWithGitHub = async () => {
     global.plugin.call('dgit', 'login')
-    trackMatomoEvent({ category: 'topbar', action: 'header', name: 'Settings', isClick: true })
+    trackMatomoEvent({ category: 'topbar', action: 'GIT', name: 'login', isClick: true })
   }
 
   const logOutOfGithub = async () => {
