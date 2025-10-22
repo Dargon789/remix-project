@@ -24,8 +24,8 @@ export interface WorkspaceEvent extends MatomoEventBase {
   category: 'Workspace';
   action: 
     | 'switchWorkspace'
-    | 'GIT'
-    | 'createWorkspace';
+    | 'template'
+    | 'GIT';
 }
 
 export interface StorageEvent extends MatomoEventBase {
