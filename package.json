@@ -264,7 +264,7 @@
     "@nrwl/linter": "15.7.1",
     "@nrwl/node": "15.7.1",
     "@nrwl/react": "15.7.1",
-    "@nrwl/tao": "15.7.1",
+    "@nrwl/tao": "17.0.4",
     "@nrwl/web": "15.7.1",
     "@nrwl/webpack": "15.7.1",
     "@nrwl/workspace": "15.7.1",
