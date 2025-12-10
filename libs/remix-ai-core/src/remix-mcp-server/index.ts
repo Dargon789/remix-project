@@ -17,6 +17,8 @@ export { createCompilationTools } from './handlers/CompilationHandler';
 export { createDeploymentTools } from './handlers/DeploymentHandler';
 export { createDebuggingTools } from './handlers/DebuggingHandler';
 export { createCodeAnalysisTools } from './handlers/CodeAnalysisHandler';
+export { createIPFSTools } from './handlers/IPFSHandler';
+export { createAIDappGeneratorTools } from './handlers/AIDappGeneratorHandler';
 
 // Resource Providers
 export { ProjectResourceProvider } from './providers/ProjectResourceProvider';

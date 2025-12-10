@@ -32,6 +32,8 @@ import { createDeploymentTools } from './handlers/DeploymentHandler';
 import { createDebuggingTools } from './handlers/DebuggingHandler';
 import { createCodeAnalysisTools } from './handlers/CodeAnalysisHandler';
 import { createTutorialsTools } from './handlers/TutorialsHandler';
+import { createIPFSTools } from './handlers/IPFSHandler';
+import { createAIDappGeneratorTools } from './handlers/AIDappGeneratorHandler';
 
 // Import resource providers
 import { ProjectResourceProvider } from './providers/ProjectResourceProvider';
@@ -457,6 +459,14 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       // Register debugging tools
       const tutorialTools = createTutorialsTools();
       this._tools.registerBatch(tutorialTools);
+
+      // Register IPFS tools
+      const ipfsTools = createIPFSTools();
+      this._tools.registerBatch(ipfsTools);
+
+      // Register AI DApp Generator tools
+      const aiDappGeneratorTools = createAIDappGeneratorTools();
+      this._tools.registerBatch(aiDappGeneratorTools);
 
       const totalTools = this._tools.list().length;
 

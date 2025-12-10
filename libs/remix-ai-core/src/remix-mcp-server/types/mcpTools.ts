@@ -137,6 +137,40 @@ export interface RunScriptArgs {
   file: string
 }
 
+export interface PublishToIPFSArgs {
+  filePath: string;
+  ipfsUrl?: string;
+  ipfsPort?: number;
+  ipfsProtocol?: 'http' | 'https';
+  projectId?: string;
+  projectSecret?: string;
+}
+
+export interface PublishMultipleToIPFSArgs {
+  filePaths: string[];
+  ipfsUrl?: string;
+  ipfsPort?: number;
+  ipfsProtocol?: 'http' | 'https';
+  projectId?: string;
+  projectSecret?: string;
+}
+
+export interface GenerateAIDappArgs {
+  description: string;
+  contractAddress: string;
+  contractName: string;
+  abi: any[];
+  chainId: string | number;
+  outputDirectory?: string;
+}
+
+export interface UpdateAIDappArgs {
+  contractAddress: string;
+  description: string;
+  currentFiles: Record<string, string>;
+  outputDirectory?: string;
+}
+
 export interface DebugSessionArgs {
   transactionHash?: string;
 }
@@ -273,6 +307,22 @@ export interface ContractInteractionResult {
   gasUsed?: number | bigint;
   logs?: any[];
   error?: string;
+}
+
+export interface IPFSPublishResult {
+  success: boolean;
+  fileName: string;
+  hash: string;
+  url: string;
+  size?: number;
+}
+
+export interface AIDappGenerationResult {
+  success: boolean;
+  outputDirectory: string;
+  filesGenerated: string[];
+  totalFiles: number;
+  errors?: string[];
 }
 
 export interface DebugSessionResult {
