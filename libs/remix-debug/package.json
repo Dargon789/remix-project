@@ -26,7 +26,7 @@
     "@ethereumjs/tx": "github:yann300/ethereumjs-vm#fixV10",
     "@ethereumjs/util": "^10.0.0",
     "@ethereumjs/vm": "^10.0.0",
-    "@remix-project/remix-astwalker": "^0.0.110",
+    "@remix-project/remix-astwalker": "^0.0.111",
     "@remix-project/remix-lib": "^0.5.87",
     "@remix-project/remix-simulator": "^0.2.80",
     "@remix-project/remix-solidity": "^0.5.66",
