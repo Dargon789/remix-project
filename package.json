@@ -86,7 +86,7 @@
     "reinstall": "rm ./node-modules/ -rf && rm yarn.lock && rm ./build/ -rf && yarn install & yarn run build",
     "ganache": "npx ganache",
     "build-contracts": "find ./node_modules/@openzeppelin/contracts | grep -i '.sol' > libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt && find ./node_modules/@uniswap/v3-core/contracts | grep -i '.sol' >> libs/remix-ui/editor/src/lib/providers/completion/contracts/contracts.txt",
-    "prepublish": "npm run snyk-protect",
+    "prepublish": "yarn run snyk-protect",
     "snyk-protect": "snyk-protect"
   },
   "dependencies": {
@@ -139,7 +139,7 @@
     "brace": "^0.8.0",
     "cbor": "^10.0.3",
     "change-case": "^4.1.1",
-    "chokidar": "^2.1.8",
+    "chokidar": "^3.0.0",
     "circom_wasm": "https://github.com/remix-project-org/circom_wasm.git",
     "color-support": "^1.1.3",
     "commander": "^9.4.1",
