@@ -118,11 +118,9 @@ module.exports = {
       This is still an issue @todo(https://github.com/ethereum/remix-project/issues/481), so this test will fail when this issue is fixed
     */
     browser
-      .clearConsole().clearTransactions()
+      .refreshPage()
       .clickLaunchIcon('solidity')
       .setSolidityCompilerVersion('soljson-v0.6.12+commit.27d51765.js')
-      .clickLaunchIcon('filePanel')
-      .click('li[data-id="treeViewLitreeViewItemexternalImport.sol"')
       .testContracts('withABIEncoderV2.sol', sources[2]['withABIEncoderV2.sol'], ['test'])
       .clickLaunchIcon('udapp')
       .selectContract('test')

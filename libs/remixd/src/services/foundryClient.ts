@@ -23,7 +23,6 @@ export class FoundryClient extends PluginClient {
     this.methods = ['compile', 'sync']
     this.onActivation = () => {
       console.log('Foundry plugin activated')
-      this.call('terminal', 'log', { type: 'log', value: 'Foundry plugin activated' })
       this.startListening()
     }
   }

@@ -9,7 +9,7 @@ import { CompileAndRun } from './app/tabs/compile-and-run'
 import { PluginStateLogger } from './app/tabs/state-logger'
 import { SidePanel } from './app/components/side-panel'
 import { HiddenPanel } from './app/components/hidden-panel'
-import { PinnedPanel } from './app/components/pinned-panel'
+import { RightSidePanel } from './app/components/right-side-panel'
 import { PopupPanel } from './app/components/popup-panel'
 import { LandingPage } from './app/ui/landing-page/landing-page'
 import { MainPanel } from './app/components/main-panel'
@@ -29,7 +29,7 @@ import { ContractFlattener } from './app/plugins/contractFlattener'
 
 import { WalkthroughService } from './walkthroughService'
 
-import { OffsetToLineColumnConverter, CompilerMetadata, CompilerArtefacts, FetchAndCompile, CompilerImports, GistHandler } from '@remix-project/core-plugin'
+import { OffsetToLineColumnConverter, CompilerMetadata, CompilerArtefacts, FetchAndCompile, CompilerImports, GistHandler, AmpPlugin, ChartJsPlugin } from '@remix-project/core-plugin'
 
 import { Registry } from '@remix-project/remix-lib'
 import { ConfigPlugin } from './app/plugins/config'
@@ -37,10 +37,9 @@ import { StoragePlugin } from './app/plugins/storage'
 import { Layout } from './app/panels/layout'
 import { NotificationPlugin } from './app/plugins/notification'
 import { Blockchain } from './blockchain/blockchain'
-import { MergeVMProvider, LondonVMProvider, BerlinVMProvider, ShanghaiVMProvider, CancunVMProvider, PectraVMProvider } from './app/providers/vm-provider'
+import { MergeVMProvider, LondonVMProvider, BerlinVMProvider, ShanghaiVMProvider, CancunVMProvider, PectraVMProvider, FusakaVMProvider } from './app/providers/vm-provider'
 import { MainnetForkVMProvider } from './app/providers/mainnet-vm-fork-provider'
 import { SepoliaForkVMProvider } from './app/providers/sepolia-vm-fork-provider'
-import { GoerliForkVMProvider } from './app/providers/goerli-vm-fork-provider'
 import { CustomForkVMProvider } from './app/providers/custom-vm-fork-provider'
 import { HardhatProvider } from './app/providers/hardhat-provider'
 import { GanacheProvider } from './app/providers/ganache-provider'
@@ -48,6 +47,7 @@ import { FoundryProvider } from './app/providers/foundry-provider'
 import { ExternalHttpProvider } from './app/providers/external-http-provider'
 import { EnvironmentExplorer } from './app/providers/environment-explorer'
 import { FileDecorator } from './app/plugins/file-decorator'
+import { TransactionSimulator } from './app/plugins/transaction-simulator'
 import { CodeFormat } from './app/plugins/code-format'
 import { CompilationDetailsPlugin } from './app/plugins/compile-details'
 import { RemixGuidePlugin } from './app/plugins/remixGuide'
@@ -60,7 +60,6 @@ import { xtermPlugin } from './app/plugins/electron/xtermPlugin'
 import { ripgrepPlugin } from './app/plugins/electron/ripgrepPlugin'
 import { compilerLoaderPlugin, compilerLoaderPluginDesktop } from './app/plugins/electron/compilerLoaderPlugin'
 import { appUpdaterPlugin } from './app/plugins/electron/appUpdaterPlugin'
-import { remixAIDesktopPlugin } from './app/plugins/electron/remixAIDesktopPlugin'
 import { RemixAIPlugin } from './app/plugins/remixAIPlugin'
 import { SlitherHandleDesktop } from './app/plugins/electron/slitherPlugin'
 import { SlitherHandle } from './app/files/slither-handle'
@@ -75,6 +74,7 @@ import { Matomo } from './app/plugins/matomo'
 import { DesktopClient } from './app/plugins/desktop-client'
 import { DesktopHost } from './app/plugins/electron/desktopHostPlugin'
 import { WalletConnect } from './app/plugins/walletconnect'
+import { AIDappGenerator } from './app/plugins/ai-dapp-generator'
 
 import { TemplatesSelectionPlugin } from './app/plugins/templates-selection/templates-selection-plugin'
 
@@ -112,6 +112,7 @@ import Terminal from './app/panels/terminal'
 import TabProxy from './app/panels/tab-proxy.js'
 import { Plugin } from '@remixproject/engine'
 import BottomBarPanel from './app/components/bottom-bar-panel'
+import { TemplateExplorerModalPlugin } from './app/plugins/template-explorer-modal'
 
 // Tracking now handled by this.track() method using MatomoManager
 
@@ -154,10 +155,11 @@ class AppComponent {
   menuicons: VerticalIcons
   sidePanel: SidePanel
   hiddenPanel: HiddenPanel
-  pinnedPanel: PinnedPanel
+  rightSidePanel: RightSidePanel
   popupPanel: PopupPanel
   statusBar: StatusBar
   topBar: Topbar
+  templateExplorerModal: TemplateExplorerModalPlugin
   settings: SettingsTab
   params: any
   desktopClientMode: boolean
@@ -262,6 +264,7 @@ class AppComponent {
       }
     }
 
+    this.templateExplorerModal = new TemplateExplorerModalPlugin()
     // SERVICES
     // ----------------- gist service ---------------------------------
     this.gistHandler = new GistHandler()
@@ -292,6 +295,9 @@ class AppComponent {
     // ------- FILE DECORATOR PLUGIN ------------------
     const fileDecorator = new FileDecorator()
 
+    // ------- TRANSACTION SIMULATOR PLUGIN ------------------
+    const transactionSimulator = new TransactionSimulator()
+
     // ------- CODE FORMAT PLUGIN ------------------
     const codeFormat = new CodeFormat()
 
@@ -310,6 +316,9 @@ class AppComponent {
     //---- matomo
     const matomo = new Matomo()
 
+    //---- AI DApp Generator
+    const aiDappGenerator = new AIDappGenerator()
+
     //---------------- Solidity UML Generator -------------------------
     const solidityumlgen = new SolidityUmlGen(appManager)
 
@@ -324,13 +333,22 @@ class AppComponent {
     const contractFlattener = new ContractFlattener()
 
     // ----------------- AI --------------------------------------
-    const remixAI = new RemixAIPlugin(isElectron())
+    const remixAI = new RemixAIPlugin()
     const remixAiAssistant = new RemixAIAssistant()
 
     // ----------------- import content service ------------------------
     const contentImport = new CompilerImports()
 
     const blockchain = new Blockchain(Registry.getInstance().get('config').api)
+
+    // ----------------- amp (thegraph) ------------------------
+    const amp = new AmpPlugin()
+
+    // ----------------- vega (generate visualization) ------------------------
+    // const vega = new VegaPlugin()
+
+    // ----------------- chart (generate visualization) ------------------------
+    const chartjs = new ChartJsPlugin()
 
     // ----------------- compilation metadata generation service ---------
     const compilerMetadataGenerator = new CompilerMetadata()
@@ -350,10 +368,10 @@ class AppComponent {
     const vmProviderCustomFork = new CustomForkVMProvider(blockchain)
     const vmProviderMainnetFork = new MainnetForkVMProvider(blockchain)
     const vmProviderSepoliaFork = new SepoliaForkVMProvider(blockchain)
-    const vmProviderGoerliFork = new GoerliForkVMProvider(blockchain)
     const vmProviderShanghai = new ShanghaiVMProvider(blockchain)
     const vmProviderCancun = new CancunVMProvider(blockchain)
     const vmProviderPectra = new PectraVMProvider(blockchain)
+    const vmProviderFusaka = new FusakaVMProvider(blockchain)
     const vmProviderMerge = new MergeVMProvider(blockchain)
     const vmProviderBerlin = new BerlinVMProvider(blockchain)
     const vmProviderLondon = new LondonVMProvider(blockchain)
@@ -401,6 +419,8 @@ class AppComponent {
 
     const templateSelection = new TemplatesSelectionPlugin()
 
+    const templateExplorerModal = this.templateExplorerModal
+
     const walletConnect = new WalletConnect()
 
     this.engine.register([
@@ -421,6 +441,7 @@ class AppComponent {
       offsetToLineColumnConverter,
       codeParser,
       fileDecorator,
+      transactionSimulator,
       codeFormat,
       terminal,
       web3Provider,
@@ -431,11 +452,11 @@ class AppComponent {
       vmProviderShanghai,
       vmProviderCancun,
       vmProviderPectra,
+      vmProviderFusaka,
       vmProviderMerge,
       vmProviderBerlin,
       vmProviderLondon,
       vmProviderSepoliaFork,
-      vmProviderGoerliFork,
       vmProviderMainnetFork,
       vmProviderCustomFork,
       hardhatProvider,
@@ -455,11 +476,15 @@ class AppComponent {
       git,
       pluginStateLogger,
       matomo,
+      aiDappGenerator,
       templateSelection,
       scriptRunnerUI,
       remixAI,
       remixAiAssistant,
-      walletConnect
+      walletConnect,
+      amp,
+      // vega,
+      chartjs
     ])
 
     //---- fs plugin
@@ -480,8 +505,6 @@ class AppComponent {
       this.engine.register([circom])
       const appUpdater = new appUpdaterPlugin()
       this.engine.register([appUpdater])
-      const remixAIDesktop = new remixAIDesktopPlugin()
-      this.engine.register([remixAIDesktop])
       const desktopHost = new DesktopHost()
       this.engine.register([desktopHost])
       const githubAuthHandler = new GitHubAuthHandler()
@@ -517,19 +540,19 @@ class AppComponent {
     this.menuicons = new VerticalIcons()
     this.sidePanel = new SidePanel()
     this.hiddenPanel = new HiddenPanel()
-    this.pinnedPanel = new PinnedPanel()
+    this.rightSidePanel = new RightSidePanel()
     this.popupPanel = new PopupPanel()
 
     const pluginManagerComponent = new PluginManagerComponent(appManager, this.engine)
     const filePanel = new Filepanel(appManager, contentImport)
     this.statusBar = new StatusBar(filePanel, this.menuicons)
-    this.topBar = new Topbar(filePanel, git)
+    this.topBar = new Topbar(filePanel, git, this.desktopClientMode)
     const landingPage = new LandingPage(appManager, this.menuicons, fileManager, filePanel, contentImport)
     this.settings = new SettingsTab(Registry.getInstance().get('config').api, editor)//, appManager)
 
     const bottomBarPanel = new BottomBarPanel()
 
-    this.engine.register([this.menuicons, landingPage, this.hiddenPanel, this.sidePanel, this.statusBar, this.topBar, filePanel, pluginManagerComponent, this.settings, this.pinnedPanel, this.popupPanel, bottomBarPanel])
+    this.engine.register([this.menuicons, landingPage, this.hiddenPanel, this.sidePanel, this.statusBar, filePanel, pluginManagerComponent, this.settings, this.rightSidePanel, this.popupPanel, bottomBarPanel])
 
     // CONTENT VIEWS & DEFAULT PLUGINS
     const openZeppelinProxy = new OpenZeppelinProxy(blockchain)
@@ -571,6 +594,7 @@ class AppComponent {
       openZeppelinProxy,
       run.recorder
     ])
+    this.engine.register([templateExplorerModal, this.topBar])
 
     this.layout.panels = {
       tabs: { plugin: tabProxy, active: true },
@@ -605,15 +629,17 @@ class AppComponent {
       'web3Provider',
       'offsetToLineColumnConverter',
       'pluginStateLogger',
-      'matomo'
+      'matomo',
+      'ai-dapp-generator'
     ])
 
     await this.appManager.activatePlugin(['mainPanel', 'menuicons', 'tabs'])
-    await this.appManager.activatePlugin(['topbar'])
+    await this.appManager.activatePlugin(['topbar', 'templateexplorermodal'])
     await this.appManager.activatePlugin(['statusBar'])
+    // await this.appManager.activatePlugin(['remix-template-explorer-modal'])
     await this.appManager.activatePlugin(['bottomBar'])
     await this.appManager.activatePlugin(['sidePanel']) // activating  host plugin separately
-    await this.appManager.activatePlugin(['pinnedPanel'])
+    await this.appManager.activatePlugin(['rightSidePanel'])
     await this.appManager.activatePlugin(['popupPanel'])
     await this.appManager.activatePlugin(['home'])
     await this.appManager.activatePlugin(['settings', 'config'])
@@ -623,6 +649,7 @@ class AppComponent {
       'codeParser',
       'codeFormatter',
       'fileDecorator',
+      'transactionSimulator',
       'terminal',
       'blockchain',
       'fetchAndCompile',
@@ -685,7 +712,7 @@ class AppComponent {
               if (callDetails.length > 1) {
                 this.appManager.call('notification', 'toast', `initiating ${callDetails[0]} and calling "${callDetails[1]}" ...`)
                 // @todo(remove the timeout when activatePlugin is on 0.3.0)
-                this.track({ category: 'App', action: 'queryParamsCalls', name: this.params.call, isClick: false })
+                this.track({ category: 'App', action: 'queryParams-calls', name: this.params.call, isClick: false })
                 //@ts-ignore
                 await this.appManager.call(...callDetails).catch(console.error)
               }
@@ -696,7 +723,7 @@ class AppComponent {
 
               // call all functions in the list, one after the other
               for (const call of calls) {
-                this.track({ category: 'App', action: 'queryParamsCalls', name: call, isClick: false })
+                this.track({ category: 'App', action: 'queryParams-calls', name: call, isClick: false })
                 const callDetails = call.split('//')
                 if (callDetails.length > 1) {
                   this.appManager.call('notification', 'toast', `initiating ${callDetails[0]} and calling "${callDetails[1]}" ...`)
@@ -727,11 +754,11 @@ class AppComponent {
       document.body.appendChild(loadedElement)
     })
 
-    this.appManager.on('pinnedPanel', 'pinnedPlugin', (pluginProfile) => {
+    this.appManager.on('rightSidePanel', 'pinnedPlugin', (pluginProfile) => {
       localStorage.setItem('pinnedPlugin', JSON.stringify(pluginProfile))
     })
 
-    this.appManager.on('pinnedPanel', 'unPinnedPlugin', () => {
+    this.appManager.on('rightSidePanel', 'unPinnedPlugin', () => {
       localStorage.setItem('pinnedPlugin', '')
     })
 

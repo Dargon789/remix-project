@@ -44,6 +44,7 @@ export function EnvironmentUI(props: EnvironmentProps) {
   const devProviders = providers.filter(isDevByLabel)
   const walletConnect = providers.find(p => p.name === 'walletconnect' || p.name === 'walletConnect')
   const httpProvider = providers.find(p => p.name === 'basic-http-provider' || p.name === 'web3Provider' || p.name === 'basicHttpProvider')
+  const electrOnProvider = providers.find(p => p.name === 'desktopHost')
 
   const handleChangeExEnv = (env: string) => {
     if (props.selectedEnv === env || isSwitching) return
@@ -243,6 +244,16 @@ export function EnvironmentUI(props: EnvironmentProps) {
                   </Dropdown.Item>
                 ))}
               </SubmenuPortal>
+            )}
+
+            {electrOnProvider && (
+              <Dropdown.Item
+                key={electrOnProvider.name}
+                onClick={() => handleChangeExEnv(electrOnProvider.name)}
+                data-id={`dropdown-item-${electrOnProvider.name}`}
+              >
+                {electrOnProvider.displayName}
+              </Dropdown.Item>
             )}
 
             {walletConnect && (

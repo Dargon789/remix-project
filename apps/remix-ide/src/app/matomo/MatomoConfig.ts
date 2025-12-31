@@ -4,6 +4,7 @@
  * Single source of truth for Matomo site IDs and configuration
  */
 
+import isElectron from 'is-electron';
 import { MatomoConfig } from './MatomoManager';
 
 // ================ DEVELOPER CONFIGURATION ================
@@ -34,7 +35,7 @@ export interface DomainCustomDimensions {
 }
 
 // Type for domain keys (single source of truth)
-export type MatomotDomain = 'alpha.remix.live' | 'beta.remix.live' | 'remix.ethereum.org' | 'localhost' | '127.0.0.1';
+export type MatomotDomain = 'alpha.remix.live' | 'beta.remix.live' | 'remix.ethereum.org' | 'localhost' | '127.0.0.1' | 'electron';
 
 // Type for site ID configuration
 export type SiteIdConfig = Record<MatomotDomain, number>;
@@ -54,7 +55,8 @@ export const MATOMO_DOMAINS: SiteIdConfig = {
   'beta.remix.live': 2,
   'remix.ethereum.org': 3,
   'localhost': 5,
-  '127.0.0.1': 5
+  '127.0.0.1': 5,
+  'electron': 4 // Remix Desktop (Electron) app
 };
 
 // Bot tracking site IDs (separate databases to avoid polluting human analytics)
@@ -64,7 +66,8 @@ export const MATOMO_BOT_SITE_IDS: BotSiteIdConfig = {
   'beta.remix.live': null, // TODO: Create bot tracking site in Matomo (e.g., site ID 11)
   'remix.ethereum.org': 8, // TODO: Create bot tracking site in Matomo (e.g., site ID 12)
   'localhost': 7, // Keep bots in same localhost site for testing (E2E tests need cookies)
-  '127.0.0.1': 7 // Keep bots in same localhost site for testing (E2E tests need cookies)
+  '127.0.0.1': 7, // Keep bots in same localhost site for testing (E2E tests need cookies)
+  'electron': null // Electron app uses same site ID for bots (filtered via isBot dimension)
 };
 
 // Domain-specific custom dimension IDs for HUMAN traffic
@@ -96,6 +99,12 @@ export const MATOMO_CUSTOM_DIMENSIONS: CustomDimensionsConfig = {
     trackingMode: 1, // Dimension for 'anon'/'cookie' tracking mode
     clickAction: 3, // Dimension for 'true'/'false' click tracking
     isBot: 4 // Dimension for 'human'/'bot'/'automation' detection
+  },
+  // Electron Desktop App
+  electron: {
+    trackingMode: 1, // Dimension for 'anon'/'cookie' tracking mode
+    clickAction: 2, // Dimension for 'true'/'false' click tracking
+    isBot: 3 // Dimension for 'human'/'bot'/'automation' detection
   }
 };
 
@@ -119,8 +128,23 @@ export const MATOMO_BOT_CUSTOM_DIMENSIONS: BotCustomDimensionsConfig = {
     trackingMode: 1,
     clickAction: 3,
     isBot: 2
-  }
+  },
+  'electron': null // Electron app uses same custom dimensions as human traffic
 };
+
+/**
+ * Get the appropriate domain key for tracking
+ * Returns 'electron' for Electron app, otherwise returns the hostname
+ */
+export function getDomainKey(): MatomotDomain {
+  if (isElectron()) {
+    return 'electron';
+  }
+
+  const hostname = window.location.hostname as MatomotDomain;
+  // Return hostname if it's a known domain, otherwise default to localhost
+  return MATOMO_DOMAINS[hostname] !== undefined ? hostname : 'localhost';
+}
 
 /**
  * Get the appropriate site ID for the current domain and bot status
@@ -129,15 +153,15 @@ export const MATOMO_BOT_CUSTOM_DIMENSIONS: BotCustomDimensionsConfig = {
  * @returns Site ID to use for tracking
  */
 export function getSiteIdForTracking(isBot: boolean): number {
-  const hostname = window.location.hostname;
+  const domainKey = getDomainKey();
 
   // If bot and bot site ID is configured, use it
-  if (isBot && MATOMO_BOT_SITE_IDS[hostname] !== null && MATOMO_BOT_SITE_IDS[hostname] !== undefined) {
-    return MATOMO_BOT_SITE_IDS[hostname];
+  if (isBot && MATOMO_BOT_SITE_IDS[domainKey] !== null && MATOMO_BOT_SITE_IDS[domainKey] !== undefined) {
+    return MATOMO_BOT_SITE_IDS[domainKey];
   }
 
   // Otherwise use normal site ID
-  return MATOMO_DOMAINS[hostname] || MATOMO_DOMAINS['localhost'];
+  return MATOMO_DOMAINS[domainKey];
 }
 
 /**
@@ -146,21 +170,15 @@ export function getSiteIdForTracking(isBot: boolean): number {
  * @param isBot - Whether the visitor is detected as a bot (to use bot-specific dimensions if configured)
  */
 export function getDomainCustomDimensions(isBot: boolean = false): DomainCustomDimensions {
-  const hostname = window.location.hostname;
+  const domainKey = getDomainKey();
 
   // If bot and bot-specific dimensions are configured, use them
-  if (isBot && MATOMO_BOT_CUSTOM_DIMENSIONS[hostname] !== null && MATOMO_BOT_CUSTOM_DIMENSIONS[hostname] !== undefined) {
-    return MATOMO_BOT_CUSTOM_DIMENSIONS[hostname];
+  if (isBot && MATOMO_BOT_CUSTOM_DIMENSIONS[domainKey] !== null && MATOMO_BOT_CUSTOM_DIMENSIONS[domainKey] !== undefined) {
+    return MATOMO_BOT_CUSTOM_DIMENSIONS[domainKey];
   }
 
   // Return dimensions for current domain
-  if (MATOMO_CUSTOM_DIMENSIONS[hostname]) {
-    return MATOMO_CUSTOM_DIMENSIONS[hostname];
-  }
-
-  // Fallback to localhost if domain not found
-  console.warn(`No custom dimensions found for domain: ${hostname}, using localhost fallback`);
-  return MATOMO_CUSTOM_DIMENSIONS['localhost'];
+  return MATOMO_CUSTOM_DIMENSIONS[domainKey];
 }
 
 /**

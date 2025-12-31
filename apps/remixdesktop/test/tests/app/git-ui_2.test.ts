@@ -25,7 +25,7 @@ const tests = {
     },
 
     'run server #group1 #group2 #group3': function (browser: NightwatchBrowser) {
-        browser.perform(async (done) => {
+        browser.hideToolTips().perform(async (done) => {
             gitserver = await spawnGitServer('/tmp/')
             console.log('working directory', process.cwd())
             done()
@@ -47,7 +47,8 @@ const tests = {
             .pause(5000)
             .windowHandles(function (result) {
                 console.log(result.value)
-                browser.switchWindow(result.value[1])
+                browser.hideToolTips().switchWindow(result.value[1])
+                    .hideToolTips()
                     .waitForElementVisible('*[data-id="treeViewLitreeViewItem.git"]')
                     .hideToolTips()
             })

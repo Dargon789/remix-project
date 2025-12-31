@@ -6,7 +6,7 @@ console.log('preload.ts', new Date().toLocaleTimeString())
 
 /* preload script needs statically defined API for each plugin */
 
-const exposedPLugins = ['fs', 'git', 'xterm', 'isogit', 'electronconfig', 'electronTemplates', 'ripgrep', 'compilerloader', 'appUpdater', 'slither', 'foundry', 'hardhat', 'remixAID', 'circom', 'desktopHost', 'githubAuthHandler']
+const exposedPLugins = ['fs', 'git', 'xterm', 'isogit', 'electronconfig', 'electronTemplates', 'ripgrep', 'compilerloader', 'appUpdater', 'slither', 'foundry', 'hardhat', 'circom', 'desktopHost', 'githubAuthHandler']
 
 let webContentsId: number | undefined
 
@@ -17,7 +17,6 @@ ipcRenderer.invoke('getWebContentsID').then((id: number) => {
 contextBridge.exposeInMainWorld('electronAPI', {
   isPackaged: () => ipcRenderer.invoke('config:isPackaged'),
   isE2E: () => ipcRenderer.invoke('config:isE2E'),
-  canTrackMatomo: () => ipcRenderer.invoke('config:canTrackMatomo'),
   trackEvent: (args: any[]) => ipcRenderer.invoke('matomo:trackEvent', args),
   openFolder: (path: string) => ipcRenderer.invoke('fs:openFolder', webContentsId, path),
   openFolderInSameWindow: (path: string) => ipcRenderer.invoke('fs:openFolderInSameWindow', webContentsId, path),
@@ -38,6 +37,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     }
   })
-
 
 })

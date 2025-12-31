@@ -9,7 +9,7 @@ import { values } from 'lodash'
 import { AppContext } from '@remix-ui/app'
 import { TrackingContext } from '@remix-ide/tracking'
 import { desktopConnectionType } from '@remix-api'
-import { CompileDropdown, RunScriptDropdown } from '@remix-ui/tabs'
+import { CompileDropdown, RunScriptDropdown, EmptyDropdown, AmpSqlDropdown } from '@remix-ui/tabs'
 // eslint-disable-next-line @nrwl/nx/enforce-module-boundaries
 import TabProxy from 'apps/remix-ide/src/app/panels/tab-proxy'
 
@@ -43,17 +43,20 @@ interface ITabsState {
   selectedIndex: number
   fileDecorations: fileDecoration[]
   currentExt: string
+  name: string
 }
 interface ITabsAction {
   type: string
   payload: any
   ext?: string
+  name?: string
 }
 
 const initialTabsState: ITabsState = {
   selectedIndex: -1,
   fileDecorations: [],
-  currentExt: ''
+  currentExt: '',
+  name: ''
 }
 
 const tabsReducer = (state: ITabsState, action: ITabsAction) => {
@@ -62,7 +65,8 @@ const tabsReducer = (state: ITabsState, action: ITabsAction) => {
     return {
       ...state,
       currentExt: action.ext,
-      selectedIndex: action.payload
+      selectedIndex: action.payload,
+      name: action.name
     }
   case 'SET_FILE_DECORATIONS':
     return {
@@ -73,7 +77,7 @@ const tabsReducer = (state: ITabsState, action: ITabsAction) => {
     return state
   }
 }
-const PlayExtList = ['js', 'ts', 'sol', 'circom', 'vy', 'nr', 'yul']
+const PlayExtList = ['js', 'ts', 'sol', 'circom', 'vy', 'nr', 'yul', 'sql']
 
 export const TabsUI = (props: TabsUIProps) => {
 
@@ -90,10 +94,10 @@ export const TabsUI = (props: TabsUIProps) => {
   const compileSeq = useRef(0)
   const compileWatchdog = useRef<number | null>(null)
   const settledSeqRef = useRef<number>(0)
-  const [maximized, setMaximized] = useState<boolean>(false)
-  const [closedPlugin, setClosedPlugin] = useState<any>(null)
 
   const [compileState, setCompileState] = useState<'idle' | 'compiling' | 'compiled'>('idle')
+
+  const isVegaVisualization = tabsState.name && tabsState.name.indexOf('amp/vega-specs/') !== -1 && tabsState.currentExt === 'json'
 
   useEffect(() => {
     if (props.tabs[tabsState.selectedIndex] && props.tabs[tabsState.selectedIndex].show) {
@@ -105,16 +109,7 @@ export const TabsUI = (props: TabsUIProps) => {
   }, [tabsState.selectedIndex])
 
   useEffect(() => {
-    props.plugin.event.on('pluginIsClosed', (profile) => {
-      setClosedPlugin(profile)
-      if (maximized) {
-        setMaximized(false)
-      }
-    })
-    props.plugin.event.on('pluginIsMaximized', () => {
-      setClosedPlugin(null)
-      setMaximized(true)
-    })
+    // Removed pluginIsClosed listener as the event is no longer emitted
   }, [])
 
   // Toggle the copilot in editor when clicked to update in status bar
@@ -194,7 +189,7 @@ export const TabsUI = (props: TabsUIProps) => {
     currentIndexRef.current = index
     const ext = getExt(name)
     props.plugin.emit('extChanged', ext)
-    dispatch({ type: 'SELECT_INDEX', payload: index, ext: getExt(name) })
+    dispatch({ type: 'SELECT_INDEX', payload: index, ext: getExt(name), name })
   }
 
   const setFileDecorations = (fileStates: fileDecoration[]) => {
@@ -441,7 +436,6 @@ export const TabsUI = (props: TabsUIProps) => {
 
   const handleCompileClick = async () => {
     setCompileState('compiling')
-    console.log('Compiling from editor')
     trackMatomoEvent?.({
       category: 'editor',
       action: 'clickRunFromEditor',
@@ -471,6 +465,39 @@ export const TabsUI = (props: TabsUIProps) => {
         return
       }
 
+      if (tabsState.currentExt === 'sql') {
+        try {
+          const content = await props.plugin.call('fileManager', 'readFile', path)
+          const authToken: string | undefined = await props.plugin.call('config', 'getEnv', 'AMP_QUERY_TOKEN');
+          const baseUrl: string | undefined = await props.plugin.call('config', 'getEnv', 'AMP_QUERY_URL');
+          // Perform the Amp query
+          props.plugin.call('notification', 'toast', 'Performing the query...')
+          const data = await props.plugin.call('amp', 'performAmpQuery', content, baseUrl, authToken)
+          const result = {
+            query: content,
+            data
+          }
+          const resultPath = `./amp/results/query-${Date.now()}.json`
+          await props.plugin.call('fileManager', 'writeFile', resultPath, JSON.stringify(result, null, '\t'))
+          props.plugin.call('notification', 'toast',`Query done. Result has been added to ${resultPath}`)
+          setCompileState('compiled')
+        } catch (e) {
+          console.error(e)
+          props.plugin.call('notification', 'toast', `SQL error: ${e.message}`)
+          setCompileState('idle')
+        }
+        return
+      }
+
+      if (isVegaVisualization) {
+        try {
+          const file = await props.plugin.call('fileManager', 'getCurrentFile')
+          await props.plugin.call('vega', 'generateVisualization', file)
+        } catch (e) {
+          props.plugin.call('terminal', 'log', { type: 'error', value: e.message })
+        }
+      }
+
       const compilerName = {
         sol: 'solidity',
         yul: 'solidity',
@@ -485,7 +512,18 @@ export const TabsUI = (props: TabsUIProps) => {
       }
 
       await props.plugin.call('fileManager', 'saveCurrentFile')
-      await props.plugin.call('manager', 'activatePlugin', compilerName)
+      try {
+        await props.plugin.call('manager', 'activatePlugin', compilerName)
+      } catch (e: any) {
+        const isNoir = compilerName === 'noir-compiler'
+        const isAlreadyRendered = typeof e.message === 'string' && e.message.includes('already rendered')
+
+        if (isNoir && isAlreadyRendered) {
+          console.warn('Noir plugin is already active, skipping activation to proceed with compilation.')
+        } else {
+          throw e
+        }
+      }
 
       const mySeq = ++compileSeq.current
       const startedAt = Date.now()
@@ -530,6 +568,68 @@ export const TabsUI = (props: TabsUIProps) => {
     }
   }
 
+  const onNotify = (text: string, duration?: number) => {
+    props.plugin.call('notification', 'toast', text, duration)
+  }
+
+  let mainLabel = ''
+  if (tabsState.currentExt === 'sql') {
+    mainLabel = 'Run SQL'
+  } else if (isVegaVisualization) {
+    mainLabel = 'Generate Visualization'
+  } else {
+    mainLabel = (tabsState.currentExt === 'js' || tabsState.currentExt === 'ts')
+      ? (compileState === 'compiling' ? "Run script" :
+        compileState === 'compiled' ? "Run script" : "Run script")
+      : (compileState === 'compiling' ? "Compiling..." :
+        compileState === 'compiled' ? "Compiled" : "Compile")
+  }
+  let dropDown
+  if (tabsState.currentExt === 'js' || tabsState.currentExt === 'ts') {
+    dropDown = (
+      <><RunScriptDropdown
+        onNotify={onNotify}
+        plugin={props.plugin}
+        onRun={handleRunScript}
+        disabled={!(PlayExtList.includes(tabsState.currentExt)) || compileState === 'compiling'}
+      />
+      </>
+    )
+  } else if (tabsState.currentExt === 'sol' || tabsState.currentExt === 'yul') {
+    dropDown = (
+      <>
+        <CompileDropdown
+          tabPath={active().substr(active().indexOf('/') + 1, active().length)}
+          compiledFileName={active()}
+          plugin={props.plugin}
+          disabled={!(PlayExtList.includes(tabsState.currentExt)) || compileState === 'compiling'}
+          onRequestCompileAndPublish={handleCompileAndPublish}
+          setCompileState={setCompileState}
+        />
+      </>
+    )
+  } else if (tabsState.currentExt === 'sql') {
+    dropDown = (
+      <>
+        <AmpSqlDropdown
+          onNotify={onNotify}
+          plugin={props.plugin}
+          disabled={!(PlayExtList.includes(tabsState.currentExt)) || compileState === 'compiling'}
+        />
+      </>
+    )
+  } else {
+    dropDown = (
+      <>
+        <EmptyDropdown/>
+      </>
+    )
+  }
+
+  let btnDisabled = compileState === 'compiling' || !PlayExtList.includes(tabsState.currentExt)
+  if (isVegaVisualization) {
+    btnDisabled = false
+  }
   return (
     <div
       className={`remix-ui-tabs justify-content-between  border-0 header nav-tabs ${
@@ -569,7 +669,7 @@ export const TabsUI = (props: TabsUIProps) => {
                     whiteSpace: "nowrap",
                     borderRadius: "4px 0 0 4px"
                   }}
-                  disabled={!(PlayExtList.includes(tabsState.currentExt)) || compileState === 'compiling'}
+                  disabled={btnDisabled}
                   onClick={handleCompileClick}
                 >
                   <i className={
@@ -577,33 +677,12 @@ export const TabsUI = (props: TabsUIProps) => {
                       : "fas fa-play"
                   }></i>
                   <span className="ms-2" style={{ lineHeight: "12px", position: "relative", top: "1px" }}>
-                    {(tabsState.currentExt === 'js' || tabsState.currentExt === 'ts')
-                      ? (compileState === 'compiling' ? "Run script" :
-                        compileState === 'compiled' ? "Run script" : "Run script")
-                      : (compileState === 'compiling' ? "Compiling..." :
-                        compileState === 'compiled' ? "Compiled" : "Compile")}
+                    {mainLabel}
                   </span>
                 </button>
               </CustomTooltip>
             </div>
-            {(tabsState.currentExt === 'js' || tabsState.currentExt === 'ts') ? (
-              <RunScriptDropdown
-                plugin={props.plugin}
-                onRun={handleRunScript}
-                disabled={!(PlayExtList.includes(tabsState.currentExt)) || compileState === 'compiling'}
-              />
-            ) : (
-              <>
-                <CompileDropdown
-                  tabPath={active().substr(active().indexOf('/') + 1, active().length)}
-                  compiledFileName={active()}
-                  plugin={props.plugin}
-                  disabled={!(PlayExtList.includes(tabsState.currentExt)) || compileState === 'compiling'}
-                  onRequestCompileAndPublish={handleCompileAndPublish}
-                  setCompileState={setCompileState}
-                />
-              </>
-            )}
+            {dropDown}
           </div>
 
           <div className="d-flex border-start ms-2 align-items-center" style={{ height: "3em" }}>

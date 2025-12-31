@@ -1,4 +1,4 @@
-export default async () => {
+export default async (opts, plugin) => {
   return {
     // @ts-ignore
     'circuits/rln.circom': (await import('raw-loader!./circuits/rln.circom')).default,

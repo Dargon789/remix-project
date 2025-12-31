@@ -4,6 +4,8 @@
     "asar": true,
     "generateUpdatesFilesForAllChannels": false,
     "icon": "assets",
+    "afterSign": null,
+    "afterAllArtifactBuild": null,
     "files": [
         "build/**/*",
         "node_modules/node-pty-prebuilt-multiarch/**/*"
@@ -18,18 +20,13 @@
         }
     ],
     "mac": {
+        "target": "dir",
         "category": "public.app-category.productivity",
         "icon": "assets/icon.png",
         "darkModeSupport": true,
-        "hardenedRuntime": true,
+        "hardenedRuntime": false,
         "gatekeeperAssess": false,
-        "entitlements": "entitlements.mac.plist",
-        "entitlementsInherit": "entitlements.mac.plist",
-        "extendInfo": "Info.plist"
-    },
-    "dmg": {
-        "writeUpdateInfo": true,
-        "sign": false
+        "identity": null
     },
     "nsis": {
         "createDesktopShortcut": "always",
@@ -39,10 +36,7 @@
         "differentialPackage": false
     },
     "win": {
-        "target": [
-            "nsis"
-        ],
-        "artifactName": "Remix-Desktop-Setup-${version}.${ext}",
+        "target": "dir",
         "icon": "assets/icon.png",
         "forceCodeSigning": false
     },

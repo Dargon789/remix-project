@@ -18,7 +18,7 @@ const profile = {
   maintainedBy: 'Remix',
   permission: true,
   events: [],
-  methods: ['chatPipe']
+  methods: ['chatPipe', 'handleExternalMessage', 'getProfile']
 }
 
 export class RemixAIAssistant extends ViewPlugin {
@@ -28,6 +28,7 @@ export class RemixAIAssistant extends ViewPlugin {
   event: any
   chatRef: React.RefObject<RemixUiRemixAiAssistantHandle>
   history: ChatMessage[] = []
+  externalMessage: string
 
   constructor() {
     super(profile)
@@ -36,6 +37,10 @@ export class RemixAIAssistant extends ViewPlugin {
     this.element.setAttribute('id', 'remix-ai-assistant')
     this.chatRef = createRef<RemixUiRemixAiAssistantHandle>()
     ;(window as any).remixAIChat = this.chatRef
+  }
+
+  getProfile() {
+    return profile
   }
 
   async onActivation() {
@@ -88,6 +93,11 @@ export class RemixAIAssistant extends ViewPlugin {
     this.renderComponent()
   }
 
+  handleExternalMessage = (message: string) => {
+    this.externalMessage = message
+    this.renderComponent()
+  }
+
   onReady() {
     console.log('RemixAiAssistant onReady')
   }
@@ -102,8 +112,9 @@ export class RemixAIAssistant extends ViewPlugin {
   }
 
   async handleActivity(type: string, payload: any) {
-    // Use the proper type-safe tracking helper with RemixAI events
-    trackMatomoEvent(this, { category: 'ai', action: 'remixAI', name: `${type}-${payload}`, isClick: true })
+    // Never log user prompts - only track the activity type
+    const eventName = type === 'promptSend' ? 'remixai-assistant-promptSend' : `remixai-assistant-${type}-${payload}`;
+    trackMatomoEvent(this, { category: 'ai', action: 'chatting', name: `${type}-${payload}`, isClick: true })
   }
 
   updateComponent(state: {

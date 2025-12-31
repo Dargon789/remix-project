@@ -15,18 +15,59 @@ const versionData = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development'
 }
 
-const loadLocalSolJson = async () => {
-  //execute apps/remix-ide/ci/downloadsoljson.sh
-  console.log('loading local soljson')
-  const child = require('child_process').execSync('bash ' + __dirname + '/ci/downloadsoljson.sh', { encoding: 'utf8', cwd: process.cwd(), shell: true })
-  // show output
-  console.log(child)
+// Emit the soljson.js compiler into the output without touching source files
+class EmitSoljsonPlugin {
+  apply(compiler) {
+    compiler.hooks.thisCompilation.tap('EmitSoljsonPlugin', (compilation) => {
+      const { sources, Compilation } = compiler.webpack
+      const RawSource = sources && sources.RawSource
+      compilation.hooks.processAssets.tapPromise(
+        { name: 'EmitSoljsonPlugin', stage: Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL },
+        async () => {
+          try {
+            const defaultVersion = require('../../package.json').defaultVersion
+            const url = `https://binaries.soliditylang.org/bin/${defaultVersion}`
+            const data = await new Promise((resolve, reject) => {
+              const https = require('https')
+              https
+                .get(url, (res) => {
+                  if (res.statusCode !== 200) {
+                    reject(new Error(`Failed to download soljson.js (${res.statusCode})`))
+                    return
+                  }
+                  const chunks = []
+                  res.on('data', (c) => chunks.push(c))
+                  res.on('end', () => resolve(Buffer.concat(chunks)))
+                })
+                .on('error', reject)
+            })
+            if (RawSource) {
+              // Match previous public path: assets/js/soljson.js
+              compilation.emitAsset('assets/js/soljson.js', new RawSource(data))
+            }
+          } catch (e) {
+            console.warn('EmitSoljsonPlugin: skipping emit due to error:', e.message)
+          }
+        }
+      )
+    })
+  }
 }
 
-fs.writeFileSync(__dirname + '/src/assets/version.json', JSON.stringify(versionData))
+// Emit version.json as part of the build instead of writing to source
+class EmitVersionJsonPlugin {
+  apply(compiler) {
+    compiler.hooks.thisCompilation.tap('EmitVersionJsonPlugin', (compilation) => {
+      const json = JSON.stringify(versionData)
+      const RawSource = compiler.webpack && compiler.webpack.sources && compiler.webpack.sources.RawSource
+      if (RawSource) {
+        compilation.emitAsset('assets/version.json', new RawSource(json))
+      }
+    })
+  }
+}
 
-
-loadLocalSolJson()
+// No-op external writes; emit soljson during compilation instead
 
 const project = fs.readFileSync(__dirname + '/project.json', 'utf8')
 
@@ -63,6 +104,7 @@ module.exports = composePlugins(withNx(), withReact(), (config) => {
     timers: false, // require.resolve("timers-browserify"),
     zlib: require.resolve('browserify-zlib'),
     'assert/strict': require.resolve('assert/'),
+    async_hooks: false,
     fs: false,
     module: false,
     tls: false,
@@ -77,6 +119,8 @@ module.exports = composePlugins(withNx(), withReact(), (config) => {
   config.externals = {
     ...config.externals,
     solc: 'solc',
+    // Do not bundle Monaco: it's copied as static assets and loaded by @monaco-editor/react
+    'monaco-editor': 'monaco'
   }
 
   // uncomment this to enable react profiling
@@ -93,8 +137,18 @@ module.exports = composePlugins(withNx(), withReact(), (config) => {
   pkgVerkle = pkgVerkle.replace('"main": "./nodejs/rust_verkle_wasm.js",', '"main": "./web/rust_verkle_wasm.js",')
   fs.writeFileSync(path.resolve(__dirname, '../../node_modules/rust-verkle-wasm/package.json'), pkgVerkle)
 
+  // Prefer browser/Esm entry points where available
+  config.resolve.mainFields = ['browser', 'module', 'main']
+
   config.resolve.alias = {
     ...config.resolve.alias,
+    // Avoid bundling server-only deps or optional node paths
+    ws: false,
+    express: false,
+    'express-ws': false,
+    'web3-rpc-providers': false,
+    'async-limiter': false,
+    '@so-ric/colorspace': false,
     // 'rust-verkle-wasm$': path.resolve(__dirname, '../../node_modules/rust-verkle-wasm/web/run_verkle_wasm.js')
   }
 
@@ -106,9 +160,9 @@ module.exports = composePlugins(withNx(), withReact(), (config) => {
     config.output.publicPath = '/'
   }
 
-  // set filename
-  config.output.filename = `[name].${versionData.version}.${versionData.timestamp}.js`
-  config.output.chunkFilename = `[name].${versionData.version}.${versionData.timestamp}.js`
+  // set deterministic filenames for better caching
+  config.output.filename = `[name].[contenthash].js`
+  config.output.chunkFilename = `[name].[contenthash].js`
 
   // add copy & provide plugin
   config.plugins.push(
@@ -121,14 +175,28 @@ module.exports = composePlugins(withNx(), withReact(), (config) => {
         ...copyPatterns
       ].filter(Boolean)
     }),
+    new EmitSoljsonPlugin(),
+    new EmitVersionJsonPlugin(),
     new CopyFileAfterBuild(),
     new webpack.ProvidePlugin({
       Buffer: ['buffer', 'Buffer'],
       url: ['url', 'URL'],
       process: 'process/browser'
     })
-    //,new BundleAnalyzerPlugin()
   )
+
+  // Optional: generate static bundle analysis when ANALYZE env var is set
+  if (process.env.ANALYZE) {
+    config.plugins.push(
+      new BundleAnalyzerPlugin({
+        analyzerMode: 'static',
+        openAnalyzer: false,
+        reportFilename: 'bundle-report.html',
+        generateStatsFile: true,
+        statsFilename: 'bundle-stats.json',
+      })
+    )
+  }
 
   // set the define plugin to load the WALLET_CONNECT_PROJECT_ID
   config.plugins.push(
@@ -187,12 +255,6 @@ class CopyFileAfterBuild {
         // This copy the raw-loader files used by the etherscan plugin to the remix-ide root folder.
         // This is needed because by default the etherscan resources are served from the /plugins/etherscan/ folder,
         // but the raw-loader try to access the resources from the root folder.
-        const files = fs.readdirSync('./dist/apps/etherscan')
-        files.forEach((file) => {
-          if (file.includes('plugin-etherscan')) {
-            fs.copyFileSync('./dist/apps/etherscan/' + file, './dist/apps/remix-ide/' + file)
-          }
-        })
       } catch (e) {
         console.error('running CopyFileAfterBuild failed with error: ' + e.message)
       }

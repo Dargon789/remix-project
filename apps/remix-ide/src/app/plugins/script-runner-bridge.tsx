@@ -13,8 +13,8 @@ import { ScriptRunnerUIPlugin } from '../tabs/script-runner-ui'
 const profile = {
   name: 'scriptRunnerBridge',
   displayName: 'Script configuration',
-  methods: ['execute', 'getConfigurations', 'selectScriptRunner'],
-  events: ['log', 'info', 'warn', 'error'],
+  methods: ['execute', 'getConfigurations', 'selectScriptRunner', 'getActiveRunnerLibs'],
+  events: ['log', 'info', 'warn', 'error', 'runnerChanged'],
   icon: 'assets/img/solid-gear-circle-play.svg',
   description: 'Configure the dependencies for running scripts.',
   kind: '',
@@ -27,6 +27,85 @@ const configFileName = 'remix.config.json'
 
 let baseUrl = 'https://remix-project-org.github.io/script-runner-generator'
 const customBuildUrl = 'http://localhost:4000/build' // this will be used when the server is ready
+
+/**
+ * Transforms the provided script content to make it executable in a browser environment.
+ * * Key Transformation Logic:
+ * 1. Hybrid Import Handling:
+ * - Relative imports (starting with `.` or `/`) and libraries listed in `builtInDependencies`
+ * are preserved as standard static ES imports (hoisted to the top).
+ * - External NPM packages are converted into dynamic `await import(...)` calls fetching from `cdn.jsdelivr.net`.
+ * * 2. Multi-line Support:
+ * - Uses an enhanced Regex (`[\s\S]*?`) to correctly parse import statements that span multiple lines.
+ * * 3. Async Wrapper:
+ * - Wraps the main execution logic (excluding static imports) in an `async IIFE`
+ * to enable top-level await behavior for the dynamic imports.
+ * * 4. Syntax Adjustments:
+ * - Handles various import styles: Destructuring (`{ a }`), Namespace (`* as a`), and Default (`a`).
+ * - Removes `export` keywords to prevent syntax errors within the IIFE context.
+ *
+ * @param scriptContent - The original source code of the script to be transformed.
+ * @param builtInDependencies - An array of package names that are pre-bundled or available in the runtime environment
+ * (e.g., ['chai', 'web3']) and should not be fetched from the CDN.
+ * @returns The transformed script string, ready for runtime evaluation.
+ */
+function transformScriptForRuntime(scriptContent: string, builtInDependencies: string[] = []): string {
+  const dynamicImportHelper = `const dynamicImport = (p) => new Function(\`return import('https://cdn.jsdelivr.net/npm/\${p}/+esm')\`)();\n`
+  const importRegex = /import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g
+
+  const staticImports = []
+  const dynamicImports = []
+
+  const scriptBody = scriptContent.replace(importRegex, (match, importClause, packageName) => {
+    if (packageName.startsWith('.') || packageName.startsWith('/')) {
+      staticImports.push(match)
+      return ''
+    }
+
+    if (builtInDependencies.includes(packageName)) {
+      staticImports.push(match)
+      return ''
+    }
+
+    if (packageName === 'hardhat') {
+      staticImports.push(match)
+      return ''
+    }
+
+    dynamicImports.push({ importClause, packageName })
+    return ''
+  })
+
+  let finalScript = ''
+
+  if (staticImports.length > 0) {
+    finalScript += staticImports.join('\n') + '\n\n'
+  }
+
+  finalScript += `${dynamicImportHelper}\n(async () => {\n  try {\n`
+
+  if (dynamicImports.length > 0) {
+    const dynamicTransforms = []
+    for (const info of dynamicImports) {
+      if (info.importClause.startsWith('{')) {
+        dynamicTransforms.push(`    const ${info.importClause} = await dynamicImport("${info.packageName}");`)
+      } else if (info.importClause.startsWith('* as')) {
+        const alias = info.importClause.split('as ')[1]
+        dynamicTransforms.push(`    const ${alias} = await dynamicImport("${info.packageName}");`)
+      } else {
+        dynamicTransforms.push(`    const ${info.importClause} = (await dynamicImport("${info.packageName}")).default || await dynamicImport("${info.packageName}");`)
+      }
+    }
+    finalScript += dynamicTransforms.join('\n') + '\n\n'
+  }
+
+  const finalScriptBody = scriptBody.replace(/^export\s+/gm, '')
+  finalScript += finalScriptBody
+
+  finalScript += `\n  } catch (e) { console.error('Error executing script:', e); }\n})();`
+
+  return finalScript
+}
 
 export class ScriptRunnerBridgePlugin extends Plugin {
   engine: Engine
@@ -61,7 +140,6 @@ export class ScriptRunnerBridgePlugin extends Plugin {
     await this.loadConfigurations()
     const ui: ScriptRunnerUIPlugin = new ScriptRunnerUIPlugin(this)
     this.engine.register(ui)
-
   }
 
   setListeners() {
@@ -113,6 +191,13 @@ export class ScriptRunnerBridgePlugin extends Plugin {
     })
   }
 
+  public getActiveRunnerLibs() {
+    if (this.activeConfig && this.activeConfig.dependencies) {
+      return this.activeConfig.dependencies
+    }
+    return []
+  }
+
   public getConfigurations() {
     return this.configurations
   }
@@ -122,7 +207,10 @@ export class ScriptRunnerBridgePlugin extends Plugin {
   }
 
   async selectScriptRunner(config: ProjectConfiguration) {
-    if (await this.loadScriptRunner(config)) await this.saveCustomConfig(this.customConfig)
+    if (await this.loadScriptRunner(config)) {
+      await this.saveCustomConfig(this.customConfig)
+      this.emit('runnerChanged', config)
+    }
   }
 
   async loadScriptRunner(config: ProjectConfiguration): Promise<boolean> {
@@ -197,7 +285,12 @@ export class ScriptRunnerBridgePlugin extends Plugin {
     }
     try {
       this.setIsLoading(this.activeConfig.name, true)
-      await this.call(`${this.scriptRunnerProfileName}${this.activeConfig.name}`, 'execute', script, filePath)
+      // Transforms the script into an executable format using the function defined above.
+      const builtInDependencies = this.activeConfig.dependencies ? this.activeConfig.dependencies.map(dep => dep.name) : []
+      const transformedScript = transformScriptForRuntime(script, builtInDependencies)
+
+      await this.call(`${this.scriptRunnerProfileName}${this.activeConfig.name}`, 'execute', transformedScript, filePath)
+
     } catch (e) {
       console.error('Error executing script', e)
     }
@@ -235,7 +328,6 @@ export class ScriptRunnerBridgePlugin extends Plugin {
   }
 
   async dependencyError(data: any) {
-    console.log('Script runner dependency error: ', data)
     let message = `Error loading dependencies: `
     if (isArray(data.data)) {
       data.data.forEach((data: any) => {
@@ -371,7 +463,6 @@ export class ScriptRunnerBridgePlugin extends Plugin {
         console.log('Error status:', error.response.status)
         console.log('Error data:', error.response.data) // This should give you the output being sent
         console.log('Error headers:', error.response.headers)
-
         if (error.response.data.error) {
           if (isArray(error.response.data.error)) {
             const message = `${error.response.data.error[0]}`

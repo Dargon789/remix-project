@@ -21,7 +21,8 @@ const tests = {
         .pause(3000)
         .windowHandles(function (result) {
           console.log(result.value)
-          browser.switchWindow(result.value[1])
+          browser.hideToolTips().switchWindow(result.value[1])
+          .hideToolTips()
           .waitForElementVisible('*[data-id="treeViewDivtreeViewItemREADME.txt"]')
         })
         .click('[data-id="treeViewLitreeViewItemcontracts"]')

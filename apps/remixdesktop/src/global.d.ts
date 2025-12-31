@@ -7,10 +7,7 @@ declare global {
     electronAPI: {
       isPackaged: () => Promise<boolean>
       isE2E: () => Promise<boolean>
-  canTrackMatomo: () => Promise<boolean>
-  // Desktop tracking helpers
-      trackDesktopEvent: (category: string, action: string, name?: string, value?: string | number) => Promise<any>
-      setTrackingMode: (mode: 'cookie' | 'anon') => Promise<boolean>
+      trackEvent: (args: any[]) => Promise<any>
       openFolder: (path: string) => Promise<any>
       openFolderInSameWindow: (path: string) => Promise<any>
       activatePlugin: (name: string) => Promise<any>

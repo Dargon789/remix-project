@@ -8,12 +8,14 @@ const tests = {
     },
     'Should create semaphore workspace': function (browser: NightwatchBrowser) {
         browser
+            .hideToolTips()
             .waitForElementVisible('*[data-id="homeTabGetStartedsemaphore"]', 20000)
             .click('*[data-id="homeTabGetStartedsemaphore"]')
             .pause(3000)
             .windowHandles(function (result) {
                 console.log(result.value)
-                browser.switchWindow(result.value[1])
+                browser.hideToolTips().switchWindow(result.value[1])
+                    .hideToolTips()
                     .waitForElementVisible('*[data-id="treeViewLitreeViewItemcircuits"]')
                     .click('*[data-id="treeViewLitreeViewItemcircuits"]')
                     .waitForElementVisible('*[data-id="treeViewLitreeViewItemcircuits/semaphore.circom"]')

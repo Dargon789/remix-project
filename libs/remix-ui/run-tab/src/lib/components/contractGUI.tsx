@@ -253,7 +253,7 @@ export function ContractGUI(props: ContractGUIProps) {
       }
       const tabState = props.runTabState
       const compilerState = await props.plugin.call('solidity', 'getCompilerState')
-      const IsCompatible = isChainCompatible(compilerState.evmVersion ?? 'prague', parseInt(tabState.chainId))
+      const IsCompatible = isChainCompatible(compilerState.evmVersion ?? 'osaka', parseInt(tabState.chainId))
       if (status === 'Passed' && IsCompatible) {
         await handleDeploy()
       } else {
@@ -359,6 +359,7 @@ export function ContractGUI(props: ContractGUIProps) {
           }}
         />
         <i
+          data-id="udapp-instance-multi-caret-down"
           className="fas fa-angle-down udapp_methCaret"
           onClick={switchMethodViewOn}
           style={{
@@ -370,7 +371,7 @@ export function ContractGUI(props: ContractGUIProps) {
         <div className="udapp_contractActionsContainerMultiInner text-dark">
           <div onClick={switchMethodViewOff} className="udapp_multiHeader">
             <div className="udapp_multiTitle run-instance-multi-title pt-3">{title}</div>
-            <i className="fas fa-angle-up udapp_methCaret"></i>
+            <i data-id="udapp-instance-multi-caret" className="fas fa-angle-up udapp_methCaret"></i>
           </div>
           <div>
             {props.funcABI.inputs.map((inp, index) => {

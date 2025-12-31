@@ -1,5 +1,6 @@
 type EndpointUrls = {
     corsProxy: string;
+    mcpCorsProxy: string;
     solidityScan: string;
     ipfsGateway: string;
     commonCorsProxy: string;
@@ -13,10 +14,12 @@ type EndpointUrls = {
     vyper2: string;
     solidityScanWebSocket: string;
     gitHubLoginProxy: string;
+    audio;
 };
 
 const defaultUrls: EndpointUrls = {
   corsProxy: 'https://gitproxy.api.remix.live',
+  mcpCorsProxy: "https://mcp.api.remix.live",
   solidityScan: 'https://solidityscan.api.remix.live',
   ipfsGateway: 'https://jqgt.api.remix.live',
   commonCorsProxy: 'https://common-corsproxy.api.remix.live',
@@ -30,10 +33,12 @@ const defaultUrls: EndpointUrls = {
   completion: 'https://completion.api.remix.live',
   solidityScanWebSocket: 'wss://solidityscan.api.remix.live',
   gitHubLoginProxy: 'https://github-login-proxy.api.remix.live',
+  audio: 'https://audio.api.remix.live',
 };
 
 const endpointPathMap: Record<keyof EndpointUrls, string> = {
   corsProxy: 'corsproxy',
+  mcpCorsProxy: 'mcp',
   solidityScan: 'solidityscan',
   ipfsGateway: 'jqgt',
   commonCorsProxy: 'common-corsproxy',
@@ -47,6 +52,7 @@ const endpointPathMap: Record<keyof EndpointUrls, string> = {
   vyper2: 'vyper2',
   solidityScanWebSocket: '',
   gitHubLoginProxy: 'github-login-proxy',
+  audio: 'audio',
 };
 
 const prefix = process.env.NX_ENDPOINTS_URL;
@@ -60,9 +66,16 @@ const resolvedUrls: EndpointUrls = prefix
   ) as EndpointUrls
   : defaultUrls;
 
-resolvedUrls.solidityScanWebSocket = resolvedUrls.solidityScan.replace(
-  'http://',
-  'ws://'
-);
+if (resolvedUrls.solidityScan.startsWith('https://')) {
+  resolvedUrls.solidityScanWebSocket = resolvedUrls.solidityScan.replace(
+    'https://',
+    'wss://'
+  );
+} else if (resolvedUrls.solidityScan.startsWith('http://')) {
+  resolvedUrls.solidityScanWebSocket = resolvedUrls.solidityScan.replace(
+    'http://',
+    'ws://'
+  );
+}
 
 export const endpointUrls = resolvedUrls;

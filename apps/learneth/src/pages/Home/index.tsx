@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { CustomTooltip } from "@remix-ui/helper"
 import { Link } from 'react-router-dom'
 import { useAppSelector } from '../../redux/hooks'
 import RepoImporter from '../../components/RepoImporter'
@@ -57,9 +58,16 @@ function HomePage(): JSX.Element {
 
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounced(search, 250)
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilters, setShowFilters] = useState(true)
   const [selectedLevels, setSelectedLevels] = useState<number[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [completedTutorials, setCompletedTutorials] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    // Load completed tutorials from localStorage
+    const completed = JSON.parse(localStorage.getItem('learneth_completed_tutorials') || '{}')
+    setCompletedTutorials(completed)
+  }, [])
 
   const allTags = useMemo(() => {
     if (!selectedRepo) return []
@@ -78,8 +86,8 @@ function HomePage(): JSX.Element {
     const rows: Array<{
       id: string; levelNum: number; levelText: string; name: string
       subtitle: string; preview: string; stepsLen?: number;
-      duration?: number | string; tags: string[];
-    }> = []
+      duration?: number | string; tags: string[]; priority?: number;
+    }> = [] 
     Object.keys(selectedRepo.group).forEach((levelKey) => {
       const levelNum = Number(levelKey) || 1
       const levelText = LEVEL_LABEL[levelKey as LevelKey] ?? 'Beginner'
@@ -95,10 +103,11 @@ function HomePage(): JSX.Element {
           levelText,
           name: entity.name || '',
           subtitle: tags.join(', '),
-          preview: mdToPlain(entity.description?.content || '', 280),
+          preview: mdToPlain(entity.metadata?.data?.summary || '', 280),
           stepsLen: entity.steps?.length,
           duration: entity.metadata?.data?.duration,
-          tags
+          tags,
+          priority: entity.metadata?.data?.priority,
         })
       })
     })
@@ -122,7 +131,27 @@ function HomePage(): JSX.Element {
       }
       list = list.filter(r => r.tags.some(t => filterTags.has(t)))
     }
-    return list
+    return list.sort((a, b) => {
+      if (a.levelNum !== b.levelNum) {
+        return a.levelNum - b.levelNum
+      }
+
+      const aP = a.priority
+      const bP = b.priority
+      const aHasP = aP !== undefined && aP !== null
+      const bHasP = bP !== undefined && bP !== null
+
+      if (aHasP && !bHasP) return -1
+      if (!aHasP && bHasP) return 1
+
+      if (aHasP && bHasP) {
+        if (aP! !== bP!) { 
+          return aP! - bP!
+        }
+      }
+
+      return a.name.localeCompare(b.name)
+    })
   }, [flatItems, debouncedSearch, selectedLevels, selectedTags])
 
   return (
@@ -176,6 +205,14 @@ function HomePage(): JSX.Element {
                   <div className="d-flex align-items-center">
                     <Antenna level={r.levelNum} />
                     <span className="small fw-medium text-body-emphasis">{r.levelText}</span>
+                    {completedTutorials[r.id] && (
+                      <CustomTooltip
+                        placement={"auto"}
+                        tooltipId="tutorialCompletedTooltip"
+                        tooltipClasses="text-nowrap"
+                        tooltipText={<span>{'Completed'}</span>}
+                      ><i className="text-success ms-2 fas fa-check"></i></CustomTooltip>
+                    )}
                   </div>
                   <MetaRight stepsLen={r.stepsLen} duration={r.duration} />
                 </div>

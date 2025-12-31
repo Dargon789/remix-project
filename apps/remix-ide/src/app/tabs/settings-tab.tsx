@@ -10,7 +10,7 @@ import { InitializationPattern, TrackingMode, MatomoState, CustomRemixApi } from
 const profile = {
   name: 'settings',
   displayName: 'Settings',
-  methods: ['get', 'updateCopilotChoice', 'getCopilotSetting', 'updateMatomoPerfAnalyticsChoice'],
+  methods: ['get', 'updateCopilotChoice', 'getCopilotSetting', 'set', 'updateMatomoPerfAnalyticsChoice'],
   events: [],
   icon: 'assets/img/settings.webp',
   description: 'Remix-IDE settings',
@@ -67,7 +67,7 @@ export default class SettingsTab extends ViewPlugin {
 
   render() {
     return (
-      <div id="settingsTab" className="bg-light overflow-hidden">
+      <div id="settingsTab" className="bg-light h-100 overflow-auto">
         <PluginViewWrapper plugin={this} />
       </div>
     )
@@ -93,6 +93,10 @@ export default class SettingsTab extends ViewPlugin {
 
   get(key) {
     return this.config.get(key)
+  }
+
+  set(key, value){
+    this.config.set(key, value)
   }
 
   updateCopilotChoice(isChecked) {

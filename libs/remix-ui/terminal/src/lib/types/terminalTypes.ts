@@ -35,4 +35,6 @@ export interface RemixUiTerminalProps {
   plugin: any,
   onReady: (api: any) => void,
   visible: boolean,
+  isMaximized?: boolean,
+  maximizePanel?: () => void,
 }

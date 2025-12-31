@@ -1,5 +1,13 @@
 import { NightwatchBrowser } from 'nightwatch'
 
+
+function openTemplatesExplorer(browser: NightwatchBrowser) {
+  browser
+    .click('*[data-id="workspacesSelect"]')
+    .click('*[data-id="workspacecreate"]')
+    .waitForElementPresent('*[data-id="create-remixDefault"]')
+}
+
 module.exports = {
   before: function (browser: NightwatchBrowser, done: VoidFunction) {
     browser.hideToolTips()
@@ -7,15 +15,18 @@ module.exports = {
   },
   'open default template': function (browser: NightwatchBrowser) {
     browser
+      .hideToolTips()
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
-      .waitForElementVisible('*[data-id="createWorkspaceButton"]')
-      .click('*[data-id="createWorkspaceButton"]')
-      .waitForElementPresent('*[data-id="create-remixDefault"]')
-      .scrollAndClick('*[data-id="create-remixDefault"]')
+
+      openTemplatesExplorer(browser)
+
+      browser
+      .click('*[data-id="create-remixDefault"]')
       .pause(3000)
       .windowHandles(function (result) {
         console.log(result.value)
         browser.hideToolTips().switchWindow(result.value[1])
+          .hideToolTips()
           .waitForElementVisible('*[data-id="treeViewLitreeViewItemtests"]')
           .click('*[data-id="treeViewLitreeViewItemtests"]')
           .waitForElementVisible('*[data-id="treeViewLitreeViewItemcontracts"]')
@@ -29,11 +40,9 @@ module.exports = {
       })
   },
   'open template explorer and add template to current': function (browser: NightwatchBrowser) {
+    openTemplatesExplorer(browser)
+
     browser
-      .waitForElementVisible('*[data-id="workspacesSelect"]', 10000)
-      .click('*[data-id="workspacesSelect"]')
-      .waitForElementVisible('*[data-id="workspacecreate.desktop"]')
-      .click('*[data-id="workspacecreate.desktop"]')
       .waitForElementVisible('*[data-id="add-simpleEip7702"]')
       .scrollAndClick('*[data-id="add-simpleEip7702"]')
       .waitForElementVisible('*[data-id="treeViewDivtreeViewItemcontracts/Example7702.sol"]')

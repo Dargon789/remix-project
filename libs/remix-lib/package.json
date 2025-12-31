@@ -1,6 +1,6 @@
 {
   "name": "@remix-project/remix-lib",
-  "version": "0.5.87",
+  "version": "0.5.90",
   "description": "Library to various Remix tools",
   "contributors": [
     {
@@ -17,7 +17,7 @@
     "test": "./../../node_modules/.bin/ts-node --require tsconfig-paths/register ./../../node_modules/.bin/tape ./test/tests.ts"
   },
   "dependencies": {
-    "@ethereumjs/util": "^10.0.0",
+    "@ethereumjs/util": "^10.1.0",
     "async": "^2.1.2",
     "bn.js": "^5.1.2",
     "create-hash": "^1.2.0",
@@ -29,9 +29,7 @@
     "rlp": "^3.0.0",
     "solc": "0.8.26",
     "string-similarity": "^4.0.4",
-    "viem": "2.22.3",
-    "web3": "^4.1.1",
-    "web3-validator": "^2.0.0"
+    "viem": "2.22.3"
   },
   "devDependencies": {
     "@babel/core": "^7.4.5",
@@ -58,6 +56,6 @@
   },
   "homepage": "https://github.com/remix-project-org/remix-project/tree/master/libs/remix-lib#readme",
   "typings": "src/index.d.ts",
-  "gitHead": "4dac681834150631b0ea67e1bef7ee6bd85df9ee",
+  "gitHead": "32f3eaf6111329259ec66498ae62dda813fb5b76",
   "types": "./src/index.d.ts"
 }

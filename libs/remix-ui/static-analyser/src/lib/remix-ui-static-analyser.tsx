@@ -207,7 +207,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
     <span> </span>
   )
 }
-      <span className="" title={Position in ${fileName}}>Pos: ${locationString}</span>
+      <span className="">Pos: ${locationString}</span>
       </span>`
   }
 
@@ -797,6 +797,50 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
       .flat()
       .every((el) => categoryIndex.includes(el))
   }
+
+  useEffect(() => {
+    const analyzeHandler = () => {
+      run(
+        state.data,
+        state.source,
+        state.file,
+        state,
+        props,
+        isSupportedVersion,
+        showSlither,
+        categoryIndex,
+        groupedModules,
+        runner,
+        trackMatomoEvent,
+        message,
+        showWarnings,
+        allWarnings,
+        warningContainer,
+        calculateWarningStateEntries,
+        warningState,
+        setHints,
+        hints,
+        setSlitherWarnings,
+        setSsaWarnings,
+        slitherEnabled,
+        setStartAnalysis,
+        solhintEnabled,
+        basicEnabled
+      )
+    }
+
+    props.analysisModule.on('solidityStaticAnalysis', 'analyze', analyzeHandler)
+
+    return () => {
+      try {
+        props.analysisModule.off('solidityStaticAnalysis', 'analyze')
+      } catch (error) {
+        // Plugin may already be deactivated, ignore the error
+        console.debug('Could not remove event listener from solidityStaticAnalysis:', error.message)
+      }
+    }
+  }, [state.data, state.source, state.file, state, props])
+
   return (
     <div className="analysis_3ECCBV px-3 pb-1">
       <div className="my-2 d-flex flex-column align-items-left">

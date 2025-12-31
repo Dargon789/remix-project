@@ -31,6 +31,7 @@ const profile = {
   methods: [
     'createNewFile',
     'uploadFile',
+    'uploadFolder',
     'echoCall',
     'getCurrentWorkspace',
     'getAvailableWorkspaceName',
@@ -44,7 +45,8 @@ const profile = {
     'loadTemplate',
     'clone',
     'isExpanded',
-    'isGist'
+    'isGist',
+    'workspaceExists'
   ],
   events: ['setWorkspace', 'workspaceRenamed', 'workspaceDeleted', 'workspaceCreated'],
   icon: 'assets/img/fileManager.webp',
@@ -150,6 +152,11 @@ export default class Filepanel extends ViewPlugin {
     return this.workspaces
   }
 
+  workspaceExists(name) {
+    if (!this.workspaces) return false
+    return this.workspaces.find((workspace) => workspace.name === name)
+  }
+
   getAvailableWorkspaceName(name) {
     if (!this.workspaces) return name
     let index = 1
@@ -177,6 +184,15 @@ export default class Filepanel extends ViewPlugin {
   uploadFile(target) {
     return new Promise((resolve, reject) => {
       return this.emit('uploadFileReducerEvent', '/', target, (err, data) => {
+        if (err) reject(err)
+        else resolve(data)
+      })
+    })
+  }
+
+  uploadFolder(target) {
+    return new Promise((resolve, reject) => {
+      this.emit('uploadFolderReducerEvent', '/', target, (err, data) => {
         if (err) reject(err)
         else resolve(data)
       })

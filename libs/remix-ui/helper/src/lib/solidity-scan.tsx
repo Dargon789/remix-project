@@ -5,20 +5,22 @@ import { endpointUrls } from '@remix-endpoints-helper'
 import { ScanReport, SolScanTable } from '@remix-ui/helper'
 import { trackMatomoEvent } from '@remix-api'
 
-import { CopyToClipboard } from '@remix-ui/clipboard'
-import { CustomTooltip } from './components/custom-tooltip'
-
 export const handleSolidityScan = async (api: any, compiledFileName: string) => {
   await api.call('notification', 'toast', 'Processing data to scan...')
   await trackMatomoEvent(api, { category: 'solidityCompiler', action: 'solidityScan', name: 'initiateScan', isClick: false })
 
-  const workspace = await api.call('filePanel', 'getCurrentWorkspace')
-  const fileName = `${workspace.name}/${compiledFileName}`
-  const filePath = `.workspaces/${fileName}`
+  let filePath
+  if (await api.call('fileManager', 'exists', compiledFileName)) {
+    filePath = compiledFileName
+  } else {
+    const workspace = await api.call('filePanel', 'getCurrentWorkspace')
+    const fileName = `${workspace.name}/${compiledFileName}`
+    filePath = `.workspaces/${fileName}`
+  }
   const file = await api.call('fileManager', 'readFile', filePath)
 
   try {
-    const urlResponse = await axios.post(`${endpointUrls.solidityScan}/uploadFile`, { file, fileName })
+    const urlResponse = await axios.post(`${endpointUrls.solidityScan}/uploadFile`, { file, fileName: compiledFileName })
 
     if (urlResponse.data.status === 'success') {
       const ws = new WebSocket(`${endpointUrls.solidityScanWebSocket}/solidityscan`)
@@ -67,7 +69,7 @@ export const handleSolidityScan = async (api: any, compiledFileName: string) => 
                 template.positions = JSON.stringify(positions)
               }
             }
-            await api.call('terminal', 'logHtml', <SolScanTable scanReport={scanReport} fileName={fileName}/>)
+            await api.call('terminal', 'logHtml', <SolScanTable scanReport={scanReport} fileName={compiledFileName}/>)
           } else {
             await api.call('notification', 'modal', {
               id: 'SolidityScanError',

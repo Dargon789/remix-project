@@ -110,7 +110,6 @@ export type PluginNames = 'manager' |
   'foundry-provider' |
   'basic-http-provider' |
   'vm-custom-fork' |
-  'vm-goerli-fork' |
   'vm-mainnet-fork' |
   'vm-sepolia-fork' |
   'vm-paris' |
@@ -135,7 +134,7 @@ export type PluginNames = 'manager' |
   'remixAID' |
   'solhint' |
   'dgit' |
-  'pinnedPanel' |
+  'rightSidePanel' |
   'pluginStateLogger' |
   'environmentExplorer' |
   'templateSelection' |

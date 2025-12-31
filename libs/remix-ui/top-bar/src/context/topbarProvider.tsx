@@ -1,54 +1,12 @@
 /* eslint-disable @nrwl/nx/enforce-module-boundaries */
 // eslint-disable-next-line no-use-before-define
-import React, { useReducer, useState, useEffect, SyntheticEvent, useContext } from 'react'
-import {ModalDialog} from '@remix-ui/modal-dialog' // eslint-disable-line
+import React, { useReducer, useState, useEffect, useContext } from 'react'
 import {Toaster} from '@remix-ui/toaster' // eslint-disable-line
+import {ModalDialog} from '@remix-ui/modal-dialog' // eslint-disable-line
 import { browserReducer, browserInitialState } from 'libs/remix-ui/workspace/src/lib/reducers/workspace'
-import { branch } from '@remix-ui/git'
+import { appPlatformTypes, platformContext } from '@remix-ui/app'
 import {
-  initWorkspace,
-  fetchDirectory,
-  removeInputField,
-  deleteWorkspace,
-  deleteAllWorkspaces,
-  clearPopUp,
-  publishToGist,
-  publishFilesToGist,
-  createNewFile,
-  setFocusElement,
-  createNewFolder,
-  deletePath,
-  renamePath,
-  downloadPath,
-  copyFile,
-  copyShareURL,
-  copyFolder,
-  runScript,
-  signTypedData,
-  emitContextMenuEvent,
-  handleClickFile,
-  handleExpandPath,
-  addInputField,
-  createWorkspace,
-  fetchWorkspaceDirectory,
-  renameWorkspace,
-  switchToWorkspace,
-  uploadFile,
-  uploadFolder,
-  handleDownloadWorkspace,
-  handleDownloadFiles,
-  restoreBackupZip,
-  cloneRepository,
-  moveFile,
-  moveFolder,
-  showAllBranches,
-  switchBranch,
-  createNewBranch,
-  checkoutRemoteBranch,
-  openElectronFolder,
-  getElectronRecentFolders,
-  removeRecentElectronFolder,
-  updateGitSubmodules
+  clearPopUp
 } from 'libs/remix-ui/workspace/src/lib/actions'
 import { Modal } from 'libs/remix-ui/workspace/src/lib/types'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -62,6 +20,7 @@ export interface TopbarProviderProps {
 
 export const TopbarProvider = (props: TopbarProviderProps) => {
   const { plugin } = props
+  const platform = useContext(platformContext)
   const [fs, fsDispatch] = useReducer(browserReducer, browserInitialState)
   const [focusModal, setFocusModal] = useState<Modal>({
     hide: true,
@@ -75,6 +34,63 @@ export const TopbarProvider = (props: TopbarProviderProps) => {
   const [modals, setModals] = useState<Modal[]>([])
   const [focusToaster, setFocusToaster] = useState<string>('')
   const [toasters, setToasters] = useState<string[]>([])
+  const [recentFolders, setRecentFolders] = useState<string[]>([])
+
+  const fetchRecentFolders = async () => {
+    try {
+      const folders = await plugin.call('fs', 'getRecentFolders')
+      setRecentFolders(folders || [])
+    } catch (error) {
+      console.error('Error fetching recent folders:', error)
+      setRecentFolders([])
+    }
+  }
+
+  const openRecentFolder = async (path: string) => {
+    try {
+      await plugin.call('fileManager', 'closeAllFiles')
+      await plugin.call('fs', 'setWorkingDir', path)
+      // Refresh recent folders list since order might have changed
+      setTimeout(fetchRecentFolders, 200)
+    } catch (error) {
+      console.error('Error opening recent folder:', error)
+    }
+  }
+
+  const openRecentFolderInNewWindow = async (path: string) => {
+    try {
+      await plugin.call('fs', 'openFolder', path)
+    } catch (error) {
+      console.error('Error opening recent folder in new window:', error)
+    }
+  }
+
+  const removeRecentFolder = async (path: string) => {
+    try {
+      await plugin.call('fs', 'removeRecentFolder', path)
+      // Refresh the recent folders list
+      setTimeout(fetchRecentFolders, 100)
+    } catch (error) {
+      console.error('Error removing recent folder:', error)
+    }
+  }
+
+  const revealRecentFolderInExplorer = async (path: string) => {
+    try {
+      await plugin.call('fs', 'revealInExplorer', { path: [path]}, true)
+    } catch (error) {
+      console.error('Error revealing folder in explorer:', error)
+    }
+  }
+
+  // Fetch recent folders on desktop platform initialization
+  useEffect(() => {
+    if (platform === appPlatformTypes.desktop) {
+      // Fetch recent folders after a delay to ensure workspace is initialized
+      fetchRecentFolders()
+
+    }
+  }, [platform])
 
   useEffect(() => {
     if (modals.length > 0) {
@@ -151,12 +167,19 @@ export const TopbarProvider = (props: TopbarProviderProps) => {
     plugin: plugin as unknown as Topbar,
     modal,
     toast,
+    recentFolders,
+    fetchRecentFolders,
+    openRecentFolder,
+    openRecentFolderInNewWindow,
+    removeRecentFolder,
+    revealRecentFolderInExplorer,
+    desktopClientMode: plugin.desktopClientMode
   }
 
   return (
     <TopbarContext.Provider value={value}>
       <RemixUiTopbar />
-      <ModalDialog id="topbarModal" {...focusModal} handleHide={handleHideModal} />
+      <ModalDialog id="topbarModalStatic" {...focusModal} handleHide={handleHideModal} />
       <Toaster message={focusToaster} handleHide={handleToaster} />
     </TopbarContext.Provider>
   )

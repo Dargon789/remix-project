@@ -2,10 +2,10 @@
 
 set -e
 
-TESTFILES=$(grep -IRiL "\'@disabled\': \?true" "dist/apps/remix-ide-e2e/src/tests" | grep "${4}" | sort )
+TESTFILES=$(grep -IRiL "\'@disabled\': \?true" "dist/apps/remix-ide-e2e/src/tests" | grep -i "${4}" | sort )
 
 # count test files
-fileCount=$(grep -IRiL "\'@disabled\': \?true" "dist/apps/remix-ide-e2e/src/tests" | grep "${4}" | wc -l )
+fileCount=$(grep -IRiL "\'@disabled\': \?true" "dist/apps/remix-ide-e2e/src/tests" | grep -i "${4}" | wc -l )
 # if fileCount is 0
 if [ $fileCount -eq 0 ]
 then
@@ -13,7 +13,7 @@ then
   exit 0
 fi
 
-BUILD_ID=${CIRCLE_BUILD_NUM:-${TRAVIS_JOB_NUMBER}}
+BUILD_ID=${CIRCLE_BUILD_NUM:-local}
 echo "$BUILD_ID"
 TEST_EXITCODE=0
 
@@ -21,6 +21,9 @@ npx ganache &
 npx http-server -p 9090 --cors='*' ./node_modules &
 yarn run serve:production &
 sleep 5
+
+# Prepare slither toolchain if remixd tests are present in this selection
+printf '%s\n' "$TESTFILES" | ./apps/remix-ide/ci/setup_slither_if_needed.sh
 
 for TESTFILE in $TESTFILES; do
     npx nightwatch --config dist/apps/remix-ide-e2e/nightwatch-${1}.js $TESTFILE --env=$1  || TEST_EXITCODE=1

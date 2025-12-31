@@ -1,14 +1,16 @@
 import { CustomTooltip } from '@remix-ui/helper'
-import React, { useContext, useEffect } from 'react' // eslint-disable-line
+import React from 'react' // eslint-disable-line
 import { FormattedMessage } from 'react-intl'
-import { TerminalContext } from '../context'
-import { RemixUiTerminalProps, TOGGLE } from '../types/terminalTypes'
+import { RemixUiTerminalProps } from '../types/terminalTypes'
 export const RemixUITerminalMenuToggle = (props: RemixUiTerminalProps) => {
 
-  const { terminalState, dispatch } = useContext(TerminalContext)
-
-  function handleToggleTerminal(event: any): void {
-    dispatch({ type: TOGGLE })
+  async function handleToggleTerminal(): Promise<void> {
+    // If panel is maximized, un-maximize it first to show main panel
+    if (props.isMaximized && props.maximizePanel) {
+      await props.maximizePanel()
+    }
+    // Toggle the bottom terminal panel using terminal-wrap component
+    await props.plugin.call('terminal', 'togglePanel')
   }
 
   return (
@@ -17,11 +19,11 @@ export const RemixUITerminalMenuToggle = (props: RemixUiTerminalProps) => {
         placement="top"
         tooltipId="terminalToggle"
         tooltipClasses="text-nowrap"
-        tooltipText={terminalState.isOpen ? <FormattedMessage id="terminal.hideTerminal" /> : <FormattedMessage id="terminal.showTerminal" />}
+        tooltipText={<FormattedMessage id="terminal.hideTerminal" />}
       >
         <i
-          className={`mx-2 remix_ui_terminal_toggleTerminal fas ${terminalState.isOpen ? 'fa-angle-double-down' : 'fa-angle-double-up'}`}
-          data-id="terminalToggleIcon"
+          className="ms-1 me-2 codicon codicon-close fw-bold fs-5"
+          data-id="hideBottomPanel"
           onClick={handleToggleTerminal}
         ></i>
       </CustomTooltip>

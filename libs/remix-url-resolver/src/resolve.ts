@@ -163,7 +163,13 @@ export class RemixURLResolver {
     }
 
     const npm_urls = ["https://cdn.jsdelivr.net/npm/", "https://unpkg.com/"]
-    process && process.env && process.env['NX_NPM_URL'] && npm_urls.unshift(process.env['NX_NPM_URL'])
+
+    // Runtime configuration for E2E tests (injected via post-build script)
+    const runtimeConfig = typeof window !== 'undefined' ? (window as any)['__REMIX_COMPILER_URLS__'] : undefined
+    if (runtimeConfig?.npmURL) {
+      npm_urls.unshift(runtimeConfig.npmURL)
+    }
+
     let content = null
     // get response from all urls
     for (let i = 0; i < npm_urls.length; i++) {

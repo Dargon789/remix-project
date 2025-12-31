@@ -19,6 +19,7 @@ interface compilerDropdownProps {
   handleLoadVersion: (url: string) => void,
   _shouldBeAdded: (version: string) => boolean,
   onlyDownloaded: boolean
+  disabled: boolean
 }
 
 export const CompilerDropdown = (props: compilerDropdownProps) => {
@@ -27,9 +28,20 @@ export const CompilerDropdown = (props: compilerDropdownProps) => {
   const { customVersions, selectedVersion, defaultVersion, allversions, handleLoadVersion, _shouldBeAdded, onlyDownloaded } = props
   return (
     <Dropdown id="versionSelector" data-id="versionSelector">
-      <Dropdown.Toggle as={CompilerMenuToggle} id="dropdown-custom-components" className="btn btn-light w-100 d-inline-block border form-select" icon={null}>
+      <Dropdown.Toggle
+        disabled={props.disabled}
+        as={CompilerMenuToggle}
+        id="dropdown-custom-components"
+        className="btn btn-light w-100 d-inline-block border form-select"
+        icon={null}
+        style={{
+          opacity: props.disabled ? 0.5 : 1,
+          cursor: props.disabled ? 'not-allowed' : 'pointer',
+          pointerEvents: props.disabled ? 'none' : 'auto'
+        }}
+      >
         <div style={{ flexGrow: 1, overflow: 'hidden', display:'flex', justifyContent:'left' }}>
-          <div className="text-truncate font-sm">
+          <div className={`text-truncate font-sm ${props.disabled ? 'text-muted' : ''}`}>
             {customVersions.map((url, i) => {
               if (selectedVersion === url) return (<span data-id="selectedVersion" key={i}>custom</span>)
             })}

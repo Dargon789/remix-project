@@ -319,6 +319,14 @@ export class MatomoManager implements IMatomoManager {
     this.emit('log', { message, data, timestamp });
   }
 
+  /**
+   * Check if running in Electron environment
+   */
+  private isElectronApp(): boolean {
+    return typeof window !== 'undefined' &&
+           (window as any).electronAPI !== undefined;
+  }
+
   private setupPaqInterception(): void {
     this.log('Setting up _paq interception');
     if (typeof window === 'undefined') return;
@@ -825,40 +833,63 @@ export class MatomoManager implements IMatomoManager {
   trackEvent(eventObjOrCategory: MatomoEvent | string, action?: string, name?: string, value?: string | number): number {
     const eventId = ++this.state.lastEventId;
 
+    // Extract event parameters
+    let category: string;
+    let eventAction: string;
+    let eventName: string | undefined;
+    let eventValue: string | number | undefined;
+    let isClick: boolean | undefined;
+
     // If first parameter is a MatomoEvent object, use type-safe approach
     if (typeof eventObjOrCategory === 'object' && eventObjOrCategory !== null && 'category' in eventObjOrCategory) {
-      const { category, action: eventAction, name: eventName, value: eventValue, isClick } = eventObjOrCategory;
-      this.log(`Tracking type-safe event ${eventId}: ${category} / ${eventAction} / ${eventName} / ${eventValue} / isClick: ${isClick}`);
+      category = eventObjOrCategory.category;
+      eventAction = eventObjOrCategory.action;
+      eventName = eventObjOrCategory.name;
+      eventValue = eventObjOrCategory.value;
+      isClick = eventObjOrCategory.isClick;
 
-      // Set custom action dimension for click tracking
-      if (isClick !== undefined) {
-        window._paq.push(['setCustomDimension', this.customDimensions.clickAction, isClick ? 'true' : 'false']);
+      this.log(`Tracking type-safe event ${eventId}: ${category} / ${eventAction} / ${eventName} / ${eventValue} / isClick: ${isClick}`);
+    } else {
+      // Legacy string-based approach
+      category = eventObjOrCategory as string;
+      eventAction = action!;
+      eventName = name;
+      eventValue = value;
+
+      this.log(`Tracking legacy event ${eventId}: ${category} / ${eventAction} / ${eventName} / ${eventValue} (⚠️ no click dimension)`);
+    }
+
+    // Check if running in Electron - use IPC bridge instead of _paq
+    if (this.isElectronApp()) {
+      this.log(`Electron detected - routing event through IPC bridge`);
+
+      const electronAPI = (window as any).electronAPI;
+      if (electronAPI && electronAPI.trackEvent) {
+        // Pass isClick as the 6th parameter
+        const eventData = ['trackEvent', category, eventAction, eventName || '', eventValue, isClick];
+        electronAPI.trackEvent(eventData).catch((err: any) => {
+          console.error('[Matomo] Failed to send event to Electron:', err);
+        });
       }
 
-      const matomoEvent: MatomoCommand = ['trackEvent', category, eventAction];
-      if (eventName !== undefined) matomoEvent.push(eventName);
-      if (eventValue !== undefined) matomoEvent.push(eventValue);
-
-      window._paq.push(matomoEvent);
       this.emit('event-tracked', { eventId, category, action: eventAction, name: eventName, value: eventValue, isClick });
-
       return eventId;
     }
 
-    // Legacy string-based approach - no isClick dimension set
-    const category = eventObjOrCategory as string;
-    this.log(`Tracking legacy event ${eventId}: ${category} / ${action} / ${name} / ${value} (⚠️ no click dimension)`);
+    // Standard web tracking using _paq
+    if (isClick !== undefined) {
+      window._paq.push(['setCustomDimension', this.customDimensions.clickAction, isClick ? 'true' : 'false']);
+    }
 
-    const matomoEvent: MatomoCommand = ['trackEvent', category, action!];
-    if (name !== undefined) matomoEvent.push(name);
-    if (value !== undefined) matomoEvent.push(value);
+    const matomoEvent: MatomoCommand = ['trackEvent', category, eventAction];
+    if (eventName !== undefined) matomoEvent.push(eventName);
+    if (eventValue !== undefined) matomoEvent.push(eventValue);
 
     window._paq.push(matomoEvent);
-    this.emit('event-tracked', { eventId, category, action, name, value });
+    this.emit('event-tracked', { eventId, category, action: eventAction, name: eventName, value: eventValue, isClick });
 
     return eventId;
   }
-
   trackPageView(title?: string): void {
     this.log(`Tracking page view: ${title || 'default'}`);
     const pageView: MatomoCommand = ['trackPageView'];
@@ -948,6 +979,14 @@ export class MatomoManager implements IMatomoManager {
   // ================== SCRIPT LOADING ==================
 
   async loadScript(): Promise<void> {
+    // Skip script loading in Electron - we use IPC bridge instead
+    if (this.isElectronApp()) {
+      this.log('Electron detected - skipping Matomo script load (using IPC bridge)');
+      this.state.scriptLoaded = true;
+      this.emit('script-loaded');
+      return;
+    }
+
     if (this.state.scriptLoaded) {
       this.log('Script already loaded');
       return;
@@ -1344,11 +1383,16 @@ export class MatomoManager implements IMatomoManager {
    */
   shouldShowConsentDialog(configApi?: any): boolean {
     try {
+      // Electron doesn't need cookie consent (uses server-side HTTP tracking)
+      const isElectron = (window as any).electronAPI !== undefined;
+      if (isElectron) {
+        return false;
+      }
+
       // Use domains from constructor config or fallback to empty object
       const matomoDomains = this.config.matomoDomains || {};
 
-      const isElectron = (window as any).electronAPI !== undefined;
-      const isSupported = matomoDomains[window.location.hostname] || isElectron;
+      const isSupported = matomoDomains[window.location.hostname];
 
       if (!isSupported) {
         return false;

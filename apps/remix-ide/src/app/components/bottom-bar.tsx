@@ -64,6 +64,12 @@ export const BottomBar = ({ plugin }: BottomBarProps) => {
     }
     setExplaining(true)
     try {
+      // Show right side panel if it's hidden
+      const isPanelHidden = await plugin.call('rightSidePanel', 'isPanelHidden')
+      if (isPanelHidden) {
+        await plugin.call('rightSidePanel', 'togglePanel')
+      }
+
       await plugin.call('menuicons', 'select', 'remixaiassistant')
       await new Promise((resolve) => setTimeout(resolve, 500))
       const content = await plugin.call('fileManager', 'readFile', currentFilePath)

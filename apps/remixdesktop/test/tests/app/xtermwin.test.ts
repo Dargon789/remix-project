@@ -6,7 +6,7 @@ const tests = {
     done()
   },
   open: function (browser: NightwatchBrowser) {
-    browser.waitForElementVisible('*[data-id="openFolderButton"]', 10000).click('*[data-id="openFolderButton"]')
+    browser.hideToolTips().waitForElementVisible('*[data-id="openFolderButton"]', 10000).click('*[data-id="openFolderButton"]')
   },
   'open xterm window and create a file': function (browser: NightwatchBrowser) {
     browser

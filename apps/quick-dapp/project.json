@@ -9,7 +9,6 @@
       "executor": "@nrwl/webpack:webpack",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "development",
-      "dependsOn": ["install"],
       "options": {
         "compiler": "babel",
         "outputPath": "dist/apps/quick-dapp",
@@ -40,6 +39,7 @@
     },
     "install": {
       "executor": "nx:run-commands",
+      "cache": false,
       "options": {
         "commands": [
           "cd apps/quick-dapp && yarn"

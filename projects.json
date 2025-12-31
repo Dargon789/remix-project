@@ -4298,10 +4298,6 @@
               "hash": "cc5875fabb8c2ee75a3d20f131a99c1a8a0df204"
             },
             {
-              "file": "apps/remix-ide/.travis.yml",
-              "hash": "c8790fa6b88ab7decc844e935d573c1f3e1ea44f"
-            },
-            {
               "file": "apps/remix-ide/background.js",
               "hash": "5bffa0da9e279dd971aa8151ddff3dcd4f8eb117"
             },
@@ -4318,10 +4314,6 @@
               "hash": "f02c550e7b4e136710a372333c3ac2ef9aa95d8e"
             },
             {
-              "file": "apps/remix-ide/ci/browser_tests.sh",
-              "hash": "3070563e526497d41e440f1cd226e96b9915e086"
-            },
-            {
               "file": "apps/remix-ide/ci/build_and_publish_docker_images.sh",
               "hash": "cc9247fbd9884eb48c0be510c8cf7f65b766da9b"
             },
@@ -4330,24 +4322,16 @@
               "hash": "ab0bf9ccb2046e9ca35c1b64b1f9ba2614f4aaba"
             },
             {
-              "file": "apps/remix-ide/ci/deploy_from_travis_remix-alpha.sh",
-              "hash": "c57de7fea57c4a68675409d6d6fffd1e29bd595c"
+              "file": "apps/remix-ide/ci/deploy_remix-alpha.sh",
+              "hash": "3c7b9510bda1f1a7d1b88aab6605d31ecfa07225"
             },
             {
-              "file": "apps/remix-ide/ci/deploy_from_travis_remix-beta.sh",
-              "hash": "134d9c2090c8692a76b34a81d002f58f9a846c2a"
+              "file": "apps/remix-ide/ci/deploy_remix-beta.sh",
+              "hash": "8a5174cb8392d9fdd60817e5b62244ac1ee94cc7"
             },
             {
-              "file": "apps/remix-ide/ci/deploy_from_travis_remix-live.sh",
-              "hash": "1376cda6f028a9c0a758983b1be444a21fa82caa"
-            },
-            {
-              "file": "apps/remix-ide/ci/deploy_key_remix-live-alpha.enc",
-              "hash": "db21779a32b98f06e94ee5e12652397cc39abbb2"
-            },
-            {
-              "file": "apps/remix-ide/ci/deploy_key_remix-live.enc",
-              "hash": "03806ec8345d23df935f8d9f4691d2a8ba9e1540"
+              "file": "apps/remix-ide/ci/deploy_remix-live.sh",
+              "hash": "95ebd400718ff3d37aafc26e42ca96642861232c"
             },
             {
               "file": "apps/remix-ide/ci/download_e2e_assets.js",

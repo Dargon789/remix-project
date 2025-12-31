@@ -43,9 +43,9 @@ module.exports = composePlugins(withNx(), (config) => {
   // add public path
   config.output.publicPath = '/'
 
-  // set filename
-  config.output.filename = `[name].plugin-contract-verification.${versionData.timestamp}.js`
-  config.output.chunkFilename = `[name].plugin-contract-verification.${versionData.timestamp}.js`
+  // set deterministic filenames for better caching
+  config.output.filename = `[name].plugin-contract-verification.[contenthash].js`
+  config.output.chunkFilename = `[name].plugin-contract-verification.[contenthash].js`
 
   // add copy & provide plugin
   config.plugins.push(

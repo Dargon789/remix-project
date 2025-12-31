@@ -58,7 +58,6 @@ let requiredModules = [
   'foundry-provider',
   'basic-http-provider',
   'vm-custom-fork',
-  'vm-goerli-fork',
   'vm-mainnet-fork',
   'vm-sepolia-fork',
   'vm-paris',
@@ -83,7 +82,7 @@ let requiredModules = [
   'remixAID',
   'solhint',
   'dgit',
-  'pinnedPanel',
+  'rightSidePanel',
   'pluginStateLogger',
   'environmentExplorer',
   'templateSelection',
@@ -94,14 +93,19 @@ let requiredModules = [
   'remixAID',
   'remixaiassistant',
   'topbar',
+  'templateexplorermodal',
   'githubAuthHandler',
-  'desktopClient'
+  'desktopClient',
+  'transactionSimulator',
+  'amp',
+  'vega',
+  'chartjs'
 ]
 
 // dependentModules shouldn't be manually activated (e.g hardhat is activated by remixd)
 const dependentModules = ['foundry', 'hardhat', 'truffle', 'slither']
 
-const loadLocalPlugins = ['doc-gen', 'doc-viewer', 'contract-verification', 'vyper', 'solhint', 'circuit-compiler', 'learneth', 'quick-dapp', 'noir-compiler']
+const loadLocalPlugins = ['doc-gen', 'doc-viewer', 'contract-verification', 'vyper', 'solhint', 'circuit-compiler', 'learneth', 'quick-dapp', 'quick-dapp-v2', 'noir-compiler']
 
 const partnerPlugins = ['cookbookdev']
 
@@ -146,7 +150,7 @@ export function isNative(name) {
     'foundry-provider',
     'basic-http-provider',
     'tabs',
-    'pinnedPanel',
+    'rightSidePanel',
     'doc-gen',
     'doc-viewer',
     'circuit-compiler',
@@ -161,7 +165,11 @@ export function isNative(name) {
     'desktopClient',
     'LearnEth',
     'noir-compiler',
-    'remixaiassistant'
+    'remixaiassistant',
+    'templateexplorermodal',
+    'amp',
+    'vega',
+    'chartjs'
   ]
   return nativePlugins.includes(name) || requiredModules.includes(name) || isInjectedProvider(name) || isVM(name) || isScriptRunner(name)
 }

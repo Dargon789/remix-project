@@ -10,6 +10,7 @@ import EventManager from '../../lib/events'
 
 import { CompilerImports } from '@remix-project/core-plugin' // eslint-disable-line
 import { RemixUiXterminals } from '@remix-ui/xterm'
+import { trackMatomoEvent } from '@remix-api'
 
 const KONSOLES = []
 
@@ -18,7 +19,7 @@ function register(api) { KONSOLES.push(api) }
 const profile = {
   displayName: 'Terminal',
   name: 'terminal',
-  methods: ['log', 'logHtml'],
+  methods: ['log', 'logHtml', 'togglePanel', 'isPanelHidden', 'maximizePanel'],
   events: [],
   description: 'Remix IDE terminal',
   version: packageJson.version
@@ -53,8 +54,11 @@ export default class Terminal extends Plugin {
   _shell: any
   dispatch: any
   terminalApi: any
+  isHidden: boolean
+  isMaximized: boolean
   constructor(opts, api) {
     super(profile)
+    this.isMaximized = false
     this.fileImport = new CompilerImports()
     this.event = new EventManager()
     this.globalRegistry = Registry.getInstance()
@@ -114,6 +118,42 @@ export default class Terminal extends Plugin {
 
   onActivation() {
     this.renderComponent()
+
+    // Listen for file changes - auto-restore terminal panel if maximized when main panel is used
+    this.on('fileManager', 'currentFileChanged', () => {
+      if (this.isMaximized) {
+        this.maximizePanel() // This will toggle and restore the panel
+      }
+    })
+
+    // Listen for tab/app switches - auto-restore terminal panel if maximized
+    this.on('tabs', 'switchApp', () => {
+      if (this.isMaximized) {
+        this.maximizePanel() // This will toggle and restore the panel
+      }
+    })
+
+    // Initialize isHidden state from panelStates in localStorage
+    const panelStatesStr = window.localStorage.getItem('panelStates')
+    const panelStates = panelStatesStr ? JSON.parse(panelStatesStr) : {}
+
+    if (panelStates.bottomPanel) {
+      this.isHidden = panelStates.bottomPanel.isHidden || false
+      // Apply d-none class to hide the terminal on reload if it was hidden
+      if (this.isHidden) {
+        const terminalPanel = document.querySelector('.terminal-wrap')
+        terminalPanel?.classList.add('d-none')
+        trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'hiddenOnLoad', isClick: false })
+      }
+    } else {
+      // Initialize with default state if not found
+      this.isHidden = false
+      panelStates.bottomPanel = {
+        isHidden: this.isHidden,
+        pluginProfile: this.profile
+      }
+      window.localStorage.setItem('panelStates', JSON.stringify(panelStates))
+    }
   }
 
   onDeactivation() {
@@ -124,11 +164,120 @@ export default class Terminal extends Plugin {
   }
 
   logHtml(html) {
+    // Unhide terminal panel if it's hidden when a log is added
+    if (this.isHidden) {
+      this.showPanel()
+    }
     this.terminalApi.logHtml(html)
   }
 
   log(message, type) {
+    // Unhide terminal panel if it's hidden when a log is added
+    if (this.isHidden) {
+      this.showPanel()
+    }
     this.terminalApi.log(message, type)
+  }
+
+  showPanel() {
+    const terminalPanel = document.querySelector('.terminal-wrap')
+    this.isHidden = false
+    terminalPanel?.classList.remove('d-none')
+    trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'shownOnLog', isClick: false })
+    this.emit('terminalPanelShown')
+
+    // Persist the state
+    const panelStates = JSON.parse(window.localStorage.getItem('panelStates') || '{}')
+    panelStates.bottomPanel = {
+      isHidden: this.isHidden,
+      pluginProfile: this.profile
+    }
+    window.localStorage.setItem('panelStates', JSON.stringify(panelStates))
+  }
+
+  togglePanel() {
+    const terminalPanel = document.querySelector('.terminal-wrap')
+    if (this.isHidden) {
+      this.isHidden = false
+      terminalPanel?.classList.remove('d-none')
+      trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'shownOnToggleIconClick', isClick: false })
+      this.emit('terminalPanelShown')
+    } else {
+      this.isHidden = true
+
+      // If terminal was hidden when maximized, restore the main panel
+      if (this.isMaximized) {
+        const mainView = document.querySelector('.mainview')
+        if (mainView) {
+          const wraps = mainView.querySelectorAll('[class*="-wrap"]')
+          wraps.forEach((wrap: HTMLElement) => {
+            if (!wrap.classList.contains('terminal-wrap')) {
+              wrap.classList.remove('d-none')
+            }
+          })
+        }
+        terminalPanel?.classList.remove('maximized')
+        this.isMaximized = false
+        this.renderComponent()
+      }
+
+      terminalPanel?.classList.add('d-none')
+      trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'hiddenOnToggleIconClick', isClick: false })
+      this.emit('terminalPanelHidden')
+    }
+    // Persist the hidden state and plugin profile to panelStates
+    const panelStates = JSON.parse(window.localStorage.getItem('panelStates') || '{}')
+    panelStates.bottomPanel = {
+      isHidden: this.isHidden,
+      pluginProfile: this.profile
+    }
+    window.localStorage.setItem('panelStates', JSON.stringify(panelStates))
+  }
+
+  isPanelHidden() {
+    return this.isHidden
+  }
+
+  async maximizePanel() {
+    if (!this.isMaximized) {
+      // Hide all main panel content except terminal
+      const mainView = document.querySelector('.mainview')
+      if (mainView) {
+        // Find all child elements with -wrap class except terminal-wrap
+        const wraps = mainView.querySelectorAll('[class*="-wrap"]')
+        wraps.forEach((wrap: HTMLElement) => {
+          if (!wrap.classList.contains('terminal-wrap')) {
+            wrap.classList.add('d-none')
+          } else {
+            // Add maximized class to terminal-wrap
+            wrap.classList.add('maximized')
+          }
+        })
+      }
+
+      this.isMaximized = true
+      trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'maximized', isClick: false })
+      this.emit('terminalPanelMaximized')
+    } else {
+      // Show all main panel content
+      const mainView = document.querySelector('.mainview')
+      if (mainView) {
+        // Find all child elements with -wrap class and show them
+        const wraps = mainView.querySelectorAll('[class*="-wrap"]')
+        wraps.forEach((wrap: HTMLElement) => {
+          wrap.classList.remove('d-none')
+          // Remove maximized class from terminal-wrap
+          if (wrap.classList.contains('terminal-wrap')) {
+            wrap.classList.remove('maximized')
+          }
+        })
+      }
+
+      this.isMaximized = false
+      trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'restored', isClick: false })
+      this.emit('terminalPanelRestored')
+    }
+    this.renderComponent()
   }
 
   setDispatch(dispatch) {
@@ -146,6 +295,8 @@ export default class Terminal extends Plugin {
           plugin={state.plugin}
           onReady={state.onReady}
           visible={true}
+          isMaximized={this.isMaximized}
+          maximizePanel={this.maximizePanel.bind(this)}
         />
       </>)
   }

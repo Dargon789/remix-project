@@ -35,7 +35,7 @@ pre {
   flex-direction     : row-reverse;
   width              : 320px;
   transition         : width 0.25s;
-  padding-bottom     : 1.1rem;
+  padding-bottom     : 0.4rem;
 }
 .statusBar           {
 
@@ -48,6 +48,14 @@ pre {
   width              : 320px;
   transition         : width 0.25s;
   padding-bottom     : 1.4rem;
+}
+.right-panel-maximized {
+  width              : 50% !important;
+  max-width          : 50%;
+  margin             : 0 auto;
+  flex               : none;
+  border-left        : none !important;
+  border-right       : none !important;
 }
 .highlightcode       {
   position           : absolute;

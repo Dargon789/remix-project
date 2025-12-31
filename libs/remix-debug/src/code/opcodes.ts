@@ -33,6 +33,7 @@ export default function (op, full) {
     0x1b: ['SHL', 3, 2, 1, false],
     0x1c: ['SHR', 3, 2, 1, false],
     0x1d: ['SAR', 3, 2, 1, false],
+    0x1e: ['CLZ', 5, 1, 1, false], // EIP-7939: Count Leading Zeros
 
     // 0x20 range - crypto
     0x20: ['SHA3', 30, 2, 1, false],

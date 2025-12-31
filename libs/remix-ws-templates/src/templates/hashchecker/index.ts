@@ -1,4 +1,4 @@
-export default async () => {
+export default async (opts, plugin) => {
   return {
     // @ts-ignore
     'circuits/calculate_hash.circom': (await import('raw-loader!./circuits/calculate_hash.circom')).default,

@@ -1,5 +1,18 @@
 import { NightwatchBrowser } from 'nightwatch'
 
+function openTemplatesExplorer(browser: NightwatchBrowser) {
+  browser
+    .click('*[data-id="workspacesSelect"]')
+    .pause(2000)
+    .click('*[data-id="workspacecreate"]')
+    .waitForElementVisible('*[data-id="template-explorer-modal-react"]')
+    .waitForElementVisible('*[data-id="template-explorer-template-container"]')
+    .click('*[data-id="template-explorer-template-container"]')
+    .waitForElementPresent('*[data-id="template-card-remixDefault-0"]')
+    .click('*[data-id="template-card-remixDefault-0"]')
+    .waitForElementVisible('*[data-id="workspace-details-section"]')
+}
+
 const tests = {
   before: function (browser: NightwatchBrowser, done: VoidFunction) {
     browser.hideToolTips()
@@ -7,16 +20,18 @@ const tests = {
   },
   'open default template': function (browser: NightwatchBrowser) {
     browser
+      .hideToolTips()
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
-      .waitForElementVisible('button[data-id="landingPageImportFromTemplate"]')
-      .click('button[data-id="landingPageImportFromTemplate"]')
-      .waitForElementPresent('*[data-id="create-remixDefault"]')
-      .scrollAndClick('*[data-id="create-remixDefault"]')
+
+    openTemplatesExplorer(browser)
+
+    browser
       .pause(3000)
       .windowHandles(function (result) {
         console.log(result.value)
         browser.hideToolTips()
           .switchWindow(result.value[1])
+          .hideToolTips()
           .waitForElementVisible('*[data-id="treeViewLitreeViewItemtests"]')
           .click('*[data-id="treeViewLitreeViewItemtests"]')
           .waitForElementVisible('*[data-id="treeViewLitreeViewItemcontracts"]')

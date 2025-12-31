@@ -13,7 +13,7 @@ const tests = {
         done()
     },
     installFoundry: function (browser: NightwatchBrowser) {
-        browser.perform(async (done) => {
+        browser.hideToolTips().perform(async (done) => {
             await downloadFoundry()
             await installFoundry()
             await initFoundryProject()

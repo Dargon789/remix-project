@@ -25,7 +25,7 @@ const clientProfile: Profile = {
     name: 'foundry',
     displayName: 'electron foundry',
     description: 'electron foundry',
-    methods: ['sync', 'compile']
+    methods: ['sync', 'compile', 'runCommand']
 }
 
 
@@ -40,9 +40,7 @@ class FoundryPluginClient extends ElectronBasePluginRemixdClient {
 
     async onActivation(): Promise<void> {
         console.log('Foundry plugin activated')
-        this.call('terminal', 'log', { type: 'log', value: 'Foundry plugin activated' })
         this.on('fs' as any, 'workingDirChanged', async (path: string) => {
-            console.log('workingDirChanged foundry', path)
             this.currentSharedFolder = path
             this.startListening()
         })
@@ -53,120 +51,84 @@ class FoundryPluginClient extends ElectronBasePluginRemixdClient {
     startListening() {
         this.buildPath = utils.absolutePath('out', this.currentSharedFolder)
         this.cachePath = utils.absolutePath('cache', this.currentSharedFolder)
-        console.log('Foundry plugin checking for', this.buildPath, this.cachePath)
-        if (fs.existsSync(this.buildPath) && fs.existsSync(this.cachePath)) {
-            this.listenOnFoundryCompilation()
-        } else {
-            this.listenOnFoundryFolder()
-        }
+        this.on('fileManager', 'currentFileChanged', async (currentFile: string) => {
+            const cache = JSON.parse(await fs.promises.readFile(join(this.cachePath, 'solidity-files-cache.json'), { encoding: 'utf-8' }))
+            this.emitContract(basename(currentFile), cache)
+        })
+        this.listenOnFoundryCompilation()
     }
 
-    listenOnFoundryFolder() {
-        console.log('Foundry out folder doesn\'t exist... waiting for the compilation.')
+     listenOnFoundryCompilation() {
         try {
             if (this.watcher) this.watcher.close()
-            this.watcher = chokidar.watch(this.currentSharedFolder, { depth: 1, ignorePermissionErrors: true, ignoreInitial: true })
-            // watch for new folders
-            this.watcher.on('addDir', (path: string) => {
-                console.log('add dir foundry', path)
-                if (fs.existsSync(this.buildPath) && fs.existsSync(this.cachePath)) {
-                    this.listenOnFoundryCompilation()
-                }
+            this.watcher = chokidar.watch(this.cachePath, { depth: 0, ignorePermissionErrors: true, ignoreInitial: true })
+            this.watcher.on('change', async () => {
+                const currentFile = await this.call('fileManager', 'getCurrentFile')
+                const cache = JSON.parse(await fs.promises.readFile(join(this.cachePath, 'solidity-files-cache.json'), { encoding: 'utf-8' }))
+                this.emitContract(basename(currentFile), cache)
+            })
+            this.watcher.on('add', async () => {
+                const currentFile = await this.call('fileManager', 'getCurrentFile')
+                const cache = JSON.parse(await fs.promises.readFile(join(this.cachePath, 'solidity-files-cache.json'), { encoding: 'utf-8' }))
+                this.emitContract(basename(currentFile), cache)
             })
         } catch (e) {
             console.log(e)
         }
     }
-
+    
     compile() {
         return new Promise((resolve, reject) => {
             const cmd = `forge build`
+            this.call('terminal', 'log', { type: 'log', value: `running ${cmd}` })
             const options = { cwd: this.currentSharedFolder, shell: true }
             const child = spawn(cmd, options)
-            let result = ''
             let error = ''
-            child.stdout.on('data', (data) => {
-                const msg = `[Foundry Compilation]: ${data.toString()}`
-                console.log('\x1b[32m%s\x1b[0m', msg)
-                result += msg + '\n'
+            child.stdout.on('data', async (data) => {
+                if (data.toString().includes('Error')) {
+                    this.call('terminal', 'log', { type: 'error', value: `${data.toString()}` })
+                } else {
+                    const msg = `${data.toString()}`
+                    console.log('\x1b[32m%s\x1b[0m', msg)
+                    this.call('terminal', 'log', { type: 'log', value: msg })
+                }
             })
             child.stderr.on('data', (err) => {
-                error += `[Foundry Compilation]: ${err.toString()} \n`
+                error += err.toString() + '\n'
+                this.call('terminal', 'log', { type: 'error', value: `${err.toString()}` })
             })
-            child.on('close', () => {
-                if (error && result) resolve(error + result)
-                else if (error) reject(error)
-                else resolve(result)
+            child.on('close', async () => {
+                const currentFile = await this.call('fileManager', 'getCurrentFile')
+                const cache = JSON.parse(await fs.promises.readFile(join(this.cachePath, 'solidity-files-cache.json'), { encoding: 'utf-8' }))
+                this.emitContract(basename(currentFile), cache)
+                resolve('')
             })
         })
     }
-
-    checkPath() {
-        if (!fs.existsSync(this.buildPath) || !fs.existsSync(this.cachePath)) {
-            this.listenOnFoundryFolder()
-            return false
-        }
-        if (!fs.existsSync(join(this.cachePath, 'solidity-files-cache.json'))) return false
-        return true
-    }
-
-    private async processArtifact() {
-        if (!this.checkPath()) return
-        const folderFiles = await fs.promises.readdir(this.buildPath) // "out" folder
+    
+    private async emitContract(file: string, cache) {
         try {
-            const cache = JSON.parse(await fs.promises.readFile(join(this.cachePath, 'solidity-files-cache.json'), { encoding: 'utf-8' }))
-            // name of folders are file names
-            for (const file of folderFiles) {
-                const path = join(this.buildPath, file) // out/Counter.sol/
-                const compilationResult = {
-                    input: {},
-                    output: {
-                        contracts: {},
-                        sources: {}
-                    },
-                    inputSources: { sources: {}, target: '' },
-                    solcVersion: null,
-                    compilationTarget: null
-                }
-                compilationResult.inputSources.target = file
-                await this.readContract(path, compilationResult, cache)
-                this.emit('compilationFinished', compilationResult.compilationTarget, { sources: compilationResult.input }, 'soljson', compilationResult.output, compilationResult.solcVersion)
+            const path = join(this.buildPath, file) // out/Counter.sol/
+            const compilationResult = {
+                input: {},
+                output: {
+                    contracts: {},
+                    sources: {}
+                },
+                inputSources: { sources: {}, target: '' },
+                solcVersion: null,
+                compilationTarget: null
             }
-
-            clearTimeout(this.logTimeout)
-            this.logTimeout = setTimeout(() => {
-                // @ts-ignore
-                this.call('terminal', 'log', { type: 'log', value: `receiving compilation result from Foundry. Select a file to populate the contract interaction interface.` })
-                console.log('Syncing compilation result from Foundry')
-            }, 1000)
-
+            compilationResult.inputSources.target = file
+            if (!fs.existsSync(path)) return            
+            await this.readContract(path, compilationResult, cache)
+            this.emit('compilationFinished', compilationResult.compilationTarget, { sources: compilationResult.input }, 'soljson', compilationResult.output, compilationResult.solcVersion)
         } catch (e) {
-            console.log(e)
+            console.log('Error emitting contract', e)
         }
     }
 
-    async triggerProcessArtifact() {
-        // prevent multiple calls
-        clearTimeout(this.processingTimeout)
-        this.processingTimeout = setTimeout(async () => await this.processArtifact(), 1000)
-    }
-
-    listenOnFoundryCompilation() {
-        try {
-            console.log('Foundry out folder exists... processing the artifact.')
-            if (this.watcher) this.watcher.close()
-            this.watcher = chokidar.watch(this.cachePath, { depth: 0, ignorePermissionErrors: true, ignoreInitial: true })
-            this.watcher.on('change', async () => await this.triggerProcessArtifact())
-            this.watcher.on('add', async () => await this.triggerProcessArtifact())
-            this.watcher.on('unlink', async () => await this.triggerProcessArtifact())
-            // process the artifact on activation
-            this.triggerProcessArtifact()
-        } catch (e) {
-            console.log(e)
-        }
-    }
-
-    async readContract(contractFolder, compilationResultPart, cache) {
+    async readContract(contractFolder, compilationResultPart, cache) {        
         const files = await fs.promises.readdir(contractFolder)
         for (const file of files) {
             const path = join(contractFolder, file)
@@ -235,13 +197,61 @@ class FoundryPluginClient extends ElectronBasePluginRemixdClient {
                 bytecode: contentJSON.bytecode,
                 deployedBytecode: contentJSON.deployedBytecode,
                 methodIdentifiers: contentJSON.methodIdentifiers
-            }
+            },
+            metadata: contentJSON.metadata
         }
     }
 
     async sync() {
         console.log('syncing Foundry with Remix...')
-        this.processArtifact()
+        const currentFile = await this.call('fileManager', 'getCurrentFile')
+        const cache = JSON.parse(await fs.promises.readFile(join(this.cachePath, 'solidity-files-cache.json'), { encoding: 'utf-8' }))
+        this.emitContract(basename(currentFile), cache)
+    }
+
+    runCommand(commandArgs: string) {
+        return new Promise((resolve, reject) => {
+            // Validate that the command starts with allowed Foundry commands
+            const allowedCommands = ['forge', 'cast', 'anvil']
+            const commandParts = commandArgs.trim().split(' ')
+            const baseCommand = commandParts[0]
+
+            if (!allowedCommands.includes(baseCommand)) {
+                reject(new Error(`Command must start with one of: ${allowedCommands.join(', ')}`))
+                return
+            }
+
+            const cmd = commandArgs
+            this.call('terminal', 'log', { type: 'log', value: `running ${cmd}` })
+            const options = { cwd: this.currentSharedFolder, shell: true }
+            const child = spawn(cmd, options)
+            let stdout = ''
+            let stderr = ''
+
+            child.stdout.on('data', (data) => {
+                const output = data.toString()
+                stdout += output
+                this.call('terminal', 'log', { type: 'log', value: output })
+            })
+
+            child.stderr.on('data', (err) => {
+                const output = err.toString()
+                stderr += output
+                this.call('terminal', 'log', { type: 'error', value: output })
+            })
+
+            child.on('close', (code) => {
+                if (code === 0) {
+                    resolve({ stdout, stderr, exitCode: code })
+                } else {
+                    reject(new Error(`Command failed with exit code ${code}: ${stderr}`))
+                }
+            })
+
+            child.on('error', (err) => {
+                reject(err)
+            })
+        })
     }
 }
 

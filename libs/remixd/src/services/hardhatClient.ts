@@ -21,7 +21,6 @@ export class HardhatClient extends PluginClient {
     this.methods = ['compile', 'sync']
     this.onActivation = () => {
       console.log('Hardhat plugin activated')
-      this.call('terminal', 'log', { type: 'log', value: 'Hardhat plugin activated' })
       this.startListening()
     }
   }

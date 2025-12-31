@@ -1,4 +1,4 @@
-export default async () => {
+export default async (opts, plugin) => {
   return {
     // @ts-ignore
     'src/main.nr': (await import('raw-loader!./src/main.nr')).default,
