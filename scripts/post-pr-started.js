@@ -88,7 +88,7 @@ function formatRunTime() {
 
 function parseSlug(slug) {
   const m = String(slug).match(/^(?:gh|github)\/([^/]+)\/([^/]+)$/);
-  if (!m) exit(`Bad slug: ${slug}`);
+  if (!m) exit('Bad slug format; expected "gh/owner/repo" or "github/owner/repo"');
   return { owner: m[1], repo: m[2] };
 }
 
