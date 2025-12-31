@@ -85,11 +85,11 @@ function formatRunTime() {
     log(`Set commit status ${STATUS_CONTEXT}: pending`);
   }
 })().catch(e => {
-  const message = (e && typeof e.message === 'string') ? e.message : String(e);
   const status = (e && typeof e.status !== 'undefined') ? ` status=${e.status}` : '';
-  console.error(`[post-pr-started] Error:${status} ${message}`);
+  console.error(`[post-pr-started] Error:${status} (details omitted to avoid logging sensitive data)`);
   process.exit(1);
 });
+
 
 function parseSlug(slug) {
   const m = String(slug).match(/^(?:gh|github)\/([^/]+)\/([^/]+)$/);
