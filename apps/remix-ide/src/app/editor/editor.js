@@ -781,8 +781,13 @@ export default class Editor extends Plugin {
 
   async addDecoration (decoration, filePath, typeOfDecoration) {
     if (!filePath) return
-    filePath = await this.call('fileManager', 'getPathFromUrl', filePath)
-    filePath = filePath.file
+    try {
+      const currentFile = await this.call('fileManager', 'file')
+      const resolved = await this.call('resolutionIndex', 'resolvePath', currentFile, filePath)
+      filePath = resolved || filePath
+    } catch (e) {
+      // best-effort: fall back to provided path
+    }
     if (!this.sessions[filePath]) return
     const path = filePath || this.currentFile
 
@@ -811,8 +816,37 @@ export default class Editor extends Plugin {
     await this.addDecoration(annotation, filePath, 'sourceAnnotationsPerFile')
   }
 
-  async highlight (position, filePath, highlightColor, opt = { focus: true }) {
-    filePath = filePath || this.currentFile
+  async highlight (position, filePath, highlightColor, opt = { focus: true, origin: undefined }) {
+    // Allow callers (e.g. debugger) to specify the import origin file so we can
+    // resolve the correct dependency version/path via resolutionIndex.
+    // Falls back to the current file when origin is not provided for backward compatibility.
+    try {
+      const currentFile = await this.call('fileManager', 'file')
+      const originPath = opt && opt.origin ? opt.origin : currentFile
+      
+      // Try resolution index with __sources__ + .raw_paths.json approach first
+      if (originPath) {
+        try {
+          const resolved = await this.call('resolutionIndex', 'resolveActualPath', originPath, filePath)
+          if (resolved) {
+            filePath = resolved
+          } else {
+            // Fall back to regular resolution
+            const fallback = await this.call('resolutionIndex', 'resolvePath', originPath, filePath)
+            filePath = fallback || filePath || this.currentFile
+          }
+        } catch (e) {
+          console.log('Resolution failed, using provided path:', e)
+          filePath = filePath || this.currentFile
+        }
+      } else {
+        filePath = filePath || this.currentFile
+      }
+    } catch (e) {
+      // best-effort: fall back to provided path or current file
+      filePath = filePath || this.currentFile
+    }
+
     if (opt.focus) {
       await this.call('fileManager', 'open', filePath)
       this.scrollToLine(position.start.line)

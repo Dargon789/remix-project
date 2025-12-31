@@ -212,8 +212,15 @@
             "@remix-ide/tracking": [
               "apps/remix-ide/src/app/contexts/TrackingContext"
             ],
+            "@remix-ui/login": [
+              "libs/remix-ui/login/src/index.ts"
+            ],
             "@remix-ui/template-explorer-modal": [
               "libs/remix-ui/template-explorer-modal/src/index.ts"
+            ]
+            ,
+            "@remix-project/import-resolver": [
+              "libs/remix-import-resolver/src/index.ts"
             ]
         }
     }

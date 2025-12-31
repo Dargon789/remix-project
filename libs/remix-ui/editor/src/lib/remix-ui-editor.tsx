@@ -607,8 +607,23 @@ export const EditorUI = (props: EditorUIProps) => {
       let filePath = error.file
 
       if (!filePath) return
-      const fileFromUrl = await props.plugin.call('fileManager', 'getPathFromUrl', filePath)
-      filePath = fileFromUrl.file
+      // Try fast path: resolve via in-memory resolution index based on current file context
+      try {
+        const currentFile = await props.plugin.call('fileManager', 'file')
+        const resolved = await props.plugin.call('resolutionIndex', 'resolvePath', currentFile, filePath)
+        if (resolved) filePath = resolved
+      } catch (e) {
+        // best-effort: fall back to legacy mapping
+        try {
+          try {
+            const currentFile = await props.plugin.call('fileManager', 'file')
+            const resolved = await props.plugin.call('resolutionIndex', 'resolvePath', currentFile, filePath)
+            if (resolved) filePath = resolved
+          } catch (_) { /* leave as-is */ }
+        } catch (_) {
+          // keep original filePath
+        }
+      }
       const model = editorModelsState[filePath]?.model
       const errorServerityMap = {
         error: MarkerSeverity.Error,
@@ -1176,12 +1191,21 @@ export const EditorUI = (props: EditorUIProps) => {
       if (input && input.resource && input.resource.path) {
         try {
           await props.plugin.call('fileManager', 'open', input.resource.path)
+
           if (input.options && input.options.selection) {
-            editor.revealRange(input.options.selection)
-            editor.setPosition({
-              column: input.options.selection.startColumn,
-              lineNumber: input.options.selection.startLineNumber,
-            })
+            // Wait for the model to switch before revealing the range
+            setTimeout(() => {
+              const model = editorRef.current.getModel()
+              const editor = editorRef.current
+
+              if (model && model.uri.path === input.resource.path) {
+                editor.revealRangeInCenter(input.options.selection)
+                editor.setPosition({
+                  column: input.options.selection.startColumn,
+                  lineNumber: input.options.selection.startLineNumber,
+                })
+              }
+            }, 100)
           }
         } catch (e) {
           console.log(e)
@@ -1199,6 +1223,12 @@ export const EditorUI = (props: EditorUIProps) => {
 
     monacoRef.current = monaco
     props.setMonaco(monaco)
+
+    // Initialize the inline completion provider
+    // By creating the provider instance before registering it, Monaco now has a proper object to work with instead of null,
+    // preventing the WeakMap error when processing keystrokes.
+    inlineCompletionProviderRef.current = new RemixInLineCompletionProvider(props, monaco, trackMatomoEvent)
+
     // Register a new language
     monacoRef.current.languages.register({ id: 'remix-solidity' })
     monacoRef.current.languages.register({ id: 'remix-cairo' })

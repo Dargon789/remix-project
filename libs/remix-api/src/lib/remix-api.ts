@@ -20,6 +20,7 @@ import { IPopupPanelAPI } from "./plugins/popuppanel-api"
 import { IDesktopClient } from "./plugins/desktop-client"
 import { IGitHubAuthHandlerApi } from "./plugins/githubAuthHandler-api"
 import { ITopbarApi } from "./plugins/topbar-api"
+import { ISSOApi } from "./plugins/sso-api"
 
 export interface ICustomRemixApi extends IRemixApi {
   popupPanel: IPopupPanelAPI
@@ -43,6 +44,7 @@ export interface ICustomRemixApi extends IRemixApi {
   remixAI: IRemixAI,
   desktopClient: IDesktopClient
   githubAuthHandler: IGitHubAuthHandlerApi
+  sso: ISSOApi
 }
 
 export declare type CustomRemixApi = Readonly<ICustomRemixApi>

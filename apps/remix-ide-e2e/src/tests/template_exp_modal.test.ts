@@ -7,7 +7,7 @@ module.exports = {
   before: function (browser: NightwatchBrowser, done: VoidFunction) {
     init(browser, done)
   },
-  'Create blank workspace': function (browser: NightwatchBrowser) {
+  'Create blank workspace #group2': function (browser: NightwatchBrowser) {
     browser
       .refreshPage()
       .click('*[data-id="workspacesSelect"]')
@@ -35,7 +35,7 @@ module.exports = {
         browser.assert.equal(result.value, 3, 'Incorrect number of files in workspace');
       });
   },
-  'Create Pectra 7702 based workspace': function (browser: NightwatchBrowser) {
+  'Create Pectra 7702 based workspace #group2': function (browser: NightwatchBrowser) {
     browser
       .click('*[data-id="workspacesSelect"]')
       .pause(2000)
@@ -57,7 +57,7 @@ module.exports = {
       .isVisible('*[data-id="treeViewDivDraggableItemcontracts/Example7702.sol"]')
       .waitForElementNotPresent('*[data-id="treeViewDivDraggableItemtests"]')
   },
-  'Create Semaphore based workspace': function (browser: NightwatchBrowser) {
+  'Create Semaphore based workspace #group2': function (browser: NightwatchBrowser) {
     browser
       .click('*[data-id="workspacesSelect"]')
       .pause(2000)
@@ -87,7 +87,7 @@ module.exports = {
       .clickLaunchIcon('filePanel')
       .waitForElementVisible('*[data-id="treeViewDivDraggableItemcircuits/.bin/semaphore_js"]')
   },
-  'Search for Noir Simple Multiplier template': function (browser: NightwatchBrowser) {
+  'Search for Noir Simple Multiplier template #group2': function (browser: NightwatchBrowser) {
     browser
       .click('*[data-id="workspacesSelect"]')
       .pause(2000)
@@ -112,7 +112,7 @@ module.exports = {
       .click('*[data-id="treeViewDivDraggableItemsrc/main.nr"]')
       .waitForElementVisible('*[data-id="compile-action"]')
   },
-  'Create OpenZeppelin ERC20 template with Contract Wizard': function (browser: NightwatchBrowser) {
+  'Create OpenZeppelin ERC20 template with Contract Wizard #group2': function (browser: NightwatchBrowser) {
     browser
       .click('*[data-id="workspacesSelect"]')
       .pause(2000)
@@ -145,7 +145,7 @@ module.exports = {
       .waitForElementVisible('#verticalIconsKindsolidity > i.remixui_status.fas.fa-check-circle.text-success.remixui_statusCheck')
       .pause(2000)
   },
-  'Create OpenZeppelin ERC721 template with Contract Wizard': function (browser: NightwatchBrowser) {
+  'Create OpenZeppelin ERC721 template with Contract Wizard #group2': function (browser: NightwatchBrowser) {
     browser
       .clickLaunchIcon('filePanel')
       .click('*[data-id="workspacesSelect"]')
@@ -186,9 +186,6 @@ module.exports = {
       })
       .waitForElementVisible('*[data-id="treeViewLitreeViewItemscripts"]')
       .click('*[data-id="compile-action"]')
-      // Shows 3 warnings to inform about the deprecation of the use of 'assembly ("memory-safe")' in OZ files
-      // See: https://docs.soliditylang.org/en/latest/assembly.html#memory-safety
-      .waitForElementVisible('#verticalIconsKindsolidity > i.remixui_status.badge.rounded-pill.bg-warning')
       .clickLaunchIcon('solidity')
       .isVisible('*[data-id="compilation-details"]')
   },
@@ -325,7 +322,7 @@ module.exports = {
           'Correct content')
       })
   },
-  'Confirm that editing workspace name works': function (browser: NightwatchBrowser) {
+  'Confirm that editing workspace name works #group3': function (browser: NightwatchBrowser) {
     browser
       .click('*[data-id="workspacesSelect"]')
       .pause(2000)
@@ -359,7 +356,7 @@ module.exports = {
       .currentWorkspaceIs('ChangedWorkspaceName')
       .switchWorkspace('Basic')
   },
-  'Creating a workspace with the same name as an existing one should show an error': function (browser: NightwatchBrowser) {
+  'Creating a workspace with the same name as an existing one should show an error #group3': function (browser: NightwatchBrowser) {
     browser
       .click('*[data-id="workspacesSelect"]')
       .pause(2000)

@@ -46,8 +46,10 @@ export const DebuggerApiMixin = (Base) => class extends Base {
     await this.call('editor', 'discardLineTexts' as any)
   }
 
-  async highlight (lineColumnPos, path, rawLocation, stepDetail, lineGasCost) {
-    await this.call('editor', 'highlight', lineColumnPos, path, '', { focus: true })
+  async highlight (lineColumnPos, path, rawLocation, stepDetail, lineGasCost, origin?) {
+    console.log('highlight', { lineColumnPos, path, rawLocation, stepDetail, lineGasCost, origin })
+    // Pass the main contract being debugged as the origin for proper resolution
+    await this.call('editor', 'highlight', lineColumnPos, path, '', { focus: true, origin })
     const label = `${stepDetail.op} costs ${stepDetail.gasCost} gas - this line costs ${lineGasCost} gas - ${stepDetail.gas} gas left`
     const linetext: lineText = {
       content: label,

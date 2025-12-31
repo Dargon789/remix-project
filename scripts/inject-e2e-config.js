@@ -42,8 +42,7 @@ const configScript = `
 	<script>
 		window.__REMIX_COMPILER_URLS__ = {
 			binURL: '${binUrl}',
-			wasmURL: '${wasmUrl}',
-			npmURL: '${npmUrl}'
+			wasmURL: '${wasmUrl}'
 		};
 	</script>
 `;

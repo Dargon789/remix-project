@@ -167,6 +167,7 @@ export class ChartJsPlugin extends Plugin {
 ${description}
 ![Chart image](${chartUrl})`
       await this.call('fileManager', 'writeFile', mdFile, mdContent)
+      await this.call('doc-viewer' as any, 'viewDocs', [mdFile])
       return mdFile
     } catch (e) {
       this.call('terminal', 'log', {
@@ -189,12 +190,12 @@ ${description}
   async checkAvailability(url: string): Promise<void> {
     const INTERVAL_MS = 4000
     const TIMEOUT_MS = 60000
-    const controller = new AbortController()
     const startTime = Date.now()
 
     return new Promise((resolve, reject) => {
       const poll = async () => {
         try {
+          const controller = new AbortController()
           const timeoutId = setTimeout(() => controller.abort(), 5000)
           const res = await fetch(url, { method: 'HEAD', signal: controller.signal })
           clearTimeout(timeoutId)
@@ -222,9 +223,4 @@ ${description}
       poll()
     })
   }
-}
-
-const transformData = (content: any, dataTransformFn: string) => {
-  const transformFn = new Function('data', `return (${dataTransformFn})(data)`)
-  return transformFn(content)
 }

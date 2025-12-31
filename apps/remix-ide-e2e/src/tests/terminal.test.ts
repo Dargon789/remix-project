@@ -13,6 +13,7 @@ module.exports = {
   },
   'Should execution a simple console command #group1': function (browser: NightwatchBrowser) {
     browser
+      // Terminal is shown by init.ts for e2e tests
       .waitForElementVisible('*[data-id="terminalCli"]', 10000)
       .executeScriptInTerminal('console.log(1 + 1)')
       .pause(2000)

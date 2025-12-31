@@ -201,7 +201,8 @@ module.exports = composePlugins(withNx(), withReact(), (config) => {
   // set the define plugin to load the WALLET_CONNECT_PROJECT_ID
   config.plugins.push(
     new webpack.DefinePlugin({
-      WALLET_CONNECT_PROJECT_ID: JSON.stringify(process.env.WALLET_CONNECT_PROJECT_ID)
+      WALLET_CONNECT_PROJECT_ID: JSON.stringify(process.env.WALLET_CONNECT_PROJECT_ID),
+      'process.env.NX_ENDPOINTS_URL': JSON.stringify(process.env.NX_ENDPOINTS_URL)
     })
   )
 
@@ -243,7 +244,6 @@ module.exports = composePlugins(withNx(), withReact(), (config) => {
     ignored: /node_modules/
   }
 
-  console.log('config', process.env.NX_DESKTOP_FROM_DIST)
   return config;
 });
 

@@ -32,7 +32,7 @@ export const TreeViewItem = (props: TreeViewItemProps) => {
         ) : icon ? (
           <div className={`pe-2 ps-2 ${icon} caret caret_tv`}></div>
         ) : null}
-        <span className="w-100 ms-1 ps-2">{label}</span>
+        <span className="w-100 ms-1 ps-2" data-id={`treeViewLabelDiv${id}`}>{label}</span>
       </div>
       {isExpanded ? <div className="ps-3">
         {children}

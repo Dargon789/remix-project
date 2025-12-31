@@ -264,30 +264,6 @@ module.exports = {
       .clickLaunchIcon('solidity')
       .pause(2000)
       .click('[data-id="compilerContainerCompileBtn"]')
-      .clickLaunchIcon('filePanel')
-      .openFile('.deps/npm/@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol')
-      .isVisible({
-        selector: '*[data-id="treeViewDivtreeViewItem.deps/npm/@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol"]',
-        timeout: 120000,
-        suppressNotFoundErrors: true
-      })
-      .clickLaunchIcon('solidity')
-      .click('[data-id="compilerContainerCompileBtn"]')
-      .clickLaunchIcon('filePanel')
-      .isVisible({
-        selector: '*[data-id="treeViewDivtreeViewItem.deps/npm/@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol"]',
-        timeout: 120000,
-        suppressNotFoundErrors: true
-      })
-      .clickLaunchIcon('solidity')
-      .click('[data-id="compilerContainerCompileBtn"]')
-      .clickLaunchIcon('filePanel')
-      .waitForElementVisible({
-        selector: '*[data-id="treeViewDivtreeViewItem.deps/npm/@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol"]',
-        timeout: 120000,
-      })
-      .openFile('myTokenV1.sol')
-      .clickLaunchIcon('solidity')
       .waitForElementPresent('select[id="compiledContracts"] option[value=MyToken]', 60000)
       .clickLaunchIcon('udapp')
       .click('select.udapp_contractNames')

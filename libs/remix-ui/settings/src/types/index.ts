@@ -115,6 +115,7 @@ export interface SettingsState {
   'ai-privacy-policy': ConfigState,
   'mcp/servers/enable': ConfigState,
   'mcp-server-management': ConfigState,
+  'account-manager': ConfigState,
   'ollama-config': ConfigState,
   'ollama-endpoint': ConfigState,
   toaster: ConfigState

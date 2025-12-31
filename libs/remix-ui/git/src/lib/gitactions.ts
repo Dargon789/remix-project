@@ -658,6 +658,7 @@ export const loadGitHubUserFromToken = async () => {
         appDispatcher({ type: appActionTypes.setGitHubUser, payload: data.user })
         dispatch(setScopes(data.scopes))
         dispatch(setUserEmails(data.emails))
+
         sendToGitLog({
           type: 'success',
           message: `Github user loaded...`
