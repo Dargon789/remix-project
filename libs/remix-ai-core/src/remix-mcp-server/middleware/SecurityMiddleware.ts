@@ -1,20 +1,11 @@
-/**
- * Security Middleware for Remix MCP Server
- */
 
 import { Plugin } from '@remixproject/engine';
-import { IMCPToolCall, IMCPToolResult } from '../../types/mcp';
+import { IMCPToolCall } from '../../types/mcp';
 import { ToolExecutionContext } from '../types/mcpTools';
-
-export interface SecurityConfig {
-  maxRequestsPerMinute: number;
-  maxFileSize: number;
-  allowedFileTypes: string[];
-  blockedPaths: string[];
-  requirePermissions: boolean;
-  enableAuditLog: boolean;
-  maxExecutionTime: number;
-}
+import { RemixToolRegistry } from '../registry/RemixToolRegistry';
+import { MCPSecurityConfig } from '../types/mcpConfig';
+import { MCPConfigManager } from '../config/MCPConfigManager';
+import { BaseMiddleware } from './BaseMiddleware';
 
 export interface SecurityValidationResult {
   allowed: boolean;
@@ -33,27 +24,48 @@ export interface AuditLogEntry {
   riskLevel: 'low' | 'medium' | 'high';
 }
 
-/**
- * Security middleware for validating and securing MCP tool calls
- */
-export class SecurityMiddleware {
+export class SecurityMiddleware extends BaseMiddleware {
   private rateLimitTracker = new Map<string, { count: number; resetTime: number }>();
   private auditLog: AuditLogEntry[] = [];
-  private blockedIPs = new Set<string>();
+  private toolRegistry?: RemixToolRegistry;
+  private config: MCPSecurityConfig;
+  private rateLimitCleanupInterval?: NodeJS.Timeout;
 
-  constructor(private config: SecurityConfig) {}
+  constructor(toolRegistry?: RemixToolRegistry, configManager?: MCPConfigManager) {
+    super(configManager);
+    this.toolRegistry = toolRegistry;
 
-  /**
-   * Validate a tool call before execution
-   */
+    this.config = configManager.getSecurityConfig() as MCPSecurityConfig;
+
+    // Setup periodic cleanup of rate limit tracker (every 5 minutes)
+    this.rateLimitCleanupInterval = setInterval(() => {
+      this.cleanupRateLimitTracker();
+    }, 300000);
+  }
+
+  private getConfig(): MCPSecurityConfig {
+    if (this.configManager) {
+      return this.configManager.getSecurityConfig();
+    }
+    return this.config;
+  }
+
   async validateToolCall(
     call: IMCPToolCall,
     context: ToolExecutionContext,
     plugin: Plugin
   ): Promise<SecurityValidationResult> {
     const startTime = Date.now();
+    const config = this.getConfig();
 
     try {
+      // Check if tool is allowed (exclude/allow lists)
+      const toolAllowedResult = this.checkToolAllowed(call.name);
+      if (!toolAllowedResult.allowed) {
+        this.logAudit(call, context, 'blocked', toolAllowedResult.reason, startTime, 'high');
+        return toolAllowedResult;
+      }
+
       // Rate limiting check
       const rateLimitResult = this.checkRateLimit(context);
       if (!rateLimitResult.allowed) {
@@ -66,6 +78,13 @@ export class SecurityMiddleware {
       if (!permissionResult.allowed) {
         this.logAudit(call, context, 'blocked', permissionResult.reason, startTime, 'high');
         return permissionResult;
+      }
+
+      // Mainnet transaction validation (must be before other validations to block early)
+      const mainnetResult = await this.validateMainnetOperation(call, plugin);
+      if (!mainnetResult.allowed) {
+        this.logAudit(call, context, 'blocked', mainnetResult.reason, startTime, 'high');
+        return mainnetResult;
       }
 
       // Argument validation
@@ -102,56 +121,45 @@ export class SecurityMiddleware {
     }
   }
 
-  /**
-   * Wrap tool execution with security monitoring
-   */
-  async secureExecute<T>(
-    toolName: string,
-    context: ToolExecutionContext,
-    executor: () => Promise<T>
-  ): Promise<T> {
-    const startTime = Date.now();
-    const timeoutId = setTimeout(() => {
-      throw new Error(`Tool execution timeout: ${toolName} exceeded ${this.config.maxExecutionTime}ms`);
-    }, this.config.maxExecutionTime);
+  private checkToolAllowed(toolName: string): SecurityValidationResult {
+    const config = this.getConfig();
 
-    try {
-      const result = await executor();
-      clearTimeout(timeoutId);
-
-      this.logAudit(
-        { name: toolName, arguments: {} },
-        context,
-        'success',
-        'Execution completed',
-        startTime,
-        'low'
-      );
-
-      return result;
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      this.logAudit(
-        { name: toolName, arguments: {} },
-        context,
-        'error',
-        error.message,
-        startTime,
-        'high'
-      );
-
-      throw error;
+    // Use ConfigManager if available
+    if (this.configManager) {
+      const allowed = this.configManager.isToolAllowed(toolName);
+      if (!allowed) {
+        return {
+          allowed: false,
+          reason: `Tool '${toolName}' is not allowed by configuration`,
+          risk: 'high'
+        };
+      }
+      return { allowed: true, risk: 'low' };
     }
+
+    if (config.excludeTools && config.excludeTools.includes(toolName)) {
+      return {
+        allowed: false,
+        reason: `Tool '${toolName}' is excluded by security configuration`,
+        risk: 'high'
+      };
+    }
+
+    return { allowed: true, risk: 'low' };
   }
 
-  /**
-   * Check rate limiting for user/session
-   */
   private checkRateLimit(context: ToolExecutionContext): SecurityValidationResult {
+    const config = this.getConfig();
     const identifier = context.userId || context.sessionId || 'anonymous';
     const now = Date.now();
     const resetTime = Math.floor(now / 60000) * 60000 + 60000; // Next minute
+
+    // Check if rate limiting is disabled
+    if (config.rateLimit && !config.rateLimit.enabled) {
+      return { allowed: true, risk: 'low' };
+    }
+
+    const maxRequests = config.rateLimit?.requestsPerMinute || config.maxRequestsPerMinute;
 
     const userLimit = this.rateLimitTracker.get(identifier);
     if (!userLimit || userLimit.resetTime <= now) {
@@ -159,10 +167,10 @@ export class SecurityMiddleware {
       return { allowed: true, risk: 'low' };
     }
 
-    if (userLimit.count >= this.config.maxRequestsPerMinute) {
+    if (userLimit.count >= maxRequests) {
       return {
         allowed: false,
-        reason: `Rate limit exceeded: ${userLimit.count}/${this.config.maxRequestsPerMinute} requests per minute`,
+        reason: `Rate limit exceeded: ${userLimit.count}/${maxRequests} requests per minute`,
         risk: 'medium'
       };
     }
@@ -202,32 +210,30 @@ export class SecurityMiddleware {
 
   /**
    * Validate tool arguments for security issues
+   *
+   * IMPORTANT: For file operations (file_write, file_create), we treat 'content'
+   * arguments as code, not user input, to avoid false positives for legitimate
+   * code patterns like require(), eval(), etc.
    */
   private async validateArguments(call: IMCPToolCall, plugin: Plugin): Promise<SecurityValidationResult> {
     const args = call.arguments || {};
+    console.log('validateArguments', args)
 
-    // Check for potentially dangerous patterns
-    const dangerousPatterns = [
-      /eval\s*\(/i,
-      /function\s*\(/i,
-      /javascript:/i,
-      /<script/i,
-      /\$\{.*\}/,
-      /`.*`/,
-      /require\s*\(/i,
-      /import\s+.*from/i
-    ];
+    // File operation tools where 'content' is expected to be code
+    const fileOperationTools = ['file_write', 'file_create', 'file_update'];
+    const isFileOperation = fileOperationTools.includes(call.name);
 
     for (const [key, value] of Object.entries(args)) {
       if (typeof value === 'string') {
-        for (const pattern of dangerousPatterns) {
-          if (pattern.test(value)) {
-            return {
-              allowed: false,
-              reason: `Potentially dangerous content detected in argument ${key}: ${pattern}`,
-              risk: 'high'
-            };
-          }
+        const context = (isFileOperation && key === 'content') ? 'code' : 'input';
+
+        const dangerousPattern = this.findDangerousPattern(value, context);
+        if (dangerousPattern) {
+          return {
+            allowed: false,
+            reason: `Potentially dangerous content detected in argument ${key}: ${dangerousPattern}`,
+            risk: 'high'
+          };
         }
 
         // Check for extremely long strings that might cause DoS
@@ -244,20 +250,14 @@ export class SecurityMiddleware {
     return { allowed: true, risk: 'low' };
   }
 
-  /**
-   * Validate file operations for security
-   */
   private async validateFileOperations(call: IMCPToolCall, plugin: Plugin): Promise<SecurityValidationResult> {
     const args = call.arguments || {};
-
-    // File operation tools
     const fileOps = ['file_read', 'file_write', 'file_create', 'file_delete', 'file_move', 'file_copy'];
 
     if (!fileOps.includes(call.name)) {
       return { allowed: true, risk: 'low' };
     }
 
-    // Check file paths
     const pathArgs = ['path', 'from', 'to', 'sourceFile'];
     for (const pathArg of pathArgs) {
       if (args[pathArg]) {
@@ -298,6 +298,8 @@ export class SecurityMiddleware {
    * Validate file path for security issues
    */
   private validateFilePath(path: string): SecurityValidationResult {
+    const config = this.getConfig();
+
     // Check for path traversal attacks
     if (path.includes('..') || path.includes('~')) {
       return {
@@ -316,12 +318,43 @@ export class SecurityMiddleware {
       };
     }
 
+    // Use ConfigManager if available
+    if (this.configManager) {
+      const allowed = this.configManager.isPathAllowed(path);
+      if (!allowed) {
+        return {
+          allowed: false,
+          reason: 'Path not allowed by configuration',
+          risk: 'high'
+        };
+      }
+      return { allowed: true, risk: 'low' };
+    }
+
     // Check blocked paths
-    for (const blockedPath of this.config.blockedPaths) {
+    for (const blockedPath of config.blockedPaths) {
       if (path.includes(blockedPath)) {
         return {
           allowed: false,
           reason: `Path contains blocked segment: ${blockedPath}`,
+          risk: 'high'
+        };
+      }
+    }
+
+    // Check allowed paths (if set, only allow paths matching patterns)
+    if (config.allowedPaths && config.allowedPaths.length > 0) {
+      let pathAllowed = false;
+      for (const allowedPattern of config.allowedPaths) {
+        if (path.includes(allowedPattern) || this.matchPattern(path, allowedPattern)) {
+          pathAllowed = true;
+          break;
+        }
+      }
+      if (!pathAllowed) {
+        return {
+          allowed: false,
+          reason: 'Path not in allowed paths list',
           risk: 'high'
         };
       }
@@ -342,39 +375,38 @@ export class SecurityMiddleware {
     return { allowed: true, risk: 'low' };
   }
 
+  /**
+   * Validate input sanitization (check for injection patterns)
+   *
+   * IMPORTANT: This is more lenient for file content in file operations
+   */
   private validateInputSanitization(call: IMCPToolCall): SecurityValidationResult {
     const args = call.arguments || {};
 
-    // Check for SQL injection patterns (even though we're not using SQL)
-    const sqlPatterns = [
-      /union\s+select/i,
-      /drop\s+table/i,
-      /delete\s+from/i,
-      /insert\s+into/i,
-      /update\s+.*set/i
-    ];
+    // File operation tools where 'content' is expected to be code
+    const fileOperationTools = ['file_write', 'file_create', 'file_update'];
+    const isFileOperation = fileOperationTools.includes(call.name);
 
-    // Check for command injection patterns
     const cmdPatterns = [
-      /;.*rm\s/i,
-      /&&.*rm\s/i,
-      /\|.*rm\s/i,
-      /`.*`/,
-      /\$\(.*\)/,
-      />\s*\/dev\//i,
-      /curl\s.*\|/i,
-      /wget\s.*\|/i
+      /;\s*rm\s+-rf\s+\//i, // Severe: rm -rf /
+      /&&\s*rm\s+-rf\s+\//i, // Severe: chained rm -rf /
+      /\|\s*rm\s+-rf\s+\//i, // Severe: piped rm -rf /
+      />\s*\/dev\//i, // Redirect to devices
+      /curl\s.*\|\s*sh/i, // Piped curl to shell
+      /wget\s.*\|\s*sh/i, // Piped wget to shell
     ];
-
-    const allPatterns = [...sqlPatterns, ...cmdPatterns];
 
     for (const [key, value] of Object.entries(args)) {
       if (typeof value === 'string') {
-        for (const pattern of allPatterns) {
+        if (isFileOperation && key === 'content' && this.isLikelyCodeContent(value)) {
+          continue;
+        }
+
+        for (const pattern of cmdPatterns) {
           if (pattern.test(value)) {
             return {
               allowed: false,
-              reason: `Potentially malicious content detected in ${key}`,
+              reason: `Potentially malicious content detected in ${key}: ${pattern}`,
               risk: 'high'
             };
           }
@@ -385,27 +417,124 @@ export class SecurityMiddleware {
     return { allowed: true, risk: 'low' };
   }
 
-  /**
-   * Get required permissions for a tool (placeholder)
-   */
-  private getRequiredPermissions(toolName: string): string[] {
-    // This would typically come from the tool registry
-    // TODO update the tools
-    const toolPermissions: Record<string, string[]> = {
-      'file_write': ['file:write'],
-      'file_delete': ['file:delete'],
-      'deploy_contract': ['deploy:contract'],
-      'call_contract': ['contract:interact'],
-      'debug_start': ['debug:start'],
-      'solidity_compile': ['compile:solidity']
-    };
+  private async validateMainnetOperation(call: IMCPToolCall, plugin: Plugin): Promise<SecurityValidationResult> {
+    const criticalTools = ['deploy_contract', 'send_transaction', 'call_contract'];
+    if (!criticalTools.includes(call.name)) {
+      return { allowed: true, risk: 'low' };
+    }
 
-    return toolPermissions[toolName] || [];
+    try {
+      const isMainnet = await this.isMainnetNetwork(plugin);
+      if (!isMainnet) {
+        return { allowed: true, risk: 'low' };
+      }
+
+      const args = call.arguments || {};
+      const hasValue = args.value && args.value !== '0';
+
+      // Build confirmation message based on operation type
+      let operationType = '';
+      let warningMessage = '';
+
+      if (call.name === 'deploy_contract') {
+        operationType = 'Contract Deployment';
+        warningMessage = `You are about to deploy the contract "${args.contractName}" on Ethereum Mainnet.`;
+        if (hasValue) {
+          warningMessage += `\n\nThis deployment will send ${this.formatEther(args.value)} ETH to the contract.`;
+        }
+      } else if (call.name === 'send_transaction') {
+        operationType = 'Transaction';
+        if (hasValue) {
+          operationType = 'Value Transaction';
+          warningMessage = `You are about to send ${this.formatEther(args.value)} ETH to ${args.to} on Ethereum Mainnet.`;
+        } else {
+          warningMessage = `You are about to send a transaction to ${args.to} on Ethereum Mainnet.`;
+        }
+      } else if (call.name === 'call_contract') {
+        operationType = 'Contract Interaction';
+        warningMessage = `You are about to call the method "${args.methodName}" on contract ${args.address} on Ethereum Mainnet.`;
+        if (hasValue) {
+          warningMessage += `\n\nThis call will send ${this.formatEther(args.value)} ETH to the contract.`;
+        }
+      }
+
+      warningMessage += '\n\n⚠️ This operation will cost real ETH. Are you sure you want to proceed?';
+
+      // Show confirmation modal
+      const confirmed = await this.showConfirmationModal(plugin, operationType, warningMessage);
+
+      if (!confirmed) {
+        return {
+          allowed: false,
+          reason: 'Mainnet operation cancelled by user',
+          risk: 'high'
+        };
+      }
+
+      return { allowed: true, risk: 'high' };
+    } catch (error) {
+      console.error('[SecurityMiddleware] Error validating mainnet operation:', error);
+      // If we can't determine network, allow the operation but log it
+      return { allowed: true, risk: 'medium' };
+    }
   }
 
-  /**
-   * Log audit entry
-   */
+  private async isMainnetNetwork(plugin: Plugin): Promise<boolean> {
+    try {
+      const network = await plugin.call('network', 'detectNetwork');
+
+      if (network && (network.id === '1' || network.id === 1 || network.name === 'main' || network.name === 'mainnet')) {
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('[SecurityMiddleware] Error detecting network:', error);
+      return false;
+    }
+  }
+
+  private async showConfirmationModal(plugin: Plugin, title: string, message: string): Promise<boolean> {
+    try {
+      const result = await plugin.call('notification', 'modal', {
+        id: 'security_mainnet_confirmation',
+        title: `⚠️ Mainnet ${title}`,
+        message: message,
+        okLabel: 'Proceed',
+        cancelLabel: 'Cancel'
+      });
+
+      return result;
+    } catch (error) {
+      console.log('[SecurityMiddleware] Error showing confirmation modal:', error);
+      return false;
+    }
+  }
+
+  private formatEther(weiValue: string): string {
+    try {
+      // Simple conversion from wei to ETH (divide by 10^18)
+      const wei = BigInt(weiValue);
+      const eth = Number(wei) / 1e18;
+      return `${eth.toFixed(6)} ETH`;
+    } catch (error) {
+      return `${weiValue} wei`;
+    }
+  }
+
+  private getRequiredPermissions(toolName: string): string[] {
+    if (this.toolRegistry) {
+      const toolDefinition = this.toolRegistry.get(toolName);
+      if (toolDefinition && toolDefinition.permissions && toolDefinition.permissions.length > 0) {
+        console.log(`[SecurityMiddleware] Tool '${toolName}' requires permissions:`, toolDefinition.permissions);
+        return toolDefinition.permissions;
+      }
+    }
+
+    console.log(`[SecurityMiddleware] Tool '${toolName}' has no specific permissions defined, granting all permissions (*)`);
+    return ['*'];
+  }
+
   private logAudit(
     call: IMCPToolCall,
     context: ToolExecutionContext,
@@ -429,12 +558,10 @@ export class SecurityMiddleware {
 
     this.auditLog.push(entry);
 
-    // Keep only last 1000 entries
     if (this.auditLog.length > 1000) {
       this.auditLog.splice(0, this.auditLog.length - 1000);
     }
 
-    // Log high-risk activities
     if (riskLevel === 'high') {
       console.warn('High-risk security event:', entry);
     }
@@ -444,29 +571,31 @@ export class SecurityMiddleware {
     return this.auditLog.slice(-limit);
   }
 
-  clearAuditLog(): void {
+  private cleanupRateLimitTracker(): void {
+    const now = Date.now();
+    const entriesToDelete: string[] = [];
+
+    for (const [identifier, limit] of this.rateLimitTracker.entries()) {
+      if (limit.resetTime <= now) {
+        entriesToDelete.push(identifier);
+      }
+    }
+
+    for (const identifier of entriesToDelete) {
+      this.rateLimitTracker.delete(identifier);
+    }
+
+    if (entriesToDelete.length > 0) {
+      console.log(`[SecurityMiddleware] Cleaned up ${entriesToDelete.length} expired rate limit entries`);
+    }
+  }
+
+  destroy(): void {
+    if (this.rateLimitCleanupInterval) {
+      clearInterval(this.rateLimitCleanupInterval);
+      this.rateLimitCleanupInterval = undefined;
+    }
+    this.rateLimitTracker.clear();
     this.auditLog = [];
   }
-
-  blockIP(ip: string): void {
-    this.blockedIPs.add(ip);
-  }
-
-  unblockIP(ip: string): void {
-    this.blockedIPs.delete(ip);
-  }
-
-  isIPBlocked(ip: string): boolean {
-    return this.blockedIPs.has(ip);
-  }
 }
-
-export const defaultSecurityConfig: SecurityConfig = {
-  maxRequestsPerMinute: 60,
-  maxFileSize: 1024 * 1024 * 2, // 2MB
-  allowedFileTypes: ['sol', 'js', 'ts', 'json', 'md', 'txt', 'toml', 'yaml', 'yml'],
-  blockedPaths: ['.env', '.git', 'node_modules', '.ssh', 'private', 'secret'],
-  requirePermissions: true,
-  enableAuditLog: true,
-  maxExecutionTime: 30000 // 30 seconds
-};

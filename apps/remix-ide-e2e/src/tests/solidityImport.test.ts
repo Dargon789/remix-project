@@ -90,12 +90,6 @@ module.exports = {
 
   'Test NPM Import (with unpkg.com) #group3': function (browser: NightwatchBrowser) {
     browser
-      .setSolidityCompilerVersion('soljson-v0.8.7+commit.e28d00a7.js')
-      .waitForElementPresent({
-        selector: `//*[@data-id='compilerloaded' and @data-version='soljson-v0.8.7+commit.e28d00a7.js']`,
-        locateStrategy: 'xpath',
-        timeout: 120000
-      })
       .clickLaunchIcon('filePanel')
       .click('li[data-id="treeViewLitreeViewItemREADME.txt"')
       .addFile('Untitled9.sol', sources[8]['Untitled9.sol'])
@@ -107,6 +101,7 @@ module.exports = {
         suppressNotFoundErrors: true
       })
       .clickLaunchIcon('solidity')
+      .setSolidityCompilerVersion('soljson-v0.8.20+commit.a1b79de6.js')
       .click('[data-id="compilerContainerCompileBtn"]')
       .clickLaunchIcon('filePanel')
       .expandAllFolders()

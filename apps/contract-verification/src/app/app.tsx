@@ -21,10 +21,9 @@ const App = () => {
   const [themeType, setThemeType] = useState<ThemeType>('dark')
   const [settings, setSettings] = useLocalStorage<ContractVerificationSettings>('contract-verification:settings', { chains: {} })
   const [submittedContracts, setSubmittedContracts] = useLocalStorage<SubmittedContracts>('contract-verification:submitted-contracts', {})
-  const [chains, setChains] = useState<Chain[]>([]) // State to hold the chains data
+  const [chains, setChains] = useState<Chain[]>([]) 
   const [compilationOutput, setCompilationOutput] = useState<{ [key: string]: CompilerAbstract } | undefined>()
 
-  // Form values:
   const [selectedChain, setSelectedChain] = useState<Chain | undefined>()
   const [contractAddress, setContractAddress] = useState('')
   const [contractAddressError, setContractAddressError] = useState('')
@@ -46,34 +45,26 @@ const App = () => {
       plugin.call('locale', 'currentLocale').then((locale: any) => {
         setLocale(locale)
       })
-
       // @ts-ignore
       plugin.on('locale', 'localeChanged', (locale: any) => {
         setLocale(locale)
       })
-      
-      // Fetch compiler artefacts initially
       plugin.call('compilerArtefacts' as any, 'getAllCompilerAbstracts').then((obj: any) => {
         setCompilationOutput(obj)
       })
-
-      // Subscribe to compilations
       plugin.on('compilerArtefacts' as any, 'compilationSaved', (compilerAbstracts: { [key: string]: CompilerAbstract }) => {
         setCompilationOutput((prev) => ({ ...(prev || {}), ...compilerAbstracts }))
       })
     }
 
-    // Check if plugin is already activated
     if (plugin.isActivated()) {
       initializePlugin()
     } else {
-      // Listen for activation event if not yet activated
       plugin.internalEvents.once('verification_activated', () => {
         initializePlugin()
       })
     }
 
-    // Fetch chains.json and update state
     fetch('https://chainid.network/chains.json')
       .then((response) => response.json())
       .then((data) => setChains(data))
@@ -87,7 +78,6 @@ const App = () => {
     }
     plugin.internalEvents.on('submissionUpdated', submissionUpdatedListener)
 
-    // Clean up on unmount
     return () => {
       plugin.off('compilerArtefacts' as any, 'compilationSaved')
       plugin.internalEvents.removeListener('submissionUpdated', submissionUpdatedListener)
@@ -98,7 +88,6 @@ const App = () => {
   useEffect(() => {
     const getPendingReceipts = (submissions: SubmittedContracts) => {
       const pendingReceipts: VerificationReceipt[] = []
-      // Check statuses of receipts
       for (const submission of Object.values(submissions)) {
         for (const receipt of submission.receipts) {
           if (receipt.status === 'pending') {
@@ -126,17 +115,46 @@ const App = () => {
         const changedSubmittedContracts = { ...submittedContracts }
 
         for (const receipt of pendingReceipts) {
-          await new Promise((resolve) => setTimeout(resolve, 500)) // avoid api rate limit exceeding.
+          await new Promise((resolve) => setTimeout(resolve, 500)) 
 
-          const { verifierInfo, receiptId } = receipt
+          const { verifierInfo, receiptId, contractId } = receipt
+          const contract = changedSubmittedContracts[contractId]
+
+          if (receipt.failedChecks >= 10) {
+            receipt.failedChecks = 0
+          }
+
           if (receiptId) {
-            const contract = changedSubmittedContracts[receipt.contractId]
             const chainSettings = mergeChainSettingsWithDefaults(contract.chainId, settings)
-            const verifierSettings = chainSettings.verifiers[verifierInfo.name]
+            let verifierSettings = { ...chainSettings.verifiers[verifierInfo.name] }
 
-            // In case the user overwrites the API later, prefer the one stored in localStorage
-            const verifier = getVerifier(verifierInfo.name, { ...verifierSettings, apiUrl: verifierInfo.apiUrl })
+            if (verifierInfo.name === 'Etherscan' && !verifierSettings.apiKey) {
+              try {
+                const globalApiKey = await plugin.call('config' as any, 'getAppParameter', 'etherscan-access-token')
+                if (globalApiKey) {
+                  verifierSettings = { ...verifierSettings, apiKey: globalApiKey }
+                }
+              } catch (e) { }
+            }
+
+            if (verifierInfo.name === 'Etherscan' && !verifierSettings.apiKey) {
+              receipt.status = 'failed'
+              receipt.message = 'API key not configured'
+              continue
+            }
+
+            let verifier
+            try {
+              verifier = getVerifier(verifierInfo.name, { ...verifierSettings, apiUrl: verifierInfo.apiUrl })
+            } catch (e) {
+              receipt.status = 'failed'
+              receipt.message = e.message || 'Failed to initialize verifier'
+              continue
+            }
+
             if (!verifier.checkVerificationStatus) {
+              receipt.status = 'failed'
+              receipt.message = 'Status check not supported for this verifier'
               continue
             }
 
@@ -147,18 +165,75 @@ const App = () => {
               } else {
                 response = await verifier.checkVerificationStatus(receiptId, contract.chainId)
               }
+
+              if (response.status === 'pending') {
+                 receipt.failedChecks++
+              }
+
+              if (receipt.failedChecks >= 10) {
+                 response.status = 'failed'
+                 response.message = 'Verification timed out (30s limit).'
+              }
+
               const { status, message, lookupUrl } = response
+              const prevStatus = receipt.status
+              
               receipt.status = status
               receipt.message = message
               if (lookupUrl) {
                 receipt.lookupUrl = lookupUrl
               }
+
+              if (prevStatus === 'pending' && status !== 'pending') {
+                const successStatuses = ['verified', 'partially verified', 'already verified', 'exactly verified', 'fully verified']
+                
+                if (successStatuses.includes(status)) {
+                  if (receipt.lookupUrl) {
+                    const htmlContent = `<span class="text-success">[${verifierInfo.name}] Verification Successful!</span> &nbsp;<a href="${receipt.lookupUrl}" target="_blank">View Code</a>`
+                    await plugin.call('terminal' as any, 'logHtml', { value: htmlContent })
+                  } else {
+                    const htmlContent = `<span class="text-success">[${verifierInfo.name}] Verification Successful!</span>`
+                    await plugin.call('terminal' as any, 'logHtml', { value: htmlContent })
+                  }
+                } else if (status === 'failed') {
+                    if (message === 'Verification timed out (30s limit).') {
+                        plugin.call('terminal', 'log', { type: 'warn', value: `[${verifierInfo.name}] Polling timed out. Please open the "Contract Verification" plugin to check details.` })
+                    } else {
+                        plugin.call('terminal', 'log', { type: 'warn', value: `[${verifierInfo.name}] Verification Failed: ${message || 'Unknown reason'}` })
+                        plugin.call('terminal', 'log', { type: 'warn', value: `Please open the "Contract Verification" plugin to retry.` })
+                    }
+                  
+                    if (verifierInfo.name === 'Etherscan' && !chainSettings.verifiers['Etherscan']?.apiKey) {
+                        plugin.call('terminal', 'log', { type: 'info', value: `Note: To retry Etherscan verification in the plugin, you must save your API key in the plugin settings.` })
+                    }
+                }
+              }
             } catch (e) {
               receipt.failedChecks++
-              // Only retry 5 times
-              if (receipt.failedChecks >= 5) {
+              
+              let errorMsg = e.message || 'Unknown error'
+              
+              if (errorMsg.trim().startsWith('<') || errorMsg.includes('<!DOCTYPE html>')) {
+                 errorMsg = 'Explorer API Error (500)';
+              }
+              if (errorMsg.includes('404')) {
+                 errorMsg = 'Pending registration (404)';
+              }
+
+              if (receipt.failedChecks >= 10) {
                 receipt.status = 'failed'
-                receipt.message = e.message
+                receipt.message = errorMsg
+                
+                if (errorMsg.includes('404')) {
+                     plugin.call('terminal', 'log', { type: 'warn', value: `[${verifierInfo.name}] Polling timed out (404). Please open the "Contract Verification" plugin to check details.` })
+                } else {
+                     plugin.call('terminal', 'log', { type: 'warn', value: `[${verifierInfo.name}] Verification Failed after ${receipt.failedChecks} attempts: ${errorMsg}` })
+                     plugin.call('terminal', 'log', { type: 'warn', value: `Please open the "Contract Verification" plugin to retry.` })
+                }
+                
+                if (verifierInfo.name === 'Etherscan' && !chainSettings.verifiers['Etherscan']?.apiKey) {
+                    plugin.call('terminal', 'log', { type: 'info', value: `Note: To retry Etherscan verification in the plugin, you must save your API key in the plugin settings.` })
+                }
               }
             }
           }

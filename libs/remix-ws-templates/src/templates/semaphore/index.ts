@@ -1,4 +1,4 @@
-export default async () => {
+export default async (opts, plugin) => {
   return {
     // @ts-ignore
     'circuits/semaphore.circom': (await import('raw-loader!./circuits/semaphore.circom')).default,

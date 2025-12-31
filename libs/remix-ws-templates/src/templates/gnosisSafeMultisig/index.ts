@@ -1,4 +1,4 @@
-export default async () => {
+export default async (opts, plugin) => {
   return {
     // @ts-ignore
     'contracts/MultisigWallet.sol': (await import('raw-loader!./contracts/MultisigWallet.sol')).default,

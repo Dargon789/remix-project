@@ -66,9 +66,16 @@ const resolvedUrls: EndpointUrls = prefix
   ) as EndpointUrls
   : defaultUrls;
 
-resolvedUrls.solidityScanWebSocket = resolvedUrls.solidityScan.replace(
-  'http://',
-  'ws://'
-);
+if (resolvedUrls.solidityScan.startsWith('https://')) {
+  resolvedUrls.solidityScanWebSocket = resolvedUrls.solidityScan.replace(
+    'https://',
+    'wss://'
+  );
+} else if (resolvedUrls.solidityScan.startsWith('http://')) {
+  resolvedUrls.solidityScanWebSocket = resolvedUrls.solidityScan.replace(
+    'http://',
+    'ws://'
+  );
+}
 
 export const endpointUrls = resolvedUrls;

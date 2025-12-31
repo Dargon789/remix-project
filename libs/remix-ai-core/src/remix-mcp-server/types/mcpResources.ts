@@ -31,7 +31,8 @@ export enum ResourceCategory {
   DOCUMENTATION = 'documentation',
   TEMPLATES = 'templates',
   CONFIGURATION = 'configuration',
-  TRANSACTION_HISTORY = 'transaction_history'
+  TRANSACTION_HISTORY = 'transaction_history',
+  ANALYSIS = 'analysis'
 }
 
 /**

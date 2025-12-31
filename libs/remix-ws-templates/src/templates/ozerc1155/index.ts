@@ -1,7 +1,9 @@
 import { erc1155 } from '@openzeppelin/wizard';
 
-export default async (opts: any, contractContent?: string, contractName: string = 'MyToken') => {
+export default async (opts: any, plugin, overrides) => {
 
+  const contractName = (overrides && overrides.contractName) || 'MyToken'
+  const contractContent = overrides && overrides.contractContent
   if (opts) {
     erc1155.defaults.mintable = opts.mintable
     erc1155.defaults.burnable = opts.burnable
@@ -9,7 +11,7 @@ export default async (opts: any, contractContent?: string, contractName: string 
   }
 
   const filesObj = {
-    [`contracts/${contractName}.sol`]: contractContent ? contractContent : erc1155.print({ ...erc1155.defaults, upgradeable: opts && opts.upgradeable ? opts.upgradeable : false }),
+    [`contracts/${contractName || 'MyToken'}.sol`]: contractContent ? contractContent : erc1155.print({ ...erc1155.defaults, upgradeable: opts && opts.upgradeable ? opts.upgradeable : false }),
     // @ts-ignore
     'scripts/deploy_with_ethers.ts': (await import('!!raw-loader!./scripts/deploy_with_ethers.ts')).default,
     // @ts-ignore

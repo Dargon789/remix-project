@@ -1,6 +1,10 @@
 /* eslint-disable @nrwl/nx/enforce-module-boundaries */
+import isElectron from 'is-electron'
 import React, { useContext, useState, useRef, useEffect } from 'react'
 import { TemplateExplorerContext } from '../../context/template-explorer-context'
+import { useIntl } from 'react-intl'
+import { useCloneRepositoryModal } from 'libs/remix-ui/top-bar/src/components/CloneRepositoryModal'
+import { platformContext } from 'libs/remix-ui/app/src/lib/remix-app/context/context'
 import { ContractWizardAction, TemplateExplorerWizardAction } from '../../types/template-explorer-types'
 import { createWorkspace, switchToWorkspace, uploadFile, uploadFolder, uploadFolderExcludingRootFolder } from 'libs/remix-ui/workspace/src/lib/actions/workspace'
 import { getErc20ContractCode } from '../utils/contractWizardUtils'
@@ -9,14 +13,24 @@ import { useOnClickOutside } from 'libs/remix-ui/remix-ai-assistant/src/componen
 import { createNewFile } from 'libs/remix-ui/workspace/src/lib/actions'
 
 export function TopCards() {
+  const intl = useIntl()
   const { dispatch, facade, templateCategoryStrategy, plugin, theme, generateUniqueWorkspaceName, state, trackMatomoEvent } = useContext(TemplateExplorerContext)
+  const platform = useContext(platformContext)
   const enableDirUpload = { directory: '', webkitdirectory: '' }
   const [importFiles, setImportFiles] = useState(false)
   const [importOptionsPosition, setImportOptionsPosition] = useState({ top: 0, left: 0 })
   const importCardRef = useRef<HTMLDivElement>(null)
   const importOptionRef = useRef(null)
   const importFileInputRef = useRef(null)
+  const importFolderInputRef = useRef<HTMLInputElement>(null)
   useOnClickOutside([importCardRef, importOptionRef], () => setImportFiles(false))
+
+  // Use the clone repository modal hook
+  const { showCloneModal } = useCloneRepositoryModal({
+    plugin,
+    intl,
+    platform
+  });
 
   useEffect(() => {
     if (importFiles && importCardRef.current) {
@@ -57,26 +71,13 @@ export function TopCards() {
         data-id="importOptionsMenu"
       >
         <li
-          className="d-flex flex-row align-items-center import-option-item "
-          onClick={() => {
-            if (state.manageCategory === 'Template') {
-              dispatch({ type: TemplateExplorerWizardAction.SET_MANAGE_CATEGORY, payload: 'Files' })
-            }
-            dispatch({ type: TemplateExplorerWizardAction.IMPORT_FILES, payload: 'importFiles' })
-            dispatch({ type: TemplateExplorerWizardAction.SET_WIZARD_STEP, payload: 'importFiles' })
-            trackMatomoEvent({ category: MatomoCategories.TEMPLATE_EXPLORER_MODAL, action: 'importFiles', isClick: true })
-          }}
-          data-id="importOptionsMenuIPFS"
-        >
-          <i className="me-2 far fa-cube"></i><span className="fw-light">Import from IPFS</span></li>
-        <li
           className="d-flex flex-row align-items-center import-option-item"
           onClick={() => {
             importFileInputRef.current?.click()
           }}
           data-id="importOptionsMenuLocalFileSystem"
         >
-          <i className="me-2 far fa-upload"></i>
+          <i className="me-2 fa-solid fa-upload"></i>
           <input
             ref={importFileInputRef}
             type="file"
@@ -92,7 +93,48 @@ export function TopCards() {
               await plugin.call('notification', 'toast', 'Files imported successfully')
             }}
           />
-          <span className="fw-light">Import from local file system</span>
+          <span className="fw-light">Upload files</span>
+        </li>
+        <li
+          className="d-flex flex-row align-items-center import-option-item"
+          onClick={() => {
+            importFolderInputRef.current?.click()
+          }}
+          data-id="importOptionsMenuLocalFileSystem"
+        >
+          <i className="me-2 fa-solid fa-folder-upload"></i>
+          <input
+            ref={importFolderInputRef}
+            type="file"
+            id="importFoldersInput"
+            multiple
+            {...enableDirUpload}
+            className="d-none"
+            onChange={async (e) => {
+              e.stopPropagation()
+              if (e.target.files.length === 0 || !e.target.files) return
+              await uploadFolder(e.target, '/')
+              setImportFiles(false)
+              trackMatomoEvent({ category: MatomoCategories.TEMPLATE_EXPLORER_MODAL, action: 'uploadFolder', isClick: true })
+              facade.closeWizard()
+              await plugin.call('notification', 'toast', 'Folders imported successfully')
+            }}
+          />
+          <span className="fw-light">Upload folders</span>
+        </li>
+        <li
+          className="d-flex flex-row align-items-center import-option-item "
+          onClick={() => {
+            if (state.manageCategory === 'Template') {
+              dispatch({ type: TemplateExplorerWizardAction.SET_MANAGE_CATEGORY, payload: 'Files' })
+            }
+            dispatch({ type: TemplateExplorerWizardAction.IMPORT_FILES, payload: 'importFiles' })
+            dispatch({ type: TemplateExplorerWizardAction.SET_WIZARD_STEP, payload: 'importFiles' })
+            trackMatomoEvent({ category: MatomoCategories.TEMPLATE_EXPLORER_MODAL, action: 'importFiles', isClick: true })
+          }}
+          data-id="importOptionsMenuIPFS"
+        >
+          <i className="me-2 far fa-cube"></i><span className="fw-light">Import from IPFS</span>
         </li>
         <li
           className="d-flex flex-row align-items-center import-option-item"
@@ -106,7 +148,7 @@ export function TopCards() {
           }}
           data-id="importOptionsMenuHTTPS"
         >
-          <i className="me-2 far fa-upload"></i><span className="fw-light">Import from https</span></li>
+          <i className="me-2 fa-solid fa-link"></i><span className="fw-light">Import from HTTPS</span></li>
       </ul>
     )
   }
@@ -241,7 +283,7 @@ export function TopCards() {
             </span>
           </div>
         </div>
-        <div className="col-6">
+        {(!isElectron() || state.manageCategory !== 'Template') && <div className="col-6">
           <div
             ref={importCardRef}
             data-id="import-project-topcard"
@@ -307,8 +349,38 @@ export function TopCards() {
               <p className="mb-0 fw-light text-wrap">{state.manageCategory === 'Template' ? 'Import an existing project' : 'Import existing files'}</p>
             </span>
           </div>
-        </div>
+        </div>}
         {importFiles && <ImportOptions />}
+        {state.manageCategory === 'Template' && <div className="col-6">
+          <div
+            data-id="create-git-clone"
+            className={`explora-topcard d-flex flex-row align-items-center bg-light p-3 p-md-4 shadow-sm border-0 h-100 ${theme?.name === 'Dark' ? 'text-white-dimmed' : 'text-dark'}`}
+            onClick={async () => {
+              facade.closeWizard()
+              showCloneModal()
+              trackMatomoEvent({ category: MatomoCategories.TEMPLATE_EXPLORER_MODAL, action: 'topCardGitClone', isClick: true })
+            }}
+            style={{
+              borderRadius: '10px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'
+              e.currentTarget.style.transform = 'translateY(-2px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
+          >
+            <span className="d-flex flex-shrink-0">
+              <i className={`fa-2x fab fa-github`}></i>
+            </span>
+            <span className="d-flex flex-column flex-grow-1 ms-2 ms-md-3">
+              <p className="mb-0 fw-semibold">Git Clone</p>
+              <p className="mb-0 fw-light text-wrap">Clone a git repository</p>
+            </span>
+          </div>
+        </div>}
       </div>
     </div>
   )

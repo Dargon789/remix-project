@@ -46,7 +46,6 @@ import { getUncommittedFiles } from '../utils/gitStatusFilter'
 import { AppModal, ModalTypes } from '@remix-ui/app'
 
 import { gitUIPanels } from '@remix-ui/git'
-import * as templates from '@remix-project/remix-ws-templates'
 import { Plugin } from "@remixproject/engine";
 import { CustomRemixApi, branch, cloneInputType } from '@remix-api'
 import { scriptTemplates } from './scriptTemplates'
@@ -158,6 +157,16 @@ export const createWorkspace = async (
     dispatch(createWorkspaceSuccess({ name: workspaceName, isGitRepo }))
     await plugin.setWorkspace({ name: workspaceName, isLocalhost: false })
     await plugin.workspaceCreated(workspaceName)
+
+    // Show left side panel if it's hidden after successful workspace creation
+    try {
+      const isHidden = await plugin.call('sidePanel', 'isPanelHidden')
+      if (isHidden) {
+        await plugin.call('sidePanel', 'togglePanel')
+      }
+    } catch (e) {
+      console.log('Could not check/update side panel visibility:', e)
+    }
 
     if (isGitRepo && createCommit) {
       const name = await plugin.call('settings', 'get', 'settings/github-user-name')
@@ -458,9 +467,8 @@ export const loadWorkspacePreset = async (template: WorkspaceTemplate = 'remixDe
       // @ts-ignore
       let files = {}
       if (template === 'ozerc20' || template === 'ozerc721' || template === 'ozerc1155') {
-        files = await templateWithContent[template](opts, contractContent, contractName)
-      }
-      else {
+        files = await templateWithContent[template](opts, plugin, { contractContent, contractName })
+      } else {
         files = await templateWithContent[template](opts, plugin)
       }
       for (const file in files) {

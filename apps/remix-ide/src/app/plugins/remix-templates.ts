@@ -23,9 +23,7 @@ export class TemplatesPlugin extends Plugin {
       ...opts || {},
       isElectron: true,
     }
-    // @ts-ignore
-    const files = await templateWithContent[template](opts, this)
-    return files
+    return await templateWithContent[template](opts, this)
   }
 
   async getTemplateReadMeFile(templateName: string) {

@@ -179,67 +179,40 @@ export class CompileTabLogic {
     } else return false
   }
 
-  runCompiler (externalCompType) {
+  async runCompiler (externalCompType: string, path?: string) {
+    // externalCompType: 'remix' | 'hardhat' | 'truffle' | 'foundry'
     try {
+      this.api.saveCurrentFile()
       if (this.api.getFileManagerMode() === 'localhost' || this.api.isDesktop()) {
         if (externalCompType === 'hardhat') {
-          const { currentVersion, optimize, runs } = this.compiler.state
-          if (currentVersion) {
-            const fileContent = `module.exports = {
-              solidity: '${currentVersion.substring(0, currentVersion.indexOf('+commit'))}',
-              settings: {
-                optimizer: {
-                  enabled: ${optimize},
-                  runs: ${runs}
-                }
-              }
-            }
-            `
-            const configFilePath = 'remix-compiler.config.js'
-            this.api.writeFile(configFilePath, fileContent)
-            if (window._matomoManagerInstance) {
-              window._matomoManagerInstance.trackEvent('compiler', 'runCompile', 'compileWithHardhat')
-            }
-            this.api.compileWithHardhat(configFilePath).then((result) => {
-              this.api.logToTerminal({ type: 'log', value: result })
-            }).catch((error) => {
-              this.api.logToTerminal({ type: 'error', value: error })
-            })
+          if (window._matomoManagerInstance) {
+            window._matomoManagerInstance.trackEvent('compiler', 'runCompile', 'compileWithHardhat')
           }
+          this.api.compileWithHardhat().then((result) => {
+          }).catch((error) => {
+            this.api.logToTerminal({ type: 'error', value: error })
+          })
         } else if (externalCompType === 'truffle') {
-          const { currentVersion, optimize, runs, evmVersion } = this.compiler.state
-          if (currentVersion) {
-            const fileContent = `module.exports = {
-              compilers: {
-                solc: {
-                  version: '${currentVersion.substring(0, currentVersion.indexOf('+commit'))}',
-                  settings: {
-                    optimizer: {
-                      enabled: ${optimize},
-                      runs: ${runs},
-                    },
-                    evmVersion: ${evmVersion}
-                  }
-                }
-              }
-            }`
-            const configFilePath = 'remix-compiler.config.js'
-            this.api.writeFile(configFilePath, fileContent)
-            if (window._matomoManagerInstance) {
-              window._matomoManagerInstance.trackEvent('compiler', 'runCompile', 'compileWithTruffle')
-            }
-            this.api.compileWithTruffle(configFilePath).then((result) => {
-              this.api.logToTerminal({ type: 'log', value: result })
-            }).catch((error) => {
-              this.api.logToTerminal({ type: 'error', value: error })
-            })
+          if (window._matomoManagerInstance) {
+            window._matomoManagerInstance.trackEvent('compiler', 'runCompile', 'compileWithTruffle')
           }
+          this.api.compileWithTruffle().then((result) => {
+          }).catch((error) => {
+            this.api.logToTerminal({ type: 'error', value: error })
+          })
+        } else if (externalCompType === 'foundry') {
+          if (window._matomoManagerInstance) {
+            window._matomoManagerInstance.trackEvent('compiler', 'runCompile', 'compileWithFoundry')
+          }
+          this.api.compileWithFoundry().then((result) => {
+          }).catch((error) => {
+            this.api.logToTerminal({ type: 'error', value: error })
+          })
         }
       }
-      // TODO readd saving current file
-      this.api.saveCurrentFile()
-      const currentFile = this.api.currentFile
-      return this.compileFile(currentFile)
+      if (externalCompType === 'remix' || !externalCompType) {
+        return this.compileFile(path || this.api.currentFile)
+      }
     } catch (err) {
       console.error(err)
     }

@@ -21,7 +21,14 @@ function trackMatomoEvent(category: string, action: string, name?: string) {
 export const performSolidityScan = async (api: any, compiledFileName: string): Promise<ScanReport> => {
   const workspace = await api.call('filePanel', 'getCurrentWorkspace')
   const fileName = `${workspace.name}/${compiledFileName}`
-  const filePath = `.workspaces/${fileName}`
+  let filePath
+  if (await api.call('fileManager', 'exists', compiledFileName)) {
+    filePath = compiledFileName
+  } else {
+    const workspace = await api.call('filePanel', 'getCurrentWorkspace')
+    const fileName = `${workspace.name}/${compiledFileName}`
+    filePath = `.workspaces/${fileName}`
+  }
   const file = await api.call('fileManager', 'readFile', filePath)
 
   const urlResponse = await axios.post(`${endpointUrls.solidityScan}/uploadFile`, { file, fileName })
@@ -120,18 +127,21 @@ export const handleSolidityScan = async (
   await api.call('notification', 'toast', 'Processing data to scan...')
   trackMatomoEvent('solidityCompiler', 'solidityScan', 'initiateScan')
 
+  let id
   try {
     const workspace = await api.call('filePanel', 'getCurrentWorkspace')
     const fileName = `${workspace.name}/${compiledFileName}`
 
-    await api.call('notification', 'toast', 'Loading scan result in Remix terminal...')
+    id = await api.call('notification', 'toast', 'Loading scan result in Remix terminal...', 15000)
 
     const scanReport = await performSolidityScan(api, compiledFileName)
 
     trackMatomoEvent('solidityCompiler', 'solidityScan', 'scanSuccess')
+    api.call('notification', 'hideToaster', id)
     const renderedResults = renderResults(scanReport, fileName)
     await api.call('terminal', 'logHtml', renderedResults)
   } catch (error) {
+    api.call('notification', 'hideToaster', id)
     trackMatomoEvent('solidityCompiler', 'solidityScan', 'scanFailed')
     await api.call('notification', 'modal', {
       id: 'SolidityScanError',

@@ -82,11 +82,9 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
 
   api.onSetWorkspace = async (isLocalhost: boolean, workspaceName: string) => {
     const isDesktop = platform === appPlatformTypes.desktop
-
     const isHardhat = (isLocalhost || isDesktop) && (await compileTabLogic.isHardhatProject())
     const isTruffle = (isLocalhost || isDesktop) && (await compileTabLogic.isTruffleProject())
     const isFoundry = (isLocalhost || isDesktop) && (await compileTabLogic.isFoundryProject())
-
     setState((prevState) => {
       return {
         ...prevState,

@@ -25,12 +25,13 @@ export function GenerateWorkspaceWithAi() {
             facade.closeWizard()
             const statusCallback = (status: string): Promise<void> => {
               console.log('status', status)
+              plugin.call('remixaiassistant', 'handleExternalMessage', status)
               return Promise.resolve()
             }
 
             await plugin.call('remixaiassistant', 'handleExternalMessage', 'Please wait while the workspace is being generated!')
             trackMatomoEvent({ category: MatomoCategories.TEMPLATE_EXPLORER_MODAL, action: 'createWorkspaceWithAiRequestSent', name: state.workspaceName, isClick: true })
-            const result = await plugin.call('remixAI' as any, 'generate', state.workspaceName, statusCallback)
+            const result = await plugin.call('remixAI' as any, 'generate', state.workspaceName, {}, Date.now(), false, statusCallback)
             if (result.includes('No payload')) {
               await plugin.call('remixaiassistant', 'handleExternalMessage', 'Unfortunately, the workspace generation failed. Please try again with a different prompt.')
               trackMatomoEvent({ category: MatomoCategories.TEMPLATE_EXPLORER_MODAL, action: 'createWorkspaceWithAiFailed', name: state.workspaceName, isClick: true })

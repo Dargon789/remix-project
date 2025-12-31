@@ -145,8 +145,7 @@ module.exports = {
       .click('*[data-id="contract-wizard-validate-workspace-button"]')
       .perform(function () {
         browser.isVisible('*[data-id="treeViewUltreeViewMenu"]', function (result) {
-          browser.assert.not.ok(result.value as any, 'Scripts folder is not visible')
-            .clickLaunchIcon('filePanel')
+            if (!result.value) browser.clickLaunchIcon('filePanel')
         })
       })
       .isVisible('*[data-id="treeViewLitreeViewItemremix.config.json"]')
@@ -210,8 +209,7 @@ module.exports = {
       .click('*[data-id="contract-wizard-validate-workspace-button"]')
       .perform(function() {
         browser.isVisible('*[data-id="treeViewUltreeViewMenu"]', function (result) {
-          browser.assert.not.ok(result.value as any, 'Scripts folder is not visible')
-            .clickLaunchIcon('filePanel')
+          if (!result.value) browser.clickLaunchIcon('filePanel')
         })
       })
       .waitForElementVisible('*[data-id="treeViewLitreeViewItemcontracts"]')
@@ -271,8 +269,7 @@ module.exports = {
       .click('*[data-id="contract-wizard-validate-workspace-button"]')
       .perform(function() {
         browser.isVisible('*[data-id="treeViewUltreeViewMenu"]', function (result) {
-          browser.assert.not.ok(result.value as any, 'Scripts folder is not visible')
-            .clickLaunchIcon('filePanel')
+          if (!result.value) browser.clickLaunchIcon('filePanel')
         })
       })
       .pause(1000)
@@ -329,8 +326,7 @@ module.exports = {
       .click('*[data-id="contract-wizard-validate-workspace-button"]')
       .perform(function() {
         browser.isVisible('*[data-id="treeViewUltreeViewMenu"]', function (result) {
-          browser.assert.not.ok(result.value as any, 'Scripts folder is not visible')
-            .clickLaunchIcon('filePanel')
+          if (!result.value) browser.clickLaunchIcon('filePanel')
         })
       })
       .pause(1000)
@@ -467,8 +463,8 @@ module.exports = {
       .click('*[data-id="modalDialogCustomPromptTextRename"]')
       .clearValue('*[data-id="modalDialogCustomPromptTextRename"]')
       .setValue('*[data-id="modalDialogCustomPromptTextRename"]', 'workspace_name_renamed')
-      .waitForElementPresent('[data-id="topbarModalModalDialogModalFooter-react"] .modal-ok')
-      .click('[data-id="topbarModalModalDialogModalFooter-react"] > .modal-ok')
+      .waitForElementPresent('[data-id="topbarModalStaticModalDialogModalFooter-react"] .modal-ok')
+      .click('[data-id="topbarModalStaticModalDialogModalFooter-react"] > .modal-ok')
       .pause(2000)
       .switchWorkspace('workspace_name_1')
       .pause(2000)
@@ -487,8 +483,8 @@ module.exports = {
       .waitForElementVisible(selector)
       .click(selector)
       .click('*[data-id="workspacesubMenuDelete"]') // delete workspace_name_1
-      .waitForElementVisible('*[data-id="topbarModalModalDialogModalFooter-react"]')
-      .click('*[data-id="topbarModalModalDialogModalFooter-react"] .modal-ok')
+      .waitForElementVisible('*[data-id="topbarModalStaticModalDialogModalFooter-react"]')
+      .click('*[data-id="topbarModalStaticModalDialogModalFooter-react"] .modal-ok')
       .waitForElementVisible('*[data-id="workspacesSelect"]')
       .click('*[data-id="workspacesSelect"]')
       .waitForElementVisible('*[data-id="dropdown-item-workspace_name_renamed"]')

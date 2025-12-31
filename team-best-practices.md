@@ -20,7 +20,7 @@ Related links:
  - Remix-debug NPM module: https://www.npmjs.com/package/@remix-project/remix-debug
  - Remix-tests NPM module: https://www.npmjs.com/package/@remix-project/remix-tests
  - Remix documentation: http://remix-ide.readthedocs.io/en/latest/
- - Discord: https://discord.gg/snsrYVU4Q7
+ - Discord: https://discord.gg/qhpCQGWkmf
  
 ---
 
@@ -61,7 +61,7 @@ Before starting coding, we should ensure all devs / contributors are aware of:
 - How to setup and get started (always up to date).
 - How to run tests.
 - Where to find documentation.
-- How to reach us through the communication channels - https://discord.gg/snsrYVU4Q7
+- How to reach us through the communication channels - https://discord.gg/qhpCQGWkmf
 - The following best practices:
 
 ---

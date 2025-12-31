@@ -58,6 +58,7 @@ export class CompilerMetadata extends Plugin {
       const allBuildFiles = await this.call('fileManager', 'fileList', buildDir)
       const currentInputFileNames = Object.keys(currentInput.sources)
       for (const fileName of allBuildFiles) {
+        if (!await this.call('fileManager', 'exists', fileName)) continue
         let fileContent = await this.call('fileManager', 'readFile', fileName)
         fileContent = JSON.parse(fileContent)
         const inputFiles = Object.keys(fileContent.input.sources)
@@ -121,7 +122,8 @@ export class CompilerMetadata extends Plugin {
 
     let parsedMetadata
     try {
-      parsedMetadata = contract.object && contract.object.metadata ? JSON.parse(contract.object.metadata) : null
+      parsedMetadata = contract.object && contract.object.metadata && typeof(contract.object.metadata) === 'string' ? JSON.parse(contract.object.metadata) : null
+      if (!parsedMetadata) parsedMetadata = contract.object.metadata
     } catch (e) {
       console.log(e)
     }

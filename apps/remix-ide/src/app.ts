@@ -29,7 +29,7 @@ import { ContractFlattener } from './app/plugins/contractFlattener'
 
 import { WalkthroughService } from './walkthroughService'
 
-import { OffsetToLineColumnConverter, CompilerMetadata, CompilerArtefacts, FetchAndCompile, CompilerImports, GistHandler } from '@remix-project/core-plugin'
+import { OffsetToLineColumnConverter, CompilerMetadata, CompilerArtefacts, FetchAndCompile, CompilerImports, GistHandler, AmpPlugin, ChartJsPlugin } from '@remix-project/core-plugin'
 
 import { Registry } from '@remix-project/remix-lib'
 import { ConfigPlugin } from './app/plugins/config'
@@ -47,6 +47,7 @@ import { FoundryProvider } from './app/providers/foundry-provider'
 import { ExternalHttpProvider } from './app/providers/external-http-provider'
 import { EnvironmentExplorer } from './app/providers/environment-explorer'
 import { FileDecorator } from './app/plugins/file-decorator'
+import { TransactionSimulator } from './app/plugins/transaction-simulator'
 import { CodeFormat } from './app/plugins/code-format'
 import { CompilationDetailsPlugin } from './app/plugins/compile-details'
 import { RemixGuidePlugin } from './app/plugins/remixGuide'
@@ -294,6 +295,9 @@ class AppComponent {
     // ------- FILE DECORATOR PLUGIN ------------------
     const fileDecorator = new FileDecorator()
 
+    // ------- TRANSACTION SIMULATOR PLUGIN ------------------
+    const transactionSimulator = new TransactionSimulator()
+
     // ------- CODE FORMAT PLUGIN ------------------
     const codeFormat = new CodeFormat()
 
@@ -336,6 +340,15 @@ class AppComponent {
     const contentImport = new CompilerImports()
 
     const blockchain = new Blockchain(Registry.getInstance().get('config').api)
+
+    // ----------------- amp (thegraph) ------------------------
+    const amp = new AmpPlugin()
+
+    // ----------------- vega (generate visualization) ------------------------
+    // const vega = new VegaPlugin()
+
+    // ----------------- chart (generate visualization) ------------------------
+    const chartjs = new ChartJsPlugin()
 
     // ----------------- compilation metadata generation service ---------
     const compilerMetadataGenerator = new CompilerMetadata()
@@ -428,6 +441,7 @@ class AppComponent {
       offsetToLineColumnConverter,
       codeParser,
       fileDecorator,
+      transactionSimulator,
       codeFormat,
       terminal,
       web3Provider,
@@ -467,7 +481,10 @@ class AppComponent {
       scriptRunnerUI,
       remixAI,
       remixAiAssistant,
-      walletConnect
+      walletConnect,
+      amp,
+      // vega,
+      chartjs
     ])
 
     //---- fs plugin
@@ -632,6 +649,7 @@ class AppComponent {
       'codeParser',
       'codeFormatter',
       'fileDecorator',
+      'transactionSimulator',
       'terminal',
       'blockchain',
       'fetchAndCompile',

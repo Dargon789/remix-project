@@ -25,3 +25,12 @@
   background-color: var(--bs-secondary);
   cursor: row-resize;
 }
+
+/* Hide dragbar when terminal panel is maximized */
+.dragbar_terminal:has(+ .terminal-wrap.maximized):hover,
+.dragbar_terminal:has(+ .terminal-wrap.maximized).ondrag,
+.dragbar_terminal:has(+ .terminal-wrap.maximized) {
+  background-color: transparent !important;
+  cursor: default !important;
+  pointer-events: none !important;
+}

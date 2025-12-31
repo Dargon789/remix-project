@@ -62,6 +62,7 @@ element.style {
   font-family       : monospace;
   padding           : .4em;
   color             : var(--bs-primary);
+  border-top        : 1px solid var(--bs-border-color);
 }
 .remix_ui_terminal_prompt {
   font-family       : monospace;

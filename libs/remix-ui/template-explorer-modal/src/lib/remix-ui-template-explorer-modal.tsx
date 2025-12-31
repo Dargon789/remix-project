@@ -28,7 +28,7 @@ export function RemixUiTemplateExplorerModal (props: RemixUiTemplateExplorerModa
   return (
     <section data-id="template-explorer-modal-react" data-path={`templateExplorerModal-${state.manageCategory}`}>
       <section className="template-explorer-modal-background" style={{ zIndex: 8888 }}>
-        <div className="template-explorer-modal-container border bg-dark p-2" style={{ width: '768px', height: '768px' }}>
+        <div className="template-explorer-modal-container border bg-dark p-2" style={{ width: '768px' }}>
           <div className="template-explorer-modal-close-container bg-dark mb-3 w-100 d-flex flex-row justify-content-between align-items-center">
             {state.wizardStep === 'template' || state.wizardStep === 'reset' ? <div className="d-flex flex-row gap-2 w-100 mx-3 my-2">
               <input

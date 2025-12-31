@@ -130,45 +130,41 @@ export interface SendTransactionArgs {
   data?: string;
   gasLimit?: number;
   gasPrice?: string;
-  account?: string;
+  from?: string;
+}
+
+export interface SimulateTransactionArgs {
+  from: string;
+  to?: string;
+  value?: string;
+  maxFeePerGas?: string;
+  data?: string;
+  validation?: boolean;
+  traceTransfers?: boolean;
+  shouldDecodeLogs?: boolean;
 }
 
 export interface RunScriptArgs {
   file: string
 }
 
-export interface PublishToIPFSArgs {
-  filePath: string;
-  ipfsUrl?: string;
-  ipfsPort?: number;
-  ipfsProtocol?: 'http' | 'https';
-  projectId?: string;
-  projectSecret?: string;
+/**
+ * Math utilities argument types
+ */
+export interface WeiToEtherArgs {
+  wei: string;
 }
 
-export interface PublishMultipleToIPFSArgs {
-  filePaths: string[];
-  ipfsUrl?: string;
-  ipfsPort?: number;
-  ipfsProtocol?: 'http' | 'https';
-  projectId?: string;
-  projectSecret?: string;
+export interface EtherToWeiArgs {
+  ether: string;
 }
 
-export interface GenerateAIDappArgs {
-  description: string;
-  contractAddress: string;
-  contractName: string;
-  abi: any[];
-  chainId: string | number;
-  outputDirectory?: string;
+export interface DecimalToHexArgs {
+  decimal: string | number;
 }
 
-export interface UpdateAIDappArgs {
-  contractAddress: string;
-  description: string;
-  currentFiles: Record<string, string>;
-  outputDirectory?: string;
+export interface HexToDecimalArgs {
+  hex: string;
 }
 
 export interface DebugSessionArgs {
@@ -242,6 +238,15 @@ export interface GasEstimationArgs {
 }
 
 /**
+ * Amp query argument types
+ */
+export interface AmpQueryArgs {
+  query: string;
+  baseUrl?: string;
+  authToken?: string;
+}
+
+/**
  * Workspace tool argument types
  */
 export interface CreateWorkspaceArgs {
@@ -307,22 +312,6 @@ export interface ContractInteractionResult {
   gasUsed?: number | bigint;
   logs?: any[];
   error?: string;
-}
-
-export interface IPFSPublishResult {
-  success: boolean;
-  fileName: string;
-  hash: string;
-  url: string;
-  size?: number;
-}
-
-export interface AIDappGenerationResult {
-  success: boolean;
-  outputDirectory: string;
-  filesGenerated: string[];
-  totalFiles: number;
-  errors?: string[];
 }
 
 export interface DebugSessionResult {
@@ -402,6 +391,14 @@ export interface TestResult {
     functions: number;
     lines: number;
   };
+}
+
+export interface AmpQueryResult<T = any> {
+  success: boolean;
+  data: Array<T>;
+  rowCount: number;
+  query: string;
+  error?: string;
 }
 
 export interface RemixToolDefinition extends IMCPTool {

@@ -6,10 +6,16 @@
 // Core Server
 export { RemixMCPServer } from './RemixMCPServer';
 import { RemixMCPServer } from './RemixMCPServer';
-import { defaultSecurityConfig } from './middleware/SecurityMiddleware';
-import { defaultValidationConfig } from './middleware/ValidationMiddleware';
-import type { SecurityConfig } from './middleware/SecurityMiddleware';
-import type { ValidationConfig } from './middleware/ValidationMiddleware';
+
+// Configuration
+export { MCPConfigManager } from './config/MCPConfigManager';
+export type {
+  MCPConfig,
+  MCPSecurityConfig,
+  MCPValidationConfig,
+  MCPResourceConfig,
+} from './types/mcpConfig';
+export { defaultMCPConfig } from './types/mcpConfig';
 
 // Tool Handlers
 export { createFileManagementTools } from './handlers/FileManagementHandler';
@@ -17,32 +23,27 @@ export { createCompilationTools } from './handlers/CompilationHandler';
 export { createDeploymentTools } from './handlers/DeploymentHandler';
 export { createDebuggingTools } from './handlers/DebuggingHandler';
 export { createCodeAnalysisTools } from './handlers/CodeAnalysisHandler';
-export { createIPFSTools } from './handlers/IPFSHandler';
-export { createAIDappGeneratorTools } from './handlers/AIDappGeneratorHandler';
+export { createChartJsTools } from './handlers/ChartJsHandler';
+export { createAmpTools } from './handlers/AmpHandler';
+export { createMathUtilsTools } from './handlers/MathUtilsHandler';
+export { createFoundryHardhatTools } from './handlers/FoundryHardhatHandler';
 
 // Resource Providers
 export { ProjectResourceProvider } from './providers/ProjectResourceProvider';
 export { CompilationResourceProvider } from './providers/CompilationResourceProvider';
 export { DeploymentResourceProvider } from './providers/DeploymentResourceProvider';
 export { TutorialsResourceProvider } from './providers/TutorialsResourceProvider';
+export { AmpResourceProvider } from './providers/AmpResourceProvider';
 
 // Middleware
-export {
-  SecurityMiddleware,
-  defaultSecurityConfig
-} from './middleware/SecurityMiddleware';
 export type {
-  SecurityConfig,
   SecurityValidationResult,
+  SecurityMiddleware,
   AuditLogEntry
 } from './middleware/SecurityMiddleware';
 
-export {
-  ValidationMiddleware,
-  defaultValidationConfig
-} from './middleware/ValidationMiddleware';
 export type {
-  ValidationConfig,
+  ValidationMiddleware,
   ValidationResult,
   ValidationError,
   ValidationWarning
@@ -71,8 +72,8 @@ export async function createRemixMCPServer(
   options: {
     enableSecurity?: boolean;
     enableValidation?: boolean;
-    securityConfig?: SecurityConfig;
-    validationConfig?: ValidationConfig;
+    securityConfig?: any;
+    validationConfig?: any;
     customTools?: any[];
     customProviders?: any[];
   } = {},
@@ -80,25 +81,22 @@ export async function createRemixMCPServer(
   const {
     enableSecurity = true,
     enableValidation = true,
-    securityConfig = defaultSecurityConfig,
-    validationConfig = defaultValidationConfig,
     customTools = [],
     customProviders = []
   } = options;
 
-  // Create server with configuration
   const serverConfig = {
     name: 'Remix MCP Server',
     version: '1.0.0',
     description: 'In-browser MCP server for Remix IDE providing comprehensive smart contract development tools',
     debug: false,
     maxConcurrentTools: 10,
-    toolTimeout: 30000,
+    toolTimeout: 60000 * 10, // 10 minutes
     resourceCacheTTL: 5000,
     enableResourceCache: false,
     security: enableSecurity ? {
-      enablePermissions: securityConfig.requirePermissions,
-      enableAuditLog: securityConfig.enableAuditLog,
+      enablePermissions: true,
+      enableAuditLog: true,
       allowedFilePatterns: [],
       blockedFilePatterns: []
     } : undefined,
@@ -115,29 +113,22 @@ export async function createRemixMCPServer(
 
   const server = new RemixMCPServer(plugin, serverConfig);
 
-  // Register custom tools if provided
   if (customTools.length > 0) {
-    // TODO: Add batch registration method to server
     // for (const tool of customTools) {
     //   server.registerTool(tool);
     // }
   }
 
-  // Register custom providers if provided
   if (customProviders.length > 0) {
-    // TODO: Add provider registration method to server
     // for (const provider of customProviders) {
     //   server.registerResourceProvider(provider);
     // }
   }
 
-  // Initialize the server
+  console.log("Initializing server")
   await server.initialize();
 
   return server;
 }
 
-/**
- * Default export
- */
 export default RemixMCPServer;

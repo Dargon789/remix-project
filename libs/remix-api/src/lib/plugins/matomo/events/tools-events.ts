@@ -131,6 +131,8 @@ export interface TemplateExplorerModalEvent extends MatomoEventBase {
     | 'createWorkspaceWithGenericTemplate'
     | 'importFiles'
     | 'importHttps'
+    | 'uploadFolder'
+    | 'topCardGitClone'
 }
 
 export interface ScriptExecutorEvent extends MatomoEventBase {
@@ -203,7 +205,7 @@ export interface SolidityUMLGenEvent extends MatomoEventBase {
 
 
 /**
- * 
+ *
  * Circuit Compiler Events - Type-safe builders
  */
 export interface CircuitCompilerEvent extends MatomoEventBase {

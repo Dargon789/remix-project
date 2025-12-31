@@ -17,25 +17,25 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
   }
   const inputRef = useRef<HTMLInputElement>(null)
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
-
-  const menuItems = [
+  const folderInputRef = useRef<HTMLInputElement>(null)
+  let menuItems = [
     {
       action: 'newBlankFile',
-      title: 'New blank file',
+      title: 'New file',
       icon: 'far fa-plus',
       placement: 'top',
       platforms:[appPlatformTypes.web, appPlatformTypes.desktop]
     },
     {
       action: 'createNewFile',
-      title: 'Create new file',
+      title: 'New file using Template',
       icon: 'far fa-file',
       placement: 'top',
       platforms:[appPlatformTypes.web, appPlatformTypes.desktop]
     },
     {
       action: 'createNewFolder',
-      title: 'Create new folder',
+      title: 'New folder',
       icon: 'far fa-folder',
       placement: 'top',
       platforms:[appPlatformTypes.web, appPlatformTypes.desktop]
@@ -48,32 +48,32 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
       platforms:[appPlatformTypes.web]
     },
     {
-      action: 'uploadFolder',
-      title: 'Upload folder into current Workspace',
-      icon: 'far fa-folder-upload',
-      placement: 'top',
-      platforms:[appPlatformTypes.web]
-    },
-    {
       action: 'importFromIpfs',
-      title: 'Import files from ipfs',
+      title: 'Import files from IPFS',
       icon: 'fa-regular fa-cube',
       placement: 'top',
       platforms: [appPlatformTypes.web, appPlatformTypes.desktop]
     },
     {
-      action: 'localFileSystem',
-      title: 'Import files from local file system',
-      icon: 'fa-solid fa-upload',
+      action: 'importFromHttps',
+      title: 'Import files from HTTPS',
+      icon: 'fa-solid fa-link',
       placement: 'top',
       platforms: [appPlatformTypes.web, appPlatformTypes.desktop]
     },
     {
-      action: 'importFromHttps',
-      title: 'Import files with https',
-      icon: 'fa-solid fa-link',
+      action: 'localFileSystem',
+      title: 'Upload files',
+      icon: 'fa-solid fa-upload',
       placement: 'top',
-      platforms: [appPlatformTypes.web, appPlatformTypes.desktop]
+      platforms: [appPlatformTypes.web]
+    },
+    {
+      action: 'uploadFolder',
+      title: 'Upload folders',
+      icon: 'fa-solid fa-folder-upload',
+      placement: 'top',
+      platforms:[appPlatformTypes.web]
     },
     {
       action: 'initializeWorkspaceAsGitRepo',
@@ -91,9 +91,14 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
     }
   ]
 
+  menuItems = menuItems.filter((item) => item.platforms.includes(platform))
+
   const itemAction = async (action: string) => {
     if (action === 'localFileSystem') {
       inputRef.current?.click()
+    }
+    if (action === 'uploadFolder') {
+      folderInputRef.current?.click()
     }
   }
 
@@ -109,6 +114,20 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
         onChange={(e) => {
           e.stopPropagation()
           props.uploadFile(e.target)
+          e.target.value = null
+          setIsCreateMenuOpen(false)
+        }}
+      />
+      <input
+        ref={folderInputRef}
+        id="uploadFolderInput"
+        data-id="fileExplorerUploadFolder"
+        type="file"
+        multiple
+        {...enableDirUpload}
+        onChange={(e) => {
+          e.stopPropagation()
+          props.uploadFolder(e.target)
           e.target.value = null
           setIsCreateMenuOpen(false)
         }}
@@ -166,6 +185,27 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
                     </Dropdown.Item>
                   )
                 })}
+                {menuItems.filter((item) => item.action === 'createNewFolder').map(({ action, title, icon, placement, platforms }, index) => {
+                  return (
+                    <Dropdown.Item
+                      data-id="fileExplorerCreateButton-createNewFolder"
+                      key={index}
+                      onClick={async () => {
+                        props.createNewFolder()
+                        trackMatomoEvent({
+                          category: MatomoCategories.FILE_EXPLORER,
+                          action: 'createNewFolder',
+                          isClick: true
+                        })
+                      }}
+                    >
+                      <span className="text-decoration-none">
+                        <i className={icon}></i>
+                        <span className="ps-2">{title}</span>
+                      </span>
+                    </Dropdown.Item>
+                  )
+                })}
                 {menuItems.filter((item) => item.action === 'createNewFile').map(({ action, title, icon, placement, platforms }, index) => {
                   return (
                     <Dropdown.Item
@@ -191,16 +231,41 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
                     </Dropdown.Item>
                   )
                 })}
-                {menuItems.filter((item) => item.action === 'createNewFolder').map(({ action, title, icon, placement, platforms }, index) => {
+                {menuItems.filter((item) => item.action === 'localFileSystem').map(({ action, title, icon, placement, platforms }, index) => {
                   return (
                     <Dropdown.Item
-                      data-id="fileExplorerCreateButton-createNewFolder"
+                      data-id="fileExplorerCreateButton-localFileSystem"
                       key={index}
-                      onClick={async () => {
-                        props.createNewFolder()
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        itemAction(action)
                         trackMatomoEvent({
                           category: MatomoCategories.FILE_EXPLORER,
-                          action: 'createNewFolder',
+                          action: 'importFromLocalFileSystem',
+                          isClick: true
+                        })
+                      }}
+                    >
+                      <span className="text-decoration-none">
+                        <i className={icon}></i>
+                        <span className="ps-2">{title}</span>
+                      </span>
+                    </Dropdown.Item>
+                  )
+                })}
+                {menuItems.filter((item) => item.action === 'uploadFolder').map(({ action, title, icon, placement, platforms }, index) => {
+                  return (
+                    <Dropdown.Item
+                      data-id="fileExplorerCreateButton-uploadFolder"
+                      key={index}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        itemAction(action)
+                        trackMatomoEvent({
+                          category: MatomoCategories.FILE_EXPLORER,
+                          action: 'uploadFolder',
                           isClick: true
                         })
                       }}
@@ -226,29 +291,6 @@ export const FileExplorerMenu = (props: FileExplorerMenuProps) => {
                         trackMatomoEvent({
                           category: MatomoCategories.FILE_EXPLORER,
                           action: 'importFromIpfs',
-                          isClick: true
-                        })
-                      }}
-                    >
-                      <span className="text-decoration-none">
-                        <i className={icon}></i>
-                        <span className="ps-2">{title}</span>
-                      </span>
-                    </Dropdown.Item>
-                  )
-                })}
-                {menuItems.filter((item) => item.action === 'localFileSystem').map(({ action, title, icon, placement, platforms }, index) => {
-                  return (
-                    <Dropdown.Item
-                      data-id="fileExplorerCreateButton-localFileSystem"
-                      key={index}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        itemAction(action)
-                        trackMatomoEvent({
-                          category: MatomoCategories.FILE_EXPLORER,
-                          action: 'importFromLocalFileSystem',
                           isClick: true
                         })
                       }}

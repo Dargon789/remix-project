@@ -1,5 +1,5 @@
 
-export default async (opts) => {
+export default async (opts, plugin) => {
 
   const filesObj = {
     // @ts-ignore

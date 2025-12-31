@@ -19,7 +19,7 @@ function register(api) { KONSOLES.push(api) }
 const profile = {
   displayName: 'Terminal',
   name: 'terminal',
-  methods: ['log', 'logHtml', 'togglePanel', 'isPanelHidden'],
+  methods: ['log', 'logHtml', 'togglePanel', 'isPanelHidden', 'maximizePanel'],
   events: [],
   description: 'Remix IDE terminal',
   version: packageJson.version
@@ -55,8 +55,10 @@ export default class Terminal extends Plugin {
   dispatch: any
   terminalApi: any
   isHidden: boolean
+  isMaximized: boolean
   constructor(opts, api) {
     super(profile)
+    this.isMaximized = false
     this.fileImport = new CompilerImports()
     this.event = new EventManager()
     this.globalRegistry = Registry.getInstance()
@@ -116,6 +118,21 @@ export default class Terminal extends Plugin {
 
   onActivation() {
     this.renderComponent()
+
+    // Listen for file changes - auto-restore terminal panel if maximized when main panel is used
+    this.on('fileManager', 'currentFileChanged', () => {
+      if (this.isMaximized) {
+        this.maximizePanel() // This will toggle and restore the panel
+      }
+    })
+
+    // Listen for tab/app switches - auto-restore terminal panel if maximized
+    this.on('tabs', 'switchApp', () => {
+      if (this.isMaximized) {
+        this.maximizePanel() // This will toggle and restore the panel
+      }
+    })
+
     // Initialize isHidden state from panelStates in localStorage
     const panelStatesStr = window.localStorage.getItem('panelStates')
     const panelStates = panelStatesStr ? JSON.parse(panelStatesStr) : {}
@@ -187,6 +204,23 @@ export default class Terminal extends Plugin {
       this.emit('terminalPanelShown')
     } else {
       this.isHidden = true
+
+      // If terminal was hidden when maximized, restore the main panel
+      if (this.isMaximized) {
+        const mainView = document.querySelector('.mainview')
+        if (mainView) {
+          const wraps = mainView.querySelectorAll('[class*="-wrap"]')
+          wraps.forEach((wrap: HTMLElement) => {
+            if (!wrap.classList.contains('terminal-wrap')) {
+              wrap.classList.remove('d-none')
+            }
+          })
+        }
+        terminalPanel?.classList.remove('maximized')
+        this.isMaximized = false
+        this.renderComponent()
+      }
+
       terminalPanel?.classList.add('d-none')
       trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'hiddenOnToggleIconClick', isClick: false })
       this.emit('terminalPanelHidden')
@@ -204,6 +238,48 @@ export default class Terminal extends Plugin {
     return this.isHidden
   }
 
+  async maximizePanel() {
+    if (!this.isMaximized) {
+      // Hide all main panel content except terminal
+      const mainView = document.querySelector('.mainview')
+      if (mainView) {
+        // Find all child elements with -wrap class except terminal-wrap
+        const wraps = mainView.querySelectorAll('[class*="-wrap"]')
+        wraps.forEach((wrap: HTMLElement) => {
+          if (!wrap.classList.contains('terminal-wrap')) {
+            wrap.classList.add('d-none')
+          } else {
+            // Add maximized class to terminal-wrap
+            wrap.classList.add('maximized')
+          }
+        })
+      }
+
+      this.isMaximized = true
+      trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'maximized', isClick: false })
+      this.emit('terminalPanelMaximized')
+    } else {
+      // Show all main panel content
+      const mainView = document.querySelector('.mainview')
+      if (mainView) {
+        // Find all child elements with -wrap class and show them
+        const wraps = mainView.querySelectorAll('[class*="-wrap"]')
+        wraps.forEach((wrap: HTMLElement) => {
+          wrap.classList.remove('d-none')
+          // Remove maximized class from terminal-wrap
+          if (wrap.classList.contains('terminal-wrap')) {
+            wrap.classList.remove('maximized')
+          }
+        })
+      }
+
+      this.isMaximized = false
+      trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'restored', isClick: false })
+      this.emit('terminalPanelRestored')
+    }
+    this.renderComponent()
+  }
+
   setDispatch(dispatch) {
     this.dispatch = dispatch
   }
@@ -219,6 +295,8 @@ export default class Terminal extends Plugin {
           plugin={state.plugin}
           onReady={state.onReady}
           visible={true}
+          isMaximized={this.isMaximized}
+          maximizePanel={this.maximizePanel.bind(this)}
         />
       </>)
   }

@@ -3,17 +3,11 @@
  */
 
 import { Plugin } from '@remixproject/engine';
-import { IMCPToolCall, IMCPToolResult } from '../../types/mcp';
+import { IMCPToolCall } from '../../types/mcp';
 import { ToolExecutionContext } from '../types/mcpTools';
-
-export interface ValidationConfig {
-  validateSchemas: boolean;
-  validateTypes: boolean;
-  validateRanges: boolean;
-  validateFormats: boolean;
-  strictMode: boolean;
-  customValidators: Map<string, (value: any) => ValidationResult>;
-}
+import { MCPValidationConfig } from '../types/mcpConfig';
+import { MCPConfigManager } from '../config/MCPConfigManager';
+import { BaseMiddleware } from './BaseMiddleware';
 
 export interface ValidationResult {
   valid: boolean;
@@ -40,10 +34,24 @@ export interface ValidationWarning {
 /**
  * Validation middleware for MCP tool calls
  */
-export class ValidationMiddleware {
-  private _plugin
-  constructor(private config: ValidationConfig, plugin) {
-    this._plugin = plugin
+export class ValidationMiddleware extends BaseMiddleware {
+  private _plugin: Plugin;
+  private config: MCPValidationConfig;
+
+  constructor(plugin: Plugin, configManager?: MCPConfigManager) {
+    super(configManager);
+    this._plugin = plugin;
+    this.config = configManager.getValidationConfig() as MCPValidationConfig;
+  }
+
+  /**
+   * Get current validation config (refreshes from ConfigManager if available)
+   */
+  private getConfig(): MCPValidationConfig {
+    if (this.configManager) {
+      return this.configManager.getValidationConfig();
+    }
+    return this.config;
   }
 
   /**
@@ -55,6 +63,7 @@ export class ValidationMiddleware {
     context: ToolExecutionContext,
     plugin: Plugin
   ): Promise<ValidationResult> {
+    const config = this.getConfig();
     const result: ValidationResult = {
       valid: true,
       errors: [],
@@ -65,23 +74,26 @@ export class ValidationMiddleware {
       // Validate basic call structure
       this.validateCallStructure(call, result);
 
+      // Tool-specific validation (required/forbidden fields from config)
+      this.validateToolSpecificRules(call, result);
+
       // Validate against input schema
-      if (this.config.validateSchemas && inputSchema) {
+      if (config.validateSchemas && inputSchema) {
         this.validateSchema(call.arguments || {}, inputSchema, result);
       }
 
       // Validate argument types
-      if (this.config.validateTypes) {
+      if (config.validateTypes) {
         this.validateArgumentTypes(call.arguments || {}, inputSchema, result);
       }
 
       // Validate ranges and constraints
-      if (this.config.validateRanges) {
+      if (config.validateRanges) {
         this.validateRanges(call.arguments || {}, inputSchema, result);
       }
 
       // Validate formats (emails, URLs, addresses, etc.)
-      if (this.config.validateFormats) {
+      if (config.validateFormats) {
         this.validateFormats(call.arguments || {}, inputSchema, result);
       }
 
@@ -103,6 +115,60 @@ export class ValidationMiddleware {
     }
 
     return result;
+  }
+
+  /**
+   * Validate tool-specific rules from configuration
+   */
+  private validateToolSpecificRules(call: IMCPToolCall, result: ValidationResult): void {
+    const config = this.getConfig();
+    const toolConfig = config.toolValidation?.[call.name];
+
+    if (!toolConfig) return;
+
+    const args = call.arguments || {};
+
+    // Check required fields
+    if (toolConfig.requiredFields) {
+      for (const requiredField of toolConfig.requiredFields) {
+        if (!(requiredField in args)) {
+          result.errors.push({
+            field: requiredField,
+            code: 'REQUIRED_FIELD',
+            message: `Required field '${requiredField}' is missing (configured for tool '${call.name}')`
+          });
+        }
+      }
+    }
+
+    // Check forbidden fields
+    if (toolConfig.forbiddenFields) {
+      for (const forbiddenField of toolConfig.forbiddenFields) {
+        if (forbiddenField in args) {
+          result.errors.push({
+            field: forbiddenField,
+            code: 'FORBIDDEN_FIELD',
+            message: `Forbidden field '${forbiddenField}' is present (configured for tool '${call.name}')`
+          });
+        }
+      }
+    }
+
+    // Check custom patterns
+    if (toolConfig.patterns) {
+      for (const [fieldName, pattern] of Object.entries(toolConfig.patterns)) {
+        if (fieldName in args && typeof args[fieldName] === 'string') {
+          const regex = new RegExp(pattern);
+          if (!regex.test(args[fieldName])) {
+            result.errors.push({
+              field: fieldName,
+              code: 'PATTERN_MISMATCH',
+              message: `Field '${fieldName}' does not match required pattern (configured for tool '${call.name}')`
+            });
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -441,18 +507,6 @@ export class ValidationMiddleware {
         }
       }
 
-      // URL validation
-      if (field.includes('url') || field.includes('Url') || field.includes('URL')) {
-        if (!this.isValidUrl(value)) {
-          result.errors.push({
-            field,
-            code: 'INVALID_URL',
-            message: `Field '${field}' is not a valid URL`,
-            value
-          });
-        }
-      }
-
       // File path validation
       if (field.includes('path') || field.includes('Path') || field === 'file') {
         if (!this.isValidFilePath(value)) {
@@ -488,13 +542,6 @@ export class ValidationMiddleware {
     plugin: Plugin,
     result: ValidationResult
   ): Promise<void> {
-    const customValidator = this.config.customValidators.get(call.name);
-    if (customValidator) {
-      const customResult = customValidator(call.arguments);
-      result.errors.push(...customResult.errors);
-      result.warnings.push(...customResult.warnings);
-    }
-
     // Tool-specific validations
     switch (call.name) {
     case 'file_write':
@@ -525,6 +572,9 @@ export class ValidationMiddleware {
     plugin: Plugin,
     result: ValidationResult
   ): Promise<void> {
+    const config = this.getConfig();
+    const networkOpsConfig = config.networkOperations;
+
     // Validate workspace state
     if (this.requiresWorkspace(call.name)) {
       // TODO: Check if workspace is properly initialized
@@ -539,10 +589,33 @@ export class ValidationMiddleware {
         message: 'Ensure contracts are compiled before deployment',
         suggestion: 'Run compilation first'
       });
+
+      // Validate network is allowed
+      const args = call.arguments || {};
+      if (networkOpsConfig?.allowedNetworks && args.network) {
+        if (!networkOpsConfig.allowedNetworks.includes(args.network)) {
+          result.errors.push({
+            field: 'network',
+            code: 'NETWORK_NOT_ALLOWED',
+            message: `Network '${args.network}' is not in allowed networks list`
+          });
+        }
+      }
+
+      // Check gas limit
+      if (networkOpsConfig?.maxGasLimit && args.gasLimit) {
+        if (args.gasLimit > networkOpsConfig.maxGasLimit) {
+          result.errors.push({
+            field: 'gasLimit',
+            code: 'GAS_LIMIT_EXCEEDED',
+            message: `Gas limit ${args.gasLimit} exceeds maximum allowed (${networkOpsConfig.maxGasLimit})`
+          });
+        }
+      }
     }
 
     // Validate network connectivity for mainnet operations
-    if (this.isMainnetOperation(call)) {
+    if (networkOpsConfig?.warnOnMainnet && this.isMainnetOperation(call)) {
       result.warnings.push({
         field: 'network',
         code: 'MAINNET_WARNING',
@@ -557,6 +630,9 @@ export class ValidationMiddleware {
    */
   private async validateFileWrite(args: any, plugin: Plugin, result: ValidationResult): Promise<void> {
     if (!args.path) return;
+
+    const config = this.getConfig();
+    const fileOpsConfig = config.fileOperations;
 
     try {
       // Check if path is writable
@@ -573,14 +649,43 @@ export class ValidationMiddleware {
         }
       }
 
-      // Check file size
-      if (args.content && args.content.length > 10 * 1024 * 1024) { // 10MB
-        result.warnings.push({
+      // Check file extension against allowed list
+      if (fileOpsConfig?.allowedExtensions && args.path) {
+        // If wildcard '*' is in the list, allow all extensions
+        const allowAllExtensions = fileOpsConfig.allowedExtensions.includes('*');
+        if (!allowAllExtensions) {
+          const extension = args.path.split('.').pop()?.toLowerCase();
+          if (extension && !fileOpsConfig.allowedExtensions.includes(extension)) {
+            result.errors.push({
+              field: 'path',
+              code: 'INVALID_EXTENSION',
+              message: `File extension '.${extension}' is not allowed by configuration`
+            });
+          }
+        }
+      }
+
+      // Check file size with config max
+      const maxSize = fileOpsConfig?.maxFileSize || 10 * 1024 * 1024;
+      if (args.content && args.content.length > maxSize) {
+        result.errors.push({
           field: 'content',
-          code: 'LARGE_FILE',
-          message: 'File content is very large',
-          suggestion: 'Consider breaking into smaller files'
+          code: 'FILE_TOO_LARGE',
+          message: `File content exceeds maximum size (${maxSize} bytes)`,
         });
+      }
+
+      // Check blocked patterns
+      if (fileOpsConfig?.blockedPatterns) {
+        for (const pattern of fileOpsConfig.blockedPatterns) {
+          if (this.matchPattern(args.path, pattern)) {
+            result.errors.push({
+              field: 'path',
+              code: 'BLOCKED_PATTERN',
+              message: `File path matches blocked pattern: ${pattern}`
+            });
+          }
+        }
       }
 
     } catch (error) {
@@ -725,15 +830,3 @@ export class ValidationMiddleware {
     return args.network === 'mainnet' || args.network === '1' || args.chainId === 1;
   }
 }
-
-/**
- * Default validation configuration
- */
-export const defaultValidationConfig: ValidationConfig = {
-  validateSchemas: true,
-  validateTypes: true,
-  validateRanges: true,
-  validateFormats: true,
-  strictMode: false,
-  customValidators: new Map()
-};

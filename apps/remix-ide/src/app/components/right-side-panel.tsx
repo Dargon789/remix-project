@@ -25,9 +25,13 @@ export class RightSidePanel extends AbstractPanel {
   highlightStamp: number
   hiddenPlugin: any
   isHidden: boolean
+  isMaximized: boolean
+  maximizedState: { leftPanelHidden: boolean, terminalPanelHidden: boolean }
 
   constructor() {
     super(rightSidePanel)
+    this.isMaximized = false
+    this.maximizedState = { leftPanelHidden: false, terminalPanelHidden: false }
   }
 
   onActivation() {
@@ -37,6 +41,27 @@ export class RightSidePanel extends AbstractPanel {
         this.emit('unPinnedPlugin', name)
         this.events.emit('unPinnedPlugin', name)
         super.remove(name)
+      }
+    })
+
+    // Listen for terminal panel being shown - auto-restore right panel if maximized
+    this.on('terminal', 'terminalPanelShown', () => {
+      if (this.isMaximized) {
+        this.maximizePanel() // This will toggle and restore the panel
+      }
+    })
+
+    // Listen for file changes - auto-restore right panel if maximized when main panel is used
+    this.on('fileManager', 'currentFileChanged', () => {
+      if (this.isMaximized) {
+        this.maximizePanel() // This will toggle and restore the panel
+      }
+    })
+
+    // Listen for tab/app switches - auto-restore right panel if maximized (includes home tab, file tabs, etc.)
+    this.on('tabs', 'switchApp', () => {
+      if (this.isMaximized) {
+        this.maximizePanel() // This will toggle and restore the panel
       }
     })
 
@@ -146,6 +171,30 @@ export class RightSidePanel extends AbstractPanel {
     const activePlugin = this.currentFocus()
 
     if (activePlugin !== profile.name) throw new Error(`Plugin ${profile.name} is not pinned`)
+
+    // If the panel is maximized, restore left and main panels but not terminal
+    if (this.isMaximized) {
+      const leftPanelHidden = await this.call('sidePanel', 'isPanelHidden')
+
+      // Restore left panel if it was visible before maximizing
+      if (!this.maximizedState.leftPanelHidden && leftPanelHidden) {
+        await this.call('sidePanel', 'togglePanel')
+      }
+
+      // Show main panel
+      const mainPanel = document.querySelector('#main-panel')
+      mainPanel?.classList.remove('d-none')
+
+      // Remove full width from right panel
+      const rightPanel = document.querySelector('#right-side-panel')
+      rightPanel?.classList.remove('right-panel-maximized')
+
+      this.isMaximized = false
+      trackMatomoEvent(this, { category: 'topbar', action: 'rightSidePanel', name: 'restoredOnUnpin', isClick: false })
+      this.emit('rightSidePanelRestored')
+      this.events.emit('rightSidePanelRestored')
+    }
+
     await this.call('sidePanel', 'unPinView', profile, this.plugins[profile.name].view)
     super.remove(profile.name)
     // Clear hiddenPlugin and set panel to hidden state when no plugin is pinned
@@ -171,7 +220,7 @@ export class RightSidePanel extends AbstractPanel {
     return this.hiddenPlugin
   }
 
-  togglePanel () {
+  async togglePanel () {
     const pinnedPanel = document.querySelector('#right-side-panel')
     // Persist the hidden state to panelStates, preserving pluginProfile
     const panelStates = JSON.parse(window.localStorage.getItem('panelStates') || '{}')
@@ -205,6 +254,11 @@ export class RightSidePanel extends AbstractPanel {
       this.emit('rightSidePanelShown')
       this.events.emit('rightSidePanelShown')
     } else {
+      // If the panel is maximized, restore all panels before hiding
+      if (this.isMaximized) {
+        await this.maximizePanel() // This will toggle and restore the panels
+      }
+
       this.isHidden = true
       this.hiddenPlugin = pluginProfile
       pinnedPanel?.classList.add('d-none')
@@ -223,6 +277,68 @@ export class RightSidePanel extends AbstractPanel {
 
   isPanelHidden() {
     return this.isHidden
+  }
+
+  async maximizePanel() {
+    if (!this.isMaximized) {
+      // Store the current state of panels before maximizing
+      const leftPanelHidden = await this.call('sidePanel', 'isPanelHidden')
+      const terminalPanelHidden = await this.call('terminal', 'isPanelHidden')
+
+      this.maximizedState = { leftPanelHidden, terminalPanelHidden }
+
+      // Hide left panel if it's visible
+      if (!leftPanelHidden) {
+        await this.call('sidePanel', 'togglePanel')
+      }
+
+      // Hide terminal panel if it's visible
+      if (!terminalPanelHidden) {
+        await this.call('terminal', 'togglePanel')
+      }
+
+      // Hide main panel (center panel with editor)
+      const mainPanel = document.querySelector('#main-panel')
+      mainPanel?.classList.add('d-none')
+
+      // Make right panel take full width
+      const rightPanel = document.querySelector('#right-side-panel')
+      rightPanel?.classList.add('right-panel-maximized')
+
+      this.isMaximized = true
+      trackMatomoEvent(this, { category: 'topbar', action: 'rightSidePanel', name: 'maximized', isClick: false })
+      this.emit('rightSidePanelMaximized')
+      this.events.emit('rightSidePanelMaximized')
+    } else {
+      // Restore panels to their previous state
+      const leftPanelHidden = await this.call('sidePanel', 'isPanelHidden')
+      const terminalPanelHidden = await this.call('terminal', 'isPanelHidden')
+
+      // Restore left panel if it was visible before maximizing
+      if (!this.maximizedState.leftPanelHidden && leftPanelHidden) {
+        await this.call('sidePanel', 'togglePanel')
+      }
+
+      // Restore terminal panel if it was visible before maximizing
+      if (!this.maximizedState.terminalPanelHidden && terminalPanelHidden) {
+        await this.call('terminal', 'togglePanel')
+      }
+
+      // Show main panel
+      const mainPanel = document.querySelector('#main-panel')
+      mainPanel?.classList.remove('d-none')
+
+      // Remove full width from right panel
+      const rightPanel = document.querySelector('#right-side-panel')
+      rightPanel?.classList.remove('right-panel-maximized')
+
+      this.isMaximized = false
+      trackMatomoEvent(this, { category: 'topbar', action: 'rightSidePanel', name: 'restored', isClick: false })
+      this.emit('rightSidePanelRestored')
+      this.events.emit('rightSidePanelRestored')
+    }
+
+    this.renderComponent()
   }
 
   highlight () {
@@ -262,7 +378,7 @@ export class RightSidePanel extends AbstractPanel {
   }
 
   updateComponent(state: any) {
-    return <RemixPluginPanel header={<RemixUIPanelHeader plugins={state.plugins} pinView={this.pinView.bind(this)} unPinView={this.unPinView.bind(this)} togglePanel={this.togglePanel.bind(this)}></RemixUIPanelHeader>} { ...state } />
+    return <RemixPluginPanel header={<RemixUIPanelHeader plugins={state.plugins} pinView={this.pinView.bind(this)} unPinView={this.unPinView.bind(this)} togglePanel={this.togglePanel.bind(this)} maximizePanel={this.maximizePanel.bind(this)} isMaximized={this.isMaximized}></RemixUIPanelHeader>} { ...state } />
   }
 
   renderComponent() {

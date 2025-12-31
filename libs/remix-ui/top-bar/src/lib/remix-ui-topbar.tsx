@@ -5,16 +5,17 @@ import '../css/topbar.css'
 import { Button, Dropdown } from 'react-bootstrap'
 import { CustomToggle, CustomTopbarMenu } from 'libs/remix-ui/helper/src/lib/components/custom-dropdown'
 import { WorkspaceMetadata } from 'libs/remix-ui/workspace/src/lib/types'
-import { AppContext, appPlatformTypes, platformContext } from 'libs/remix-ui/app/src/lib/remix-app/context/context'
+import { AppContext, platformContext } from 'libs/remix-ui/app/src/lib/remix-app/context/context'
 import { FormattedMessage, useIntl } from 'react-intl'
 import { TopbarContext } from '../context/topbarContext'
 import { WorkspacesDropdown } from '../components/WorkspaceDropdown'
 import { useOnClickOutside } from 'libs/remix-ui/remix-ai-assistant/src/components/onClickOutsideHook'
-import { cloneRepository, deleteWorkspace, fetchWorkspaceDirectory, deleteAllWorkspaces as deleteAllWorkspacesAction, handleDownloadFiles, handleDownloadWorkspace, handleExpandPath, publishToGist, renameWorkspace, restoreBackupZip, switchToWorkspace } from 'libs/remix-ui/workspace/src/lib/actions'
+import { deleteWorkspace, fetchWorkspaceDirectory, deleteAllWorkspaces as deleteAllWorkspacesAction, handleDownloadFiles, handleDownloadWorkspace, handleExpandPath, publishToGist, renameWorkspace, restoreBackupZip, switchToWorkspace } from 'libs/remix-ui/workspace/src/lib/actions'
 import { GitHubUser } from 'libs/remix-api/src/lib/types/git'
 import { GitHubCallback } from '../topbarUtils/gitOauthHandler'
 import { GitHubLogin } from '../components/gitLogin'
 import { CustomTooltip } from 'libs/remix-ui/helper/src/lib/components/custom-tooltip'
+import { useCloneRepositoryModal } from '../components/CloneRepositoryModal'
 import { TrackingContext } from '@remix-ide/tracking'
 import { MatomoEvent, TopbarEvent, WorkspaceEvent } from '@remix-api'
 import { appActionTypes } from 'libs/remix-ui/app/src/lib/remix-app/actions/app'
@@ -47,13 +48,19 @@ export function RemixUiTopbar() {
   useOnClickOutside([subMenuIconRef, themeIconRef], () => setShowSubMenuFlyOut(false))
   useOnClickOutside([themeIconRef], () => setShowTheme(false))
   const workspaceRenameInput = useRef()
-  const cloneUrlRef = useRef<HTMLInputElement>()
   const [leftPanelHidden, setLeftPanelHidden] = useState<boolean>(false)
   const [bottomPanelHidden, setBottomPanelHidden] = useState<boolean>(false)
   const [rightPanelHidden, setRightPanelHidden] = useState<boolean>(false)
 
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Use the clone repository modal hook
+  const { showCloneModal } = useCloneRepositoryModal({
+    intl,
+    platform,
+    plugin: global.plugin
+  });
 
   // Check if we're on the callback page
   if (window.location.pathname === '/auth/github/callback') {
@@ -335,22 +342,6 @@ export function RemixUiTopbar() {
     )
   }
 
-  const cloneModalMessage = () => {
-    return (
-      <>
-        <input
-          type="text"
-          data-id="modalDialogCustomPromptTextClone"
-          placeholder={intl.formatMessage({
-            id: 'filePanel.workspace.enterGitUrl'
-          })}
-          ref={cloneUrlRef}
-          className="form-control"
-        />
-      </>
-    )
-  }
-
   const loginWithGitHub = async () => {
     global.plugin.call('dgit', 'login')
     trackMatomoEvent({ category: 'topbar', action: 'GIT', name: 'login', isClick: true })
@@ -360,32 +351,6 @@ export function RemixUiTopbar() {
     global.plugin.call('dgit', 'logOut')
 
     trackMatomoEvent({ category: 'topbar', action: 'GIT', name: 'logout', isClick: true })
-  }
-
-  const handleTypingUrl = () => {
-    const url = cloneUrlRef.current.value
-
-    if (url) {
-      cloneRepository(url)
-    } else {
-      global.modal(
-        intl.formatMessage({ id: 'filePanel.workspace.clone' }),
-        intl.formatMessage({ id: 'filePanel.workspace.cloneMessage' }),
-        intl.formatMessage({ id: (platform !== appPlatformTypes.desktop) ? 'filePanel.ok' : 'filePanel.selectFolder' }),
-        () => { },
-        intl.formatMessage({ id: 'filePanel.cancel' })
-      )
-    }
-  }
-
-  const cloneGitRepository = () => {
-    global.modal(
-      intl.formatMessage({ id: 'filePanel.workspace.clone' }),
-      cloneModalMessage(),
-      intl.formatMessage({ id: (platform !== appPlatformTypes.desktop) ? 'filePanel.ok' : 'filePanel.selectFolder' }),
-      handleTypingUrl,
-      intl.formatMessage({ id: 'filePanel.cancel' })
-    )
   }
 
   const renameModalMessage = (workspaceName?: string) => {
@@ -408,8 +373,7 @@ export function RemixUiTopbar() {
   }
 
   const createWorkspace = async () => {
-    await plugin.call('manager', 'activatePlugin', 'templateSelection')
-    await plugin.call('tabs', 'focus', 'templateSelection')
+    openTemplateExplorer()
   }
 
   const renameCurrentWorkspace = (workspaceName?: string) => {
@@ -637,7 +601,7 @@ export function RemixUiTopbar() {
         >
           <>
             <GitHubLogin
-              cloneGitRepository={cloneGitRepository}
+              cloneGitRepository={showCloneModal}
               logOutOfGithub={logOutOfGithub}
               publishToGist={publishToGist}
               loginWithGitHub={loginWithGitHub}

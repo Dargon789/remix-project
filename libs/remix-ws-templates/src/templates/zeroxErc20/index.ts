@@ -1,4 +1,4 @@
-export default async () => {
+export default async (opts, plugin) => {
   return {
     // @ts-ignore
     'contracts/SampleERC20.sol': (await import('raw-loader!./contracts/SampleERC20.sol')).default,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { compile, helper, Source, CompilerInputOptions, compilerInputFactory, CompilerInput } from '@remix-project/remix-solidity'
 import { CompileTabLogic, parseContracts } from '@remix-ui/solidity-compiler' // eslint-disable-line
-import type { ConfigurationSettings, iSolJsonBinData } from '@remix-project/remix-lib'
+import { ConfigurationSettings, iSolJsonBinData, execution } from '@remix-project/remix-lib'
 
 export const CompilerApiMixin = (Base) => class extends Base {
   currentFile: string
@@ -106,12 +106,16 @@ export const CompilerApiMixin = (Base) => class extends Base {
     this.call('compileAndRun', 'runScriptAfterCompilation', fileName)
   }
 
-  compileWithHardhat (configFile) {
-    return this.call('hardhat', 'compile', configFile)
+  compileWithHardhat () {
+    return this.call('hardhat', 'compile')
   }
 
-  compileWithTruffle (configFile) {
-    return this.call('truffle', 'compile', configFile)
+  compileWithFoundry () {
+    return this.call('foundry', 'compile')
+  }
+
+  compileWithTruffle () {
+    return this.call('truffle', 'compile')
   }
 
   logToTerminal (content) {
@@ -132,9 +136,13 @@ export const CompilerApiMixin = (Base) => class extends Base {
    * This function is used by remix-plugin compiler API.
    * @param {string} fileName to compile
    */
-  compile (fileName) {
+  async compile (fileName) {
     this.currentFile = fileName
-    return this.compileTabLogic.compileFile(fileName)
+    let type = 'remix'
+    if (await this.getAppParameter('hardhat-compilation')) type = 'hardhat'
+    else if (await this.getAppParameter('truffle-compilation')) type = 'truffle'
+    else if (await this.getAppParameter('foundry-compilation')) type = 'foundry'
+    return this.compileTabLogic.runCompiler(type, fileName)
   }
 
   compileFile (event) {
@@ -256,6 +264,11 @@ export const CompilerApiMixin = (Base) => class extends Base {
       if (this.onSetWorkspace) this.onSetWorkspace(workspace.isLocalhost, workspace.name)
     })
 
+    this.on('fs', 'workingDirChanged', (path) => {
+      this.resetResults()
+      if (this.onSetWorkspace) this.onSetWorkspace(true, 'localhost')
+    })
+
     this.on('fileManager', 'fileRemoved', (path) => {
       if (this.onFileRemoved) this.onFileRemoved(path)
     })
@@ -350,6 +363,18 @@ export const CompilerApiMixin = (Base) => class extends Base {
     }
     this.compiler.event.register('compilationFinished', this.data.eventHandlers.onCompilationFinished)
 
+    this.on('foundry', 'compilationFinished', (target, sources, lang, output, version) => {
+      const contract = output.contracts[target][Object.keys(output.contracts[target])[0]]
+      sources.target = target
+      this.data.eventHandlers.onCompilationFinished(true, output, sources, JSON.stringify(contract.metadata), version)
+    })
+
+    this.on('hardhat', 'compilationFinished', (target, sources, lang, output, version) => {
+      const contract = output.contracts[target][Object.keys(output.contracts[target])[0]]
+      sources.target = target
+      this.data.eventHandlers.onCompilationFinished(true, output, sources, JSON.stringify(contract.metadata), version)
+    })
+
     this.data.eventHandlers.onThemeChanged = (theme) => {
       const invert = theme.quality === 'dark' ? 1 : 0
       const img = document.getElementById('swarmLogo')
@@ -367,7 +392,8 @@ export const CompilerApiMixin = (Base) => class extends Base {
         if (this.currentFile && (this.currentFile.endsWith('.sol') || this.currentFile.endsWith('.yul'))) {
           if (await this.getAppParameter('hardhat-compilation')) this.compileTabLogic.runCompiler('hardhat')
           else if (await this.getAppParameter('truffle-compilation')) this.compileTabLogic.runCompiler('truffle')
-          else this.compileTabLogic.runCompiler(undefined).catch((error) => {
+          else if (await this.getAppParameter('foundry-compilation')) this.compileTabLogic.runCompiler('foundry')
+          else this.compileTabLogic.runCompiler('remix').catch((error) => {
             this.call('notification', 'toast', error.message)
           })
         } else if (this.currentFile && this.currentFile.endsWith('.circom')) {
@@ -391,7 +417,8 @@ export const CompilerApiMixin = (Base) => class extends Base {
       }
       const contractMap = {}
       const contractsDetails = {}
-      this.compiler.visitContracts((contract) => {
+
+      execution.txHelper.visitContracts(data.contracts, (contract) => {
         contractMap[contract.name] = contract
         contractsDetails[contract.name] = parseContracts(
           contract.name,

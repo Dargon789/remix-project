@@ -1,4 +1,4 @@
-export default async () => {
+export default async (opts, plugin) => {
   return {
     // @ts-ignore
     'contracts/1_Storage.sol': (await import('raw-loader!./contracts/1_Storage.sol')).default,

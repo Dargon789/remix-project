@@ -53,6 +53,7 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
   const [contextChoice, setContextChoice] = useState<'none' | 'current' | 'opened' | 'workspace'>(
     'none'
   )
+  const [aiAssistantHeight, setAiAssistantHeight] = useState(window.innerHeight < 750 ? 87 : window.innerHeight < 1000 ? 89.6 : 92)
 
   // Check if MCP is enabled via query parameter
   const queryParams = new QueryParams()
@@ -78,21 +79,39 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
   const userHasScrolledRef = useRef(false)
   const lastMessageCountRef = useRef(0)
 
-  // Ref to hold the sendPrompt function for audio transcription callback
-  const sendPromptRef = useRef<((prompt: string) => Promise<void>) | null>(null)
-
   // Audio transcription hook
   const {
     isRecording,
     isTranscribing,
-    error: transcriptionError,
+    error,
     toggleRecording
   } = useAudioTranscription({
     model: 'whisper-v3',
     onTranscriptionComplete: async (text) => {
-      if (sendPromptRef.current) {
-        await sendPromptRef.current(text)
+      // Check if transcription ends with "stop" (case-insensitive, with optional punctuation)
+      const trimmedText = text.trim()
+      const endsWithStop = /\bstop\b[\s.,!?;:]*$/i.test(trimmedText)
+
+      if (endsWithStop) {
+        // Remove "stop" and punctuation from the end and just append to input box (don't execute)
+        const promptText = trimmedText.replace(/\bstop\b[\s.,!?;:]*$/i, '').trim()
+        setInput(prev => prev ? `${prev} ${promptText}`.trim() : promptText)
+        // Focus the textarea so user can review/edit
+        if (textareaRef.current) {
+          textareaRef.current.focus()
+        }
         trackMatomoEvent({ category: 'ai', action: 'SpeechToTextPrompt', name: 'SpeechToTextPrompt', isClick: true })
+      } else {
+        // Append transcription to the input box and execute the prompt
+        setInput(prev => prev ? `${prev} ${text}`.trim() : text)
+        if (trimmedText) {
+          await sendPrompt(trimmedText)
+          trackMatomoEvent({ category: 'ai', action: 'SpeechToTextPrompt', name: 'SpeechToTextPrompt', isClick: true })
+        }
+        // Focus the textarea
+        if (textareaRef.current) {
+          textareaRef.current.focus()
+        }
       }
     },
     onError: (error) => {
@@ -524,11 +543,6 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
     [isStreaming, props.plugin]
   )
 
-  // Update ref for audio transcription callback
-  useEffect(() => {
-    sendPromptRef.current = sendPrompt
-  }, [sendPrompt])
-
   const handleGenerateWorkspaceWithPrompt = useCallback(async (prompt: string) => {
     dispatchActivity('button', 'generateWorkspace')
     if (prompt && prompt.trim()) {
@@ -821,7 +835,7 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
 
   return (
     <div
-      className="d-flex flex-column h-100 w-100 overflow-x-hidden"
+      className="d-flex flex-column w-100 overflow-x-hidden h-100"
       ref={aiChatRef}
     >
       <section id="remix-ai-chat-history" className="h-83 d-flex flex-column p-2 overflow-x-hidden" style={{ flex: 7, overflowY: 'scroll' }} ref={chatHistoryRef}>

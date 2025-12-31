@@ -2,6 +2,8 @@ export * from './lib/remix-ui-tabs'
 export { CompileDropdown } from './lib/components/CompileDropdown'
 export { default as RunScriptDropdown } from './lib/components/RunScriptDropdown'
 export { default as Dropdown } from './lib/components/DropdownMenu'
+export { default as EmptyDropdown } from './lib/components/EmptyDropdown'
+export { default as AmpSqlDropdown } from './lib/components/AmpSqlDropdown'
 
 export { default as AnalysisLogo } from './assets/icons/Analysis'
 export { default as ArrowRightBig } from './assets/icons/ArrowRightBig'

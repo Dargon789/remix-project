@@ -777,12 +777,11 @@ ${toolsList}`,
           const result = await this.executeTool(targetServer, innerToolCall);
           return result
         },
-        30000 // 30 second timeout
+        60000 * 10, // 10 minutes
       );
 
       // Execute the code
       const result = await codeExecutor.execute(code);
-      console.log(`[MCP Code Mode] inner tool executed with result`, result);
 
       // Convert code execution result to MCP tool result format
       if (result.success) {

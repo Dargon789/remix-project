@@ -10,7 +10,9 @@ export interface RemixPanelProps {
   plugins: Record<string, PluginRecord>,
   pinView?: (profile: PluginRecord['profile'], view: PluginRecord['view']) => void,
   unPinView?: (profile: PluginRecord['profile']) => void,
-  togglePanel?: () => void
+  togglePanel?: () => void,
+  maximizePanel?: () => void,
+  isMaximized?: boolean
 }
 const RemixUIPanelHeader = (props: RemixPanelProps) => {
   const [plugin, setPlugin] = useState<PluginRecord>()
@@ -43,6 +45,10 @@ const RemixUIPanelHeader = (props: RemixPanelProps) => {
 
   const togglePanelHandler = () => {
     props.togglePanel && props.togglePanel()
+  }
+
+  const maximizePanelHandler = () => {
+    props.maximizePanel && props.maximizePanel()
   }
 
   const tooltipChild = <i className={`px-1 ms-2 pt-1 pb-2 ${!toggleExpander ? 'fas fa-angle-right' : 'fas fa-angle-down bg-light'}`} aria-hidden="true"></i>
@@ -99,6 +105,15 @@ const RemixUIPanelHeader = (props: RemixPanelProps) => {
                           <div className="codicon codicon-layout-sidebar-left-dock ms-2 fs-6 fw-bold lh-1" style={{ marginTop: '2px' }}></div>
                         </CustomTooltip>
                       </div>
+                      <CustomTooltip placement="bottom-end" tooltipText={props.isMaximized ? "Minimize Panel" : "Maximize Panel"}>
+                        <div
+                          className="codicon-screen-icon ms-2"
+                          onClick={maximizePanelHandler}
+                          data-id="maximizeRightSidePanel"
+                        >
+                          {props.isMaximized ? '\ueb4d' : '\ueb4c' /* Actual icons were not being rendered, so used unicode for codicon-screen-full & codicon-screen-normal icons*/ }
+                        </div>
+                      </CustomTooltip>
                       <CustomTooltip placement="bottom-end" tooltipText="Hide Panel">
                         <div
                           className="codicon codicon-close ms-2 fs-5 fw-bold"

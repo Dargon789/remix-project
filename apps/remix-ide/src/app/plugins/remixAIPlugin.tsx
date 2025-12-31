@@ -8,6 +8,8 @@ import { IMCPServer, IMCPConnectionStatus } from '@remix/remix-ai-core';
 import { RemixMCPServer, createRemixMCPServer } from '@remix/remix-ai-core';
 import axios from 'axios';
 import { endpointUrls } from "@remix-endpoints-helper"
+import { QueryParams } from '@remix-project/remix-lib'
+
 type chatRequestBufferT<T> = {
   [key in keyof T]: T[key]
 }
@@ -15,7 +17,7 @@ type chatRequestBufferT<T> = {
 const profile = {
   name: 'remixAI',
   displayName: 'RemixAI',
-  methods: ['code_generation', 'code_completion', 'setContextFiles',
+  methods: ['code_generation', 'code_completion', 'setContextFiles', 'basic_prompt',
     "answer", "code_explaining", "generateWorkspace", "fixWorspaceErrors",
     "code_insertion", "error_explaining", "vulnerability_check", 'generate',
     "initialize", 'chatPipe', 'ProcessChatRequestBuffer', 'isChatRequestPending',
@@ -92,8 +94,21 @@ export class RemixAIPlugin extends Plugin {
     (window as any).getRemixAIPlugin = this
 
     // initialize the remix MCP server
-    this.remixMCPServer = await createRemixMCPServer(this)
+    const qp = new QueryParams()
+    const hasFlag = qp.exists('experimental')
+    if (hasFlag) {
+      this.remixMCPServer = await createRemixMCPServer(this)
+    }
+
     return true
+  }
+
+  async basic_prompt(prompt: string) {
+    const option = { ...GenerationParams }
+    option.stream = false
+    option.stream_result = false
+    option.return_stream_response = false
+    return await this.remoteInferencer.basic_prompt(prompt, option)
   }
 
   async code_generation(prompt: string, params: IParams=CompletionParams): Promise<any> {

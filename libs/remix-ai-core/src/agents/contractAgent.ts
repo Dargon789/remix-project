@@ -1,3 +1,4 @@
+import isElectron from 'is-electron'
 import { AssistantParams } from "../types/models";
 import { workspaceAgent } from "./workspaceAgent";
 import { CompilationResult } from "../types/types";
@@ -34,10 +35,17 @@ export class ContractAgent {
   * @param statusCallback - Optional callback for status updates in chat window
   */
   async writeContracts(payload, userPrompt, statusCallback?: (status: string) => Promise<void>) {
+    const prev_statusCallback = statusCallback
+    statusCallback = async (status: string) => {
+      console.log('Generation status:', status)
+      if (prev_statusCallback) {
+        await prev_statusCallback(status)
+      }
+    }
     await statusCallback?.('Getting current workspace info...')
     const currentWorkspace = await this.plugin.call('filePanel', 'getCurrentWorkspace')
     const writeAIResults = async (parsedResults) => {
-      if (this.plugin.isOnDesktop) {
+      if (isElectron()) {
         await statusCallback?.('Preparing files for desktop...')
         const files = parsedResults.files.reduce((acc, file) => {
           acc[file.fileName] = file.content

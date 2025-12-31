@@ -25,3 +25,12 @@
   background-color: var(--bs-secondary);
   cursor: col-resize;
 }
+
+/* Hide dragbar when right panel is maximized */
+#right-side-panel.right-panel-maximized ~ .dragbar:hover,
+#right-side-panel.right-panel-maximized ~ .dragbar.ondrag,
+#right-side-panel.right-panel-maximized ~ .dragbar {
+  background-color: transparent !important;
+  cursor: default !important;
+  pointer-events: none !important;
+}
