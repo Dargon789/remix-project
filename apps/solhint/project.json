@@ -10,7 +10,6 @@
       "outputs": [
         "{options.outputPath}"
       ],
-      "dependsOn": ["install"],
       "defaultConfiguration": "development",
       "options": {
         "compiler": "babel",
@@ -40,6 +39,7 @@
     },
     "install": {
       "executor": "nx:run-commands",
+      "cache": false,
       "options": {
         "commands": [
           "cd apps/solhint && yarn"

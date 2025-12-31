@@ -44,6 +44,16 @@ export async function autoInitializeMatomo(options: MatomoAutoInitOptions): Prom
   }
 
   try {
+    // Check for Electron - always initialize in anonymous mode (no consent needed)
+    const isElectron = (window as any).electronAPI !== undefined;
+    if (isElectron) {
+      log('Electron detected, auto-initializing in anonymous mode (server-side tracking)');
+      await matomoManager.initialize('anonymous');
+      await matomoManager.processPreInitQueue();
+      log('Electron Matomo initialized and pre-init queue processed');
+      return true;
+    }
+
     // Check if we should show the consent dialog
     const shouldShowDialog = matomoManager.shouldShowConsentDialog(config);
 

@@ -9,17 +9,23 @@ import { CompilerAbstract } from '@remix-project/remix-solidity'
 
 export class ContractVerificationPluginClient extends PluginClient {
   public internalEvents: EventManager
+  private _isActivated: boolean = false
 
   constructor() {
     super()
-    this.methods = ['lookupAndSave', 'verifyOnDeploy']
+    this.methods = ['lookupAndSave', 'verifyOnDeploy', 'isVerificationSupportedForChain']
     this.internalEvents = new EventManager()
     createClient(this)
     this.onload()
   }
 
   onActivation(): void {
+    this._isActivated = true
     this.internalEvents.emit('verification_activated')
+  }
+
+  isActivated(): boolean {
+    return this._isActivated
   }
 
   async lookupAndSave(verifierId: string, chainId: string, contractAddress: string): Promise<LookupResponse> {
@@ -68,7 +74,9 @@ export class ContractVerificationPluginClient extends PluginClient {
     try {
       await this.call('terminal', 'log', { type: 'log', value: 'Verification process started...' })
 
-      const { chainId, currentChain, contractAddress, contractName, compilationResult, constructorArgs, etherscanApiKey } = data
+      const { chainId, currentChain, contractAddress, contractName, compilationResult, constructorArgs } = data
+
+      const globalEtherscanApiKey = data.etherscanApiKey
 
       if (!currentChain) {
         await this.call('terminal', 'log', { type: 'error', value: 'Chain data was not provided for verification.' })
@@ -76,26 +84,18 @@ export class ContractVerificationPluginClient extends PluginClient {
       }
 
       const userSettings = this.getUserSettingsFromLocalStorage()
+      const chainSettings = mergeChainSettingsWithDefaults(chainId, userSettings)
+      const localEtherscanApiKey = chainSettings.verifiers['Etherscan']?.apiKey
+      const effectiveApiKey = globalEtherscanApiKey || localEtherscanApiKey
 
-      if (etherscanApiKey) {
-        if (!userSettings.chains[chainId]) {
-          userSettings.chains[chainId] = { verifiers: {} }
+      if (effectiveApiKey) {
+        if (!chainSettings.verifiers['Etherscan']) {
+          chainSettings.verifiers['Etherscan'] = {}
         }
+        chainSettings.verifiers['Etherscan'].apiKey = effectiveApiKey
 
-        if (!userSettings.chains[chainId].verifiers.Etherscan) {
-          userSettings.chains[chainId].verifiers.Etherscan = {}
-        }
-        userSettings.chains[chainId].verifiers.Etherscan.apiKey = etherscanApiKey
-
-        if (!userSettings.chains[chainId].verifiers.Routescan) {
-          userSettings.chains[chainId].verifiers.Routescan = {}
-        }
-        if (!userSettings.chains[chainId].verifiers.Routescan.apiKey){
-          userSettings.chains[chainId].verifiers.Routescan.apiKey = "placeholder"
-        }
-
-        window.localStorage.setItem("contract-verification:settings", JSON.stringify(userSettings))
-
+        const source = globalEtherscanApiKey ? "Remix Settings" : "Plugin Settings"
+        await this.call('terminal', 'log', { type: 'info', value: `Using Etherscan API Key from: ${source}` })
       }
 
       const submittedContracts: SubmittedContracts = JSON.parse(window.localStorage.getItem('contract-verification:submitted-contracts') || '{}')
@@ -117,27 +117,18 @@ export class ContractVerificationPluginClient extends PluginClient {
       }
 
       const compilerAbstract: CompilerAbstract = compilationResult
-      const chainSettings = mergeChainSettingsWithDefaults(chainId, userSettings)
-
       const verificationPromises = []
+      const verifiers: VerifierIdentifier[] = ['Sourcify', 'Etherscan', 'Blockscout', 'Routescan']
 
-      if (validConfiguration(chainSettings, 'Sourcify')) {
-        verificationPromises.push(this._verifyWithProvider('Sourcify', submittedContract, compilerAbstract, chainId, chainSettings))
-      }
+      for (const verifier of verifiers) {
+        if (verifier === 'Etherscan' && !effectiveApiKey) {
+          await this.call('terminal', 'log', { type: 'warn', value: 'Etherscan verification skipped: API key not provided.' })
+          await this.call('terminal', 'log', { type: 'warn', value: `Please input the API key in Remix Settings - Connected Services OR Contract Verification Plugin Settings.` })
+          continue
+        }
 
-      if (currentChain.explorers && currentChain.explorers.some(explorer => explorer.name.toLowerCase().includes('routescan'))) {
-        verificationPromises.push(this._verifyWithProvider('Routescan', submittedContract, compilerAbstract, chainId, chainSettings))
-      }
-
-      if (currentChain.explorers && currentChain.explorers.some(explorer => explorer.url.includes('blockscout'))) {
-        verificationPromises.push(this._verifyWithProvider('Blockscout', submittedContract, compilerAbstract, chainId, chainSettings))
-      }
-
-      if (currentChain.explorers && currentChain.explorers.some(explorer => explorer.name.includes('etherscan'))) {
-        if (etherscanApiKey) {
-          verificationPromises.push(this._verifyWithProvider('Etherscan', submittedContract, compilerAbstract, chainId, chainSettings))
-        } else {
-          await this.call('terminal', 'log', { type: 'warn', value: 'Etherscan verification skipped: API key not found in global Settings.' })
+        if (validConfiguration(chainSettings, verifier)) {
+          verificationPromises.push(this._verifyWithProvider(verifier, submittedContract, compilerAbstract, chainId, chainSettings))
         }
       }
 
@@ -149,6 +140,23 @@ export class ContractVerificationPluginClient extends PluginClient {
 
     } catch (error) {
       await this.call('terminal', 'log', { type: 'error', value: `An unexpected error occurred during verification: ${error.message}` })
+    }
+  }
+
+  async isVerificationSupportedForChain(chainId: string): Promise<boolean> {
+    try {
+      const userSettings = this.getUserSettingsFromLocalStorage()
+      const chainSettings = mergeChainSettingsWithDefaults(chainId, userSettings)
+
+      for (const verifierId of VERIFIERS) {
+        if (validConfiguration(chainSettings, verifierId as VerifierIdentifier)) {
+          return true
+        }
+      }
+      return false
+    } catch (e) {
+      console.error(e)
+      return false
     }
   }
 

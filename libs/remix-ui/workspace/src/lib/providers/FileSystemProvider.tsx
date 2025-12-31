@@ -71,7 +71,7 @@ export const FileSystemProvider = (props: WorkspaceProps) => {
   const [modals, setModals] = useState<Modal[]>([])
   const [focusToaster, setFocusToaster] = useState<string>('')
   const [toasters, setToasters] = useState<string[]>([])
-
+  const [theme, setTheme] = useState<any>(null)
   const dispatchInitWorkspace = async () => {
     await initWorkspace(plugin)(fsDispatch)
   }
@@ -252,6 +252,22 @@ export const FileSystemProvider = (props: WorkspaceProps) => {
     await removeRecentElectronFolder(path)
   }
 
+  const dispatchOpenElectronFolderInNewWindow = async (path: string) => {
+    try {
+      await plugin.call('fs', 'openFolder', path)
+    } catch (error) {
+      console.error('Error opening folder in new window:', error)
+    }
+  }
+
+  const dispatchRevealElectronFolderInExplorer = async (path: string | null) => {
+    try {
+      await plugin.call('fs', 'revealInExplorer', { path: [path]}, true)
+    } catch (error) {
+      console.error('Error revealing folder in explorer:', error)
+    }
+  }
+
   const dispatchUpdateGitSubmodules = async () => {
     await updateGitSubmodules()
   }
@@ -308,6 +324,15 @@ export const FileSystemProvider = (props: WorkspaceProps) => {
   useEffect(() => {
     plugin.expandPath = fs.browser.expandPath
   },[fs.browser.expandPath])
+
+  useEffect(() => {
+    plugin.on('theme', 'themeChanged', (theme: any) => {
+      setTheme(theme)
+    })
+    return () => {
+      plugin.off('theme', 'themeChanged')
+    }
+  }, [])
 
   const handleHideModal = () => {
     setFocusModal((modal) => {
@@ -382,7 +407,10 @@ export const FileSystemProvider = (props: WorkspaceProps) => {
     dispatchOpenElectronFolder,
     dispatchGetElectronRecentFolders,
     dispatchRemoveRecentFolder,
-    dispatchUpdateGitSubmodules
+    dispatchOpenElectronFolderInNewWindow,
+    dispatchRevealElectronFolderInExplorer,
+    dispatchUpdateGitSubmodules,
+    theme
   }
   return (
     <FileSystemContext.Provider value={value}>

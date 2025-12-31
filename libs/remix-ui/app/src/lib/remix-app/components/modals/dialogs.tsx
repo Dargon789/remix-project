@@ -1,16 +1,27 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useDialogDispatchers, useDialogs } from '../../context/provider'
-import { Toaster } from '@remix-ui/toaster'
+import { ToasterContainer } from '@remix-ui/toaster'
 import ModalWrapper from './modal-wrapper'
 
 const AppDialogs = () => {
   const { handleHideModal, handleToaster } = useDialogDispatchers()
-  const { focusModal, focusToaster } = useDialogs()
+  const { focusModal, toasters } = useDialogs()
+
+  // Map toasters to ToasterProps format with useMemo to prevent recreating on every render
+  const toastList = useMemo(() => {
+    return toasters.map((toaster) => ({
+      message: toaster.message,
+      id: toaster.toastId || `toast-${toaster.timestamp}`,
+      timeout: toaster.timeout,
+      timestamp: toaster.timestamp,
+      handleHide: handleToaster
+    }))
+  }, [toasters, handleToaster])
 
   return (
     <>
       <ModalWrapper {...focusModal} handleHide={handleHideModal}></ModalWrapper>
-      <Toaster message={focusToaster.message} timestamp={focusToaster.timestamp} handleHide={handleToaster} />
+      <ToasterContainer toasts={toastList} />
     </>
   )
 }

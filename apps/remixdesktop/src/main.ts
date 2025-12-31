@@ -34,29 +34,45 @@ if (
 // get system home dir
 const homeDir = app.getPath('userData')
 
-
 const windowSet = new Set<BrowserWindow>([]);
 export const createWindow = async (dir?: string): Promise<void> => {
-  await app.whenReady(); 
+  await app.whenReady();
   // reize factor
   let resizeFactor = 0.8
   // if the window is too small the size is 100%
   if (screen.getPrimaryDisplay().size.width < 2560 || screen.getPrimaryDisplay().size.height < 1440) {
     resizeFactor = 1
   }
-  const width = screen.getPrimaryDisplay().size.width * resizeFactor
-  const height = screen.getPrimaryDisplay().size.height * resizeFactor
+  const windowWidth = Math.round(screen.getPrimaryDisplay().size.width * resizeFactor)
+  const windowHeight = Math.round(screen.getPrimaryDisplay().size.height * resizeFactor)
 
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: (isE2E ? 2560 : width),
-    height: (isE2E ? 1140 : height),
+    // For normal use, start at ~80% of the primary display; E2E will maximize anyway
+    width: windowWidth,
+    height: windowHeight,
+    minWidth: 1024,
+    minHeight: 650,
     frame: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js')
-
+      preload: path.join(__dirname, 'preload.js'),
+      // Hint an initial zoom; Electron applies this at creation time
+      zoomFactor: (isE2E ? 0.5 : 1.0),
     },
   });
+
+  // Ensure zoom is applied after content loads (some pages reset it on load)
+  if (isE2E) {
+    const applyZoom = () => {
+      try { mainWindow.webContents.setZoomFactor(0.5); } catch (_) {}
+    };
+    // Apply once the first load finishes
+    mainWindow.webContents.once('did-finish-load', applyZoom);
+    // Re-apply on any navigation within the window (SPA route changes, reloads)
+    mainWindow.webContents.on('did-navigate-in-page', applyZoom);
+    mainWindow.webContents.on('did-navigate', applyZoom);
+  }
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url); // Open URL in user's browser.
     return { action: "deny" }; // Prevent the app from opening the URL.
@@ -114,7 +130,7 @@ app.on('activate', () => {
 });
 
 if (!isE2E) {
-  
+
   app.setAsDefaultProtocolClient('remix')
   // windows only
   const gotTheLock = app.requestSingleInstanceLock();
@@ -140,7 +156,7 @@ if (!isE2E) {
       }
     });
   }
-  
+
 }
 
 function handleRemixUrl(url: string) {
@@ -160,18 +176,18 @@ function handleRemixUrl(url: string) {
     }
 
     switch (fullPath) {
-      case '/auth/callback': {
-        const code = searchParams.get('code');
-        if (code) {
-          githubAuthHandlerPlugin?.exchangeCodeForToken(code);
-          console.log('Auth exchange', code);
-        }
-        break;
+    case '/auth/callback': {
+      const code = searchParams.get('code');
+      if (code) {
+        githubAuthHandlerPlugin?.exchangeCodeForToken(code);
+        console.log('Auth exchange', code);
       }
+      break;
+    }
 
-      default:
-        console.warn('Unknown remix:// URL path:', fullPath);
-        break;
+    default:
+      console.warn('Unknown remix:// URL path:', fullPath);
+      break;
     }
   } catch (err) {
     console.error('Failed to handle remix:// URL:', err);
@@ -227,8 +243,6 @@ if (!isE2E) {
   });
 }
 
-
-
 const showAbout = () => {
   void dialog.showMessageBox({
     title: `About Remix`,
@@ -256,20 +270,19 @@ import main from './menus/main';
 import { trackEvent } from './utils/matamo';
 import { githubAuthHandlerPlugin } from './engine';
 
-
 const commandKeys: Record<string, string> = {
   'window:new': 'CmdOrCtrl+N',
   'folder:open': 'CmdOrCtrl+O',
 };
 
 const menu = [...(process.platform === 'darwin' ? [darwinMenu(commandKeys, execCommand, showAbout)] : []),
-FileMenu(commandKeys, execCommand),
-GitMenu(commandKeys, execCommand),
-EditMenu(commandKeys, execCommand),
-ViewMenu(commandKeys, execCommand),
-TerminalMenu(commandKeys, execCommand),
-WindowMenu(commandKeys, execCommand, []),
-HelpMenu(commandKeys, execCommand),
+  FileMenu(commandKeys, execCommand),
+  GitMenu(commandKeys, execCommand),
+  EditMenu(commandKeys, execCommand),
+  ViewMenu(commandKeys, execCommand),
+  TerminalMenu(commandKeys, execCommand),
+  WindowMenu(commandKeys, execCommand, []),
+  HelpMenu(commandKeys, execCommand),
 ]
 if (!isE2E || isE2ELocal)
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu))
@@ -286,14 +299,10 @@ ipcMain.handle('config:isE2E', async () => {
   return isE2E
 })
 
-ipcMain.handle('config:canTrackMatomo', async (event, name: string) => {
-  console.log('config:canTrackMatomo', ((process.env.NODE_ENV === 'production' || isPackaged) && !isE2E))
-  return ((process.env.NODE_ENV === 'production' || isPackaged) && !isE2E)
-})
-
 ipcMain.handle('matomo:trackEvent', async (event, data) => {
   if (data && data[0] && data[0] === 'trackEvent') {
-    trackEvent(data[1], data[2], data[3], data[4])
+    // data[5] is isClick (optional)
+    trackEvent(data[1], data[2], data[3], data[4], 0, data[5]);
   }
 })
 

@@ -21,7 +21,7 @@ export default function GitStatus({ plugin, gitBranchName, setGitBranchName }: G
 
   const initializeNewGitRepo = async () => {
     await plugin.call('dgit', 'init')
-    trackMatomoEvent(plugin, { category: 'git', action: 'INIT', name: 'initNewRepo', isClick: false });
+    trackMatomoEvent(plugin, { category: 'statusBar', action: 'initNewRepo', isClick: true });
   }
 
   if (!appContext.appState.canUseGit) return null
@@ -31,7 +31,7 @@ export default function GitStatus({ plugin, gitBranchName, setGitBranchName }: G
       tooltipText={`${appContext.appState.needsGitInit ? 'Initialize as git repo' : 'Current branch: ' + appContext.appState.currentBranch.name}`}
     >
       <div
-        className="d-flex flex-row ps-3 small text-white justify-content-center align-items-center remixui_statusbar_gitstatus"
+        className="d-flex flex-row ps-3 text-white justify-content-center align-items-center remixui_statusbar_gitstatus"
         onClick={async () => await openDgit()}
       >
         {!appContext.appState.needsGitInit ? <span className="fa-regular fa-code-branch ms-1"></span>

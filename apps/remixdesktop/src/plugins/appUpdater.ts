@@ -110,12 +110,35 @@ class AppUpdaterPluginClient extends ElectronBasePluginClient {
 
   async checkForUpdates(): Promise<void> {
     console.log('checkForUpdates')
+    
+    // Get OS information
+    const platform = process.platform
+    let osName = 'Unknown OS'
+    if (platform === 'darwin') osName = 'macOS'
+    else if (platform === 'win32') osName = 'Windows'
+    else if (platform === 'linux') osName = 'Linux'
+    
+    // Send welcome message
+    const welcomeMessage = `Welcome to Remix Desktop ${autoUpdater.currentVersion} on ${osName}
+
+This desktop version includes:
+• Native Git integration - Access your system's Git directly from Remix
+• Native Terminals - Full-featured terminal emulator with native shell access
+  Click "New Terminal" in the Terminal menu to open native ${osName} terminals
+
+You can use this output terminal to:
+• Execute JavaScript scripts
+  - Input a script directly in the command line interface
+  - Select a JavaScript file in the file explorer and run \`remix.execute()\` or \`remix.exeCurrent()\` in the command line interface
+  - Right-click on a JavaScript file in the file explorer and click \`Run\`
+`
+    
     this.call('terminal', 'log', {
       type: 'log',
-      value: 'Remix Desktop version: ' + autoUpdater.currentVersion,
+      value: welcomeMessage,
     })
+    
     trackEvent('App', 'CheckForUpdate', 'Remix Desktop version: ' + autoUpdater.currentVersion, 1);
-
     autoUpdater.checkForUpdates()
   }
 }

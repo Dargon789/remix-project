@@ -10,6 +10,7 @@ import EventManager from '../../lib/events'
 
 import { CompilerImports } from '@remix-project/core-plugin' // eslint-disable-line
 import { RemixUiXterminals } from '@remix-ui/xterm'
+import { trackMatomoEvent } from '@remix-api'
 
 const KONSOLES = []
 
@@ -18,7 +19,7 @@ function register(api) { KONSOLES.push(api) }
 const profile = {
   displayName: 'Terminal',
   name: 'terminal',
-  methods: ['log', 'logHtml'],
+  methods: ['log', 'logHtml', 'togglePanel', 'isPanelHidden'],
   events: [],
   description: 'Remix IDE terminal',
   version: packageJson.version
@@ -53,6 +54,7 @@ export default class Terminal extends Plugin {
   _shell: any
   dispatch: any
   terminalApi: any
+  isHidden: boolean
   constructor(opts, api) {
     super(profile)
     this.fileImport = new CompilerImports()
@@ -114,6 +116,27 @@ export default class Terminal extends Plugin {
 
   onActivation() {
     this.renderComponent()
+    // Initialize isHidden state from panelStates in localStorage
+    const panelStatesStr = window.localStorage.getItem('panelStates')
+    const panelStates = panelStatesStr ? JSON.parse(panelStatesStr) : {}
+
+    if (panelStates.bottomPanel) {
+      this.isHidden = panelStates.bottomPanel.isHidden || false
+      // Apply d-none class to hide the terminal on reload if it was hidden
+      if (this.isHidden) {
+        const terminalPanel = document.querySelector('.terminal-wrap')
+        terminalPanel?.classList.add('d-none')
+        trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'hiddenOnLoad', isClick: false })
+      }
+    } else {
+      // Initialize with default state if not found
+      this.isHidden = false
+      panelStates.bottomPanel = {
+        isHidden: this.isHidden,
+        pluginProfile: this.profile
+      }
+      window.localStorage.setItem('panelStates', JSON.stringify(panelStates))
+    }
   }
 
   onDeactivation() {
@@ -124,11 +147,61 @@ export default class Terminal extends Plugin {
   }
 
   logHtml(html) {
+    // Unhide terminal panel if it's hidden when a log is added
+    if (this.isHidden) {
+      this.showPanel()
+    }
     this.terminalApi.logHtml(html)
   }
 
   log(message, type) {
+    // Unhide terminal panel if it's hidden when a log is added
+    if (this.isHidden) {
+      this.showPanel()
+    }
     this.terminalApi.log(message, type)
+  }
+
+  showPanel() {
+    const terminalPanel = document.querySelector('.terminal-wrap')
+    this.isHidden = false
+    terminalPanel?.classList.remove('d-none')
+    trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'shownOnLog', isClick: false })
+    this.emit('terminalPanelShown')
+
+    // Persist the state
+    const panelStates = JSON.parse(window.localStorage.getItem('panelStates') || '{}')
+    panelStates.bottomPanel = {
+      isHidden: this.isHidden,
+      pluginProfile: this.profile
+    }
+    window.localStorage.setItem('panelStates', JSON.stringify(panelStates))
+  }
+
+  togglePanel() {
+    const terminalPanel = document.querySelector('.terminal-wrap')
+    if (this.isHidden) {
+      this.isHidden = false
+      terminalPanel?.classList.remove('d-none')
+      trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'shownOnToggleIconClick', isClick: false })
+      this.emit('terminalPanelShown')
+    } else {
+      this.isHidden = true
+      terminalPanel?.classList.add('d-none')
+      trackMatomoEvent(this, { category: 'topbar', action: 'terminalPanel', name: 'hiddenOnToggleIconClick', isClick: false })
+      this.emit('terminalPanelHidden')
+    }
+    // Persist the hidden state and plugin profile to panelStates
+    const panelStates = JSON.parse(window.localStorage.getItem('panelStates') || '{}')
+    panelStates.bottomPanel = {
+      isHidden: this.isHidden,
+      pluginProfile: this.profile
+    }
+    window.localStorage.setItem('panelStates', JSON.stringify(panelStates))
+  }
+
+  isPanelHidden() {
+    return this.isHidden
   }
 
   setDispatch(dispatch) {

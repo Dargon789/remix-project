@@ -179,16 +179,21 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
     const selectorList = binVersions
 
     const wasmVersions = data.wasmList
+
+    // Runtime configuration for E2E tests (injected via post-build script)
+    // Falls back to default URLs for production builds
+    const runtimeConfig = typeof window !== 'undefined' ? (window as any)['__REMIX_COMPILER_URLS__'] : undefined
+
     selectorList.forEach((compiler, index) => {
       const wasmIndex = wasmVersions.findIndex((wasmCompiler) => {
         return wasmCompiler.longVersion === compiler.longVersion
       })
       if (wasmIndex !== -1) {
-        const URLWasm: string = process && process.env && process.env['NX_WASM_URL'] ? process.env['NX_WASM_URL'] : wasmVersions[wasmIndex].wasmURL || data.baseURLWasm
+        const URLWasm: string = runtimeConfig?.wasmURL || wasmVersions[wasmIndex].wasmURL || data.baseURLWasm
         selectorList[index] = wasmVersions[wasmIndex]
         pathToURL[compiler.path] = URLWasm
       } else {
-        const URLBin: string = process && process.env && process.env['NX_BIN_URL'] ? process.env['NX_BIN_URL'] : compiler.binURL || data.baseURLBin
+        const URLBin: string = runtimeConfig?.binURL || compiler.binURL || data.baseURLBin
         pathToURL[compiler.path] = URLBin
       }
     })

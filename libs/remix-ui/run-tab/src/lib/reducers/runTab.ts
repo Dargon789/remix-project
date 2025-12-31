@@ -20,11 +20,11 @@ export const runTabInitialState: RunTabState = {
   sendValue: '0',
   sendUnit: 'wei',
   gasLimit: 0,
-  selectExEnv: 'vm-prague',
+  selectExEnv: 'vm-osaka',
   personalMode: false,
   networkName: 'VM',
   chainId:'-',
-  displayName: 'Remix VM (Prague)',
+  displayName: 'Remix VM (Osaka)',
   providers: {
     providerList: [],
     isRequesting: false,
@@ -59,7 +59,7 @@ export const runTabInitialState: RunTabState = {
   gasPriceStatus: false,
   confirmSettings: false,
   maxFee: '',
-  maxPriorityFee: '1',
+  maxPriorityFee: '.0001',
   baseFeePerGas: '',
   gasPrice: '',
   instances: {
@@ -163,7 +163,7 @@ export const runTabReducer = (state: RunTabState = runTabInitialState, action: A
     return {
       ...state,
       selectExEnv: payload,
-      networkName: state.selectExEnv === 'vm-prague' ? 'VM' : state.networkName,
+      networkName: state.selectExEnv === 'vm-osaka' ? 'VM' : state.networkName,
       displayName: state.providers.providerList.find((env) => env.name === state.selectExEnv)?.displayName,
       accounts: {
         ...state.accounts,

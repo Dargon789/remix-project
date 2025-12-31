@@ -1,6 +1,6 @@
 /**
  * UI Events - User interface and navigation tracking events
- * 
+ *
  * This file contains UI-related events like home tab, topbar, and navigation.
  */
 
@@ -8,7 +8,7 @@ import { MatomoEventBase } from '../core/base-types';
 
 export interface HomeTabEvent extends MatomoEventBase {
   category: 'hometab';
-  action: 
+  action:
     | 'header'
     | 'filesSection'
     | 'scamAlert'
@@ -25,39 +25,42 @@ export interface HomeTabEvent extends MatomoEventBase {
 
 export interface TopbarEvent extends MatomoEventBase {
   category: 'topbar';
-  action: 
+  action:
     | 'GIT'
+    | 'leftSidePanel'
+    | 'terminalPanel'
+    | 'rightSidePanel'
     | 'header';
 }
 
 export interface LayoutEvent extends MatomoEventBase {
   category: 'layout';
-  action: 
+  action:
     | 'pinToRight'
     | 'pinToLeft';
 }
 
 export interface SettingsEvent extends MatomoEventBase {
   category: 'settings';
-  action: 
+  action:
     | 'change';
 }
 
 export interface ThemeEvent extends MatomoEventBase {
   category: 'theme';
-  action: 
+  action:
     | 'switchThemeTo';
 }
 
 export interface LocaleEvent extends MatomoEventBase {
   category: 'locale';
-  action: 
+  action:
     | 'switchTo';
 }
 
 export interface LandingPageEvent extends MatomoEventBase {
   category: 'landingPage';
-  action: 
+  action:
     | 'welcome'
     | 'getStarted'
     | 'tutorial'
@@ -65,6 +68,26 @@ export interface LandingPageEvent extends MatomoEventBase {
     | 'templates'
     | 'MatomoAIModal';
 }
+
+export interface StatusBarEvent extends MatomoEventBase {
+  category: 'statusBar';
+  action:
+    | 'initNewRepo';
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

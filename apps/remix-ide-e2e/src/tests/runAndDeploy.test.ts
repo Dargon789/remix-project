@@ -57,7 +57,7 @@ module.exports = {
       .click('*[data-id="Deploy - transact (not payable)"]')
       .pause(5000)
       .testFunction('last', {
-        status: '0x1 Transaction mined and execution succeed'
+        status: '1 Transaction mined and execution succeed'
       })
   },
 
@@ -102,7 +102,7 @@ module.exports = {
       .click('*[data-id="pluginManagerSettingsDeployAndRunLLTxSendTransaction"]')
       .pause(5000)
       .testFunction('last', {
-        status: '0x1 Transaction mined and execution succeed'
+        status: '1 Transaction mined and execution succeed'
       })
       // When this is removed and tests are running by connecting to metamask
       // Consider adding tests to check return value of contract call
@@ -135,7 +135,7 @@ module.exports = {
       .clickFunction('retrieve - call')
       .waitForElementContainsText('[data-id="treeViewLi0"]', 'uint256: 10')
       .clickLaunchIcon('filePanel')
-      .openFile('.states/vm-prague/state.json')
+      .openFile('.states/vm-osaka/state.json')
       .getEditorValue((content) => {
         browser
           .assert.ok(content.includes('"latestBlockNumber": "0x2"'), 'State is saved')
@@ -153,7 +153,7 @@ module.exports = {
       .waitForElementContainsText('[data-id="treeViewLi0"]', 'uint256: 10')
   },
 
-  'Should save state after running web3 script #group4': function (browser: NightwatchBrowser) {
+  'Should save state after running ethers script #group4': function (browser: NightwatchBrowser) {
     browser
       .waitForElementVisible('*[data-id="topbar-settingsIcon"]')
       .click('*[data-id="topbar-settingsIcon"]')
@@ -168,8 +168,8 @@ module.exports = {
       .clickLaunchIcon('filePanel')
       .waitForElementVisible('*[data-id="treeViewLitreeViewItemscripts"]')
       .click('*[data-id="treeViewLitreeViewItemscripts"]')
-      .waitForElementVisible('*[data-id="treeViewLitreeViewItemscripts/deploy_with_web3.ts"]')
-      .openFile('scripts/deploy_with_web3.ts')
+      .waitForElementVisible('*[data-id="treeViewLitreeViewItemscripts/deploy_with_ethers.ts"]')
+      .openFile('scripts/deploy_with_ethers.ts')
       .click('[data-id="compile-action"]')
       .waitForElementContainsText('*[data-id="terminalJournal"]', 'address:')
       .openFile('.states/vm-london/state.json')
@@ -196,7 +196,7 @@ module.exports = {
       .click('*[data-id="Deploy - transact (not payable)"]')
       .pause(5000)
       .clickLaunchIcon('filePanel')
-      .openFile('.states/vm-prague/state.json')
+      .openFile('.states/vm-osaka/state.json')
       .getEditorValue((content) => {
         browser
           .assert.ok(content.includes('"latestBlockNumber": "0x2"'), 'State is unchanged')

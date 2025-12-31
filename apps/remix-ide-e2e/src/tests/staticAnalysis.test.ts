@@ -39,6 +39,7 @@ module.exports = {
       .click('*[data-id="treeViewLitreeViewItemcontracts/2_Owner.sol"]')
       .clickLaunchIcon('solidity')
       .click('*[id="compileBtn"]')
+      .saveScreenshot('./reports/screenshots/compile2_Owner.png')
       .pause(10000)
       .clickLaunchIcon('solidityStaticAnalysis')
       .useXpath()
@@ -57,10 +58,12 @@ module.exports = {
       .pause(1000)
       .waitForElementVisible('span#ssaRemixtab')
       .click('span#ssaRemixtab')
-      .assert.containsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount', '388')
+      .waitForElementContainsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount', '384')
+
       .click('label[id="headingshowLibWarnings"]')
       .pause(1000)
-      .assert.containsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount', '3')
+      .waitForElementContainsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount', '3')
+
       .end()
   }
 }

@@ -8,6 +8,7 @@ module.exports = {
     },
     'download compiler': function (browser: NightwatchBrowser) {
         browser
+            .hideToolTips()
             .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
             .clickLaunchIcon('solidity')
             .pause(1000)
@@ -26,6 +27,7 @@ module.exports = {
     },
     'refresh': function (browser: NightwatchBrowser) {
         browser.refresh()
+            .hideToolTips()
             .clickLaunchIcon('solidity')
             .waitForElementVisible('*[data-id="versionSelector"]')
             .click('*[data-id="versionSelector"]')

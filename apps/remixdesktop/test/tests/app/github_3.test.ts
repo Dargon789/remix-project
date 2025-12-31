@@ -1,5 +1,18 @@
 import { NightwatchBrowser } from "nightwatch"
 
+function openTemplatesExplorer(browser: NightwatchBrowser) {
+  browser
+    .click('*[data-id="workspacesSelect"]')
+    .pause(2000)
+    .click('*[data-id="workspacecreate"]')
+    .waitForElementVisible('*[data-id="template-explorer-modal-react"]')
+    .waitForElementVisible('*[data-id="template-explorer-template-container"]')
+    .click('*[data-id="template-explorer-template-container"]')
+    .waitForElementPresent('*[data-id="template-card-remixDefault-0"]')
+    .click('*[data-id="template-card-remixDefault-0"]')
+    .waitForElementVisible('*[data-id="workspace-details-section"]')
+}
+
 const useIsoGit = process.argv.includes('--use-isogit');
 let commitCount = 0
 let branchCount = 0
@@ -11,16 +24,17 @@ const tests = {
 
   'open default template': function (browser: NightwatchBrowser) {
     browser
+      .hideToolTips()
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
-      .waitForElementVisible('button[data-id="landingPageImportFromTemplate"]')
-      .click('button[data-id="landingPageImportFromTemplate"]')
-      .waitForElementPresent('*[data-id="create-remixDefault"]')
-      .scrollAndClick('*[data-id="create-remixDefault"]')
 
+    openTemplatesExplorer(browser)
+
+    browser
       .pause(3000)
       .windowHandles(function (result) {
         console.log(result.value)
-        browser.switchWindow(result.value[1])
+        browser.hideToolTips().switchWindow(result.value[1])
+          .hideToolTips()
           .waitForElementVisible('*[data-id="treeViewLitreeViewItemtests"]')
       })
 
@@ -43,6 +57,7 @@ const tests = {
   'login to github #group1 #group2': function (browser: NightwatchBrowser) {
     browser
       .waitForElementVisible('*[data-id="github-panel"]')
+      .click('*[data-id="github-panel"]')
       .waitForElementVisible('*[data-id="gitubUsername"]')
       .setValue('*[data-id="githubToken"]', process.env.DGIT_TOKEN)
       .pause(1000)
@@ -59,6 +74,13 @@ const tests = {
       .waitForElementVisible('*[data-id="connected-link-bunsenstraat"]')
       .waitForElementVisible('*[data-id="remotes-panel"]')
   },
+  'check the FE shows logged in user #group1 #group2': function (browser: NightwatchBrowser) {
+    browser
+      .waitForElementVisible({
+        selector: '//*[@data-id="github-dropdown-toggle-login"]//span[contains(text(), "bunsenstraat")]',
+        locateStrategy: 'xpath'
+      })
+  },
   // 'check the FE for the auth user #group1 #group2': function (browser: NightwatchBrowser) {
   //   browser
   //     .clickLaunchIcon('filePanel')
@@ -67,7 +89,6 @@ const tests = {
   // pagination test
   'clone repo #group3': function (browser: NightwatchBrowser) {
     browser
-      .clickLaunchIcon('dgit')
       .waitForElementVisible('*[data-id="clone-panel"]')
       .click('*[data-id="clone-panel"]')
       .waitForElementVisible('*[data-id="clone-url"]')
@@ -80,7 +101,8 @@ const tests = {
       .pause(5000)
       .windowHandles(function (result) {
         console.log(result.value)
-        browser.switchWindow(result.value[2])
+        browser.hideToolTips().switchWindow(result.value[2])
+          .hideToolTips()
           .pause(1000)
           .waitForElementVisible('*[data-id="treeViewLitreeViewItem.git"]')
       })

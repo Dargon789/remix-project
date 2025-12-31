@@ -26,13 +26,6 @@ export interface IExtractedImport {
   isLibrary: boolean;
 }
 
-export interface IModelRequirements{
-  backend: string,
-  minSysMemory: number,
-  GPURequired: boolean,
-  MinGPUVRAM: number,
-}
-
 export interface IContextType {
   context: 'currentFile' | 'workspace'|'openedFiles' | 'none'
   files?: { fileName: string; content: string }[]
@@ -44,30 +37,13 @@ export interface ISimilaritySearchConfig {
   enabled?: boolean;
 }
 
-export interface IModel {
-  name: string;
-  task: string;
-  downloadUrl: string;
-  modelName: string;
-  modelType: ModelType;
-  modelReqs: IModelRequirements;
-  downloadPath?: string;
-  provider?: string;
-}
 export interface IRemoteModel {
   completionUrl: string;
   apiUrl: string;
 }
 
-export interface IModelResponse {
-  output: string;
-  error: string;
-  success: boolean;
-  model: IModel;
-}
-
 export interface ICompletions{
-  code_completion(context, ctxFiles, fileName, params:IParams): Promise<any>;
+  code_completion(prompt, context, ctxFiles, fileName, params:IParams): Promise<any>;
   code_insertion(msg_pfx, msg_sfx, ctxFiles, fileName, params:IParams): Promise<any>;
 }
 export interface IGeneration{
@@ -107,6 +83,16 @@ export interface IParams {
   stop?: string[];
   chatHistory?: any[];
   version: string;
+  tools?: any[];
+  tool_choice?: string;
+  toolsMessages?: any[];
+  format?: string;
+}
+
+export interface IAIStreamResponse{
+  streamResponse: any,
+  callback?: any,
+  toolExecutionStatusCallback?: (isExecuting: boolean) => void
 }
 
 export enum AIRequestType {

@@ -1,10 +1,11 @@
 'use strict'
 import React from 'react' // eslint-disable-line
-import { resolve } from 'path'
 import { EditorUI } from '@remix-ui/editor' // eslint-disable-line
 import { Plugin } from '@remixproject/engine'
 import * as packageJson from '../../../../../package.json'
 import { PluginViewWrapper } from '@remix-ui/helper'
+
+import { startTypeLoadingProcess } from './type-fetcher'
 
 const EventManager = require('../../lib/events')
 
@@ -41,6 +42,7 @@ export default class Editor extends Plugin {
       yul: 'sol',
       mvir: 'move',
       js: 'javascript',
+      jsx: 'javascript',
       py: 'python',
       vy: 'python',
       zok: 'zokrates',
@@ -51,10 +53,13 @@ export default class Editor extends Plugin {
       rs: 'rust',
       cairo: 'cairo',
       ts: 'typescript',
+      tsx: 'typescript',
       move: 'move',
       circom: 'circom',
       nr: 'move',
-      toml: 'toml'
+      toml: 'toml',
+      html: 'html',
+      css: 'css'
     }
 
     this.activated = false
@@ -71,10 +76,24 @@ export default class Editor extends Plugin {
     this.api = {}
     this.dispatch = null
     this.ref = null
+
+    this.monaco = null
+    this.typeLoaderDebounce = null
+
+    this.tsModuleMappings = {}
+    this.processedPackages = new Set()
+
+    this.typesLoadingCount = 0
+    this.shimDisposers = new Map()
   }
+
 
   setDispatch (dispatch) {
     this.dispatch = dispatch
+  }
+
+  setMonaco (monaco) {
+    this.monaco = monaco
   }
 
   updateComponent(state) {
@@ -86,6 +105,7 @@ export default class Editor extends Plugin {
       events={state.events}
       plugin={state.plugin}
       isDiff={state.isDiff}
+      setMonaco={(monaco) => this.setMonaco(monaco)}
     />
   }
 
@@ -126,8 +146,40 @@ export default class Editor extends Plugin {
     this.emit(name, ...params) // plugin stack
   }
 
+  resolveRelativePath(basePath, relativePath) {
+    const stack = basePath.split('/')
+    stack.pop()
+    
+    const parts = relativePath.split('/')
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === '.') continue
+      if (parts[i] === '..') stack.pop()
+      else stack.push(parts[i])
+    }
+    return stack.join('/')
+  }
+
   async onActivation () {
     this.activated = true
+    this.on('editor', 'editorMounted', () => {
+      if (!this.monaco) return
+      const ts = this.monaco.languages.typescript
+      const tsDefaults = ts.typescriptDefaults
+      
+      tsDefaults.setCompilerOptions({
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        module: ts.ModuleKind.NodeNext,
+        target: ts.ScriptTarget.ES2022,
+        lib: ['es2022', 'dom', 'dom.iterable'],
+        allowNonTsExtensions: true,
+        allowSyntheticDefaultImports: true,
+        skipLibCheck: true,
+        baseUrl: 'file:///node_modules/',
+        paths: this.tsModuleMappings,
+      })
+      tsDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false })
+      ts.typescriptDefaults.setEagerModelSync(true)
+    })
     this.on('sidePanel', 'focusChanged', (name) => {
       this.keepDecorationsFor(name, 'sourceAnnotationsPerFile')
       this.keepDecorationsFor(name, 'markerPerFile')
@@ -143,11 +195,26 @@ export default class Editor extends Plugin {
       this.currentFile = null
       this.renderComponent()
     })
+    this.on('fileManager', 'currentFileChanged', (currentFile) => {
+      if (this.currentFile === currentFile) return
+      this.currentFile = currentFile
+      if (currentFile && (currentFile.endsWith('.ts') || currentFile.endsWith('.js') || currentFile.endsWith('.tsx') || currentFile.endsWith('.jsx'))) {
+        this._onChange(currentFile)
+      }
+      this.renderComponent()
+    })
+    this.on('scriptRunnerBridge', 'runnerChanged', async () => {
+      this.processedPackages.clear()
+      this.tsModuleMappings = {}
+
+      if (this.currentFile) {
+        clearTimeout(this.typeLoaderDebounce)
+        await this._onChange(this.currentFile)
+      }
+    })
     try {
       this.currentThemeType = (await this.call('theme', 'currentTheme')).quality
-    } catch (e) {
-      console.log('unable to select the theme ' + e.message)
-    }
+    } catch (e) {} // eslint-disable-line no-empty
     this.renderComponent()
   }
 
@@ -156,27 +223,164 @@ export default class Editor extends Plugin {
     this.off('sidePanel', 'pluginDisabled')
   }
 
+  updateTsCompilerOptions() {
+    if (!this.monaco) return
+    
+    const tsDefaults = this.monaco.languages.typescript.typescriptDefaults
+    const currentOptions = tsDefaults.getCompilerOptions()
+    
+    tsDefaults.setCompilerOptions({
+      ...currentOptions,
+      paths: { ...currentOptions.paths, ...this.tsModuleMappings }
+    })
+  }
+  
+  toggleTsDiagnostics(enable) {
+    if (!this.monaco) return
+    const ts = this.monaco.languages.typescript
+    ts.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: !enable,
+      noSyntaxValidation: false
+    })
+  }
+
+  addShimForPackage(pkg) {
+    if (!this.monaco) return
+    const tsDefaults = this.monaco.languages.typescript.typescriptDefaults
+
+    const shimMainPath = `file:///__shims__/${pkg}.d.ts`
+    const shimWildPath = `file:///__shims__/${pkg}__wildcard.d.ts`
+
+    if (!this.shimDisposers.has(shimMainPath)) {
+      const d1 = tsDefaults.addExtraLib(`declare module '${pkg}' { const _default: any\nexport = _default }`, shimMainPath)
+      this.shimDisposers.set(shimMainPath, d1)
+    }
+
+    if (!this.shimDisposers.has(shimWildPath)) {
+      const d2 = tsDefaults.addExtraLib(`declare module '${pkg}/*' { const _default: any\nexport = _default }`, shimWildPath)
+      this.shimDisposers.set(shimWildPath, d2)
+    }
+
+  }
+
+  removeShimsForPackage(pkg) {
+    const keys = [`file:///__shims__/${pkg}.d.ts`, `file:///__shims__/${pkg}__wildcard.d.ts`]
+    for (const k of keys) {
+      const disp = this.shimDisposers.get(k)
+      if (disp && typeof disp.dispose === 'function') {
+        disp.dispose()
+        this.shimDisposers.delete(k)
+      }
+    }
+  }
+
+  beginTypesBatch() {
+    if (this.typesLoadingCount === 0) {
+      this.toggleTsDiagnostics(false)
+      this.triggerEvent('typesLoading', ['start'])
+    }
+    this.typesLoadingCount++
+  }
+
+  endTypesBatch() {
+    this.typesLoadingCount = Math.max(0, this.typesLoadingCount - 1)
+    if (this.typesLoadingCount === 0) {
+      this.updateTsCompilerOptions()
+      this.toggleTsDiagnostics(true)
+      this.triggerEvent('typesLoading', ['end'])
+    }
+  }
+
+  addExtraLibs(libs) {
+    if (!this.monaco || !libs || libs.length === 0) return
+    
+    const tsDefaults = this.monaco.languages.typescript.typescriptDefaults
+    
+    libs.forEach(lib => {
+      if (!tsDefaults.getExtraLibs()[lib.filePath]) {
+        tsDefaults.addExtraLib(lib.content, lib.filePath)
+      }
+    })
+  }
+
+  // The conductor, called on every editor content change to parse 'import' statements and trigger the type loading process.
   async _onChange (file) {
     this.triggerEvent('didChangeFile', [file])
+    if (this.monaco && (file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.tsx') || file.endsWith('.jsx'))) {
+      clearTimeout(this.typeLoaderDebounce)
+      
+      this.typeLoaderDebounce = setTimeout(async () => {
+        if (!this.monaco) return
+        const model = this.monaco.editor.getModel(this.monaco.Uri.parse(file))
+        if (!model) return
+        const code = model.getValue()
+
+        try {
+          const IMPORT_ANY_RE = /(?:import|export)\s+[^'"]*?from\s*['"]([^'"]+)['"]|import\s*['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\)/g
+          
+          const rawImports = [...code.matchAll(IMPORT_ANY_RE)]
+            .map(m => (m[1] || m[2] || m[3] || '').trim())
+            .filter(p => p && !p.startsWith('.') && !p.startsWith('/') && !p.startsWith('file://'))
+
+          const uniqueImports = [...new Set(rawImports)]
+          const getBasePackage = (p) => p.startsWith('@') ? p.split('/').slice(0, 2).join('/') : p.split('/')[0]
+          
+          const newBasePackages = [...new Set(uniqueImports.map(getBasePackage))]
+            .filter(p => !this.processedPackages.has(p))
+
+          if (newBasePackages.length === 0) return
+          
+          this.beginTypesBatch()
+
+          uniqueImports.forEach(pkgImport => this.addShimForPackage(pkgImport))
+          this.updateTsCompilerOptions()
+
+          await Promise.all(newBasePackages.map(async (basePackage) => {
+            this.processedPackages.add(basePackage)
+            
+            const activeRunnerLibs = await this.call('scriptRunnerBridge', 'getActiveRunnerLibs')
+            const libInfo = activeRunnerLibs.find(lib => lib.name === basePackage)
+            const packageToLoad = libInfo ? `${libInfo.name}@${libInfo.version}` : basePackage
+
+            try {
+              const result = await startTypeLoadingProcess(packageToLoad)
+              if (result && result.libs && result.libs.length > 0) {
+                this.addExtraLibs(result.libs)
+                if (result.subpathMap) {
+                  for (const [subpath, virtualPath] of Object.entries(result.subpathMap)) {
+                    this.tsModuleMappings[subpath] = [virtualPath]
+                  }
+                }
+                if (result.mainVirtualPath) {
+                  this.tsModuleMappings[basePackage] = [result.mainVirtualPath.replace('file:///node_modules/', '')]
+                }
+                this.tsModuleMappings[`${basePackage}/*`] = [`${basePackage}/*`]
+                
+                uniqueImports
+                  .filter(p => getBasePackage(p) === basePackage)
+                  .forEach(p => this.removeShimsForPackage(p))
+              }
+            } catch (e) {
+              this.processedPackages.delete(basePackage)
+              console.error(`[DIAGNOSE-DEEP-PASS] Crawler failed for "${basePackage}":`, e)
+            }
+          }))
+          this.endTypesBatch()
+        } catch (error) {
+          console.error('[DIAGNOSE-ONCHANGE] Critical error:', error)
+          this.endTypesBatch()
+        }
+      }, 1500)
+    }
+
     const currentFile = await this.call('fileManager', 'file')
-    if (!currentFile) {
-      return
-    }
-    if (currentFile !== file) {
-      return
-    }
+    if (!currentFile || currentFile !== file) return
+    
     const input = this.get(currentFile)
-    if (!input) {
-      return
-    }
-    // if there's no change, don't do anything
-    if (input === this.previousInput) {
-      return
-    }
+    if (!input || input === this.previousInput) return
+    
     this.previousInput = input
 
-    // fire storage update
-    // NOTE: save at most once per 5 seconds
     if (this.saveTimeout) {
       window.clearTimeout(this.saveTimeout)
     }
@@ -208,31 +412,63 @@ export default class Editor extends Plugin {
     return ext && this.modes[ext] ? this.modes[ext] : this.modes.txt
   }
 
-  async handleTypeScriptDependenciesOf (path, content, readFile, exists) {
-    if (path.endsWith('.ts')) {
-      // extract the import, resolve their content
-      // and add the imported files to Monaco through the `addModel`
-      // so Monaco can provide auto completion
+  async handleTypeScriptDependenciesOf(path, content, readFile, exists) {
+    const isJsOrTs = path.endsWith('.js') || path.endsWith('.jsx') || path.endsWith('.ts') || path.endsWith('.tsx')
+    
+    if (isJsOrTs) {
+      this._onChange(path)
+    }
+
+    const isTsFile = path.endsWith('.ts') || path.endsWith('.tsx')
+    const isJsFile = path.endsWith('.js') || path.endsWith('.jsx')
+
+    if (isTsFile || isJsFile) {
       const paths = path.split('/')
       paths.pop()
-      const fromPath = paths.join('/') // get current execution context path
+      const fromPath = paths.join('/') 
+      const language = isTsFile ? 'typescript' : 'javascript'
+
       for (const match of content.matchAll(/import\s+.*\s+from\s+(?:"(.*?)"|'(.*?)')/g)) {
-        let pathDep = match[2]
-        if (pathDep.startsWith('./') || pathDep.startsWith('../')) pathDep = resolve(fromPath, pathDep)
-        if (pathDep.startsWith('/')) pathDep = pathDep.substring(1)
-        if (!pathDep.endsWith('.ts')) pathDep = pathDep + '.ts'
+        let pathDep = match[1] || match[2]
+        if (!pathDep) continue
+
+        if (pathDep.startsWith('./') || pathDep.startsWith('../')) {
+          pathDep = this.resolveRelativePath(fromPath, pathDep)
+        } else if (pathDep.startsWith('/')) {
+          pathDep = pathDep.substring(1)
+        } else {
+          continue
+        }
+
+        const extensions = isTsFile ? ['.ts', '.tsx', '.d.ts'] : ['.js', '.jsx']
+        let hasExtension = false
+        for (const ext of extensions) {
+          if (pathDep.endsWith(ext)) {
+            hasExtension = true
+            break
+          }
+        }
+
+        if (!hasExtension) {
+          for (const ext of extensions) {
+            const pathWithExt = pathDep + ext
+            try {
+              const pathExists = await exists(pathWithExt)
+              if (pathExists) {
+                pathDep = pathWithExt
+                break
+              }
+            } catch (e) {} // eslint-disable-line no-empty
+          }
+        }
+
         try {
-          // we can't use the fileManager plugin call directly
-          // because it's itself called in a plugin context, and that causes a timeout in the plugin stack
           const pathExists = await exists(pathDep)
-          let contentDep = ''
           if (pathExists) {
-            contentDep = await readFile(pathDep)
+            const contentDep = await readFile(pathDep)
             if (contentDep !== '') {
-              this.emit('addModel', contentDep, 'typescript', pathDep, this.readOnlySessions[path])
+              this.emit('addModel', contentDep, language, pathDep, this.readOnlySessions[path])
             }
-          } else {
-            console.log("The file ", pathDep, " can't be found.")
           }
         } catch (e) {
           console.log(e)

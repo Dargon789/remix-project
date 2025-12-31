@@ -64,13 +64,10 @@ export default (
           if (focusedWindow){
             let factor = (focusedWindow as BrowserWindow).webContents.getZoomFactor()
             console.log(factor)
-            if (factor > 1.25) {
+            if (factor > 0.1) {
               factor = factor - 0.25
-              ;(focusedWindow as BrowserWindow).webContents.setZoomFactor(factor)
-            }else{
-              (focusedWindow as BrowserWindow).webContents.setZoomFactor(1)
+              ;(focusedWindow as BrowserWindow).webContents.setZoomFactor(Math.max(0.1, factor))
             }
-
           }
         }
       },

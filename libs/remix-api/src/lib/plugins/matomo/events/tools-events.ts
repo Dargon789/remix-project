@@ -1,6 +1,6 @@
 /**
  * Tools Events - Developer tools and utilities tracking events
- * 
+ *
  * This file contains events for debugger, editor, testing, and other developer tools.
  */
 
@@ -8,7 +8,7 @@ import { MatomoEventBase } from '../core/base-types';
 
 export interface DebuggerEvent extends MatomoEventBase {
   category: 'debugger';
-  action: 
+  action:
     | 'start'
     | 'step'
     | 'breakpoint'
@@ -17,7 +17,7 @@ export interface DebuggerEvent extends MatomoEventBase {
 
 export interface EditorEvent extends MatomoEventBase {
   category: 'editor';
-  action: 
+  action:
     | 'open'
     | 'save'
     | 'format'
@@ -31,7 +31,7 @@ export interface EditorEvent extends MatomoEventBase {
 
 export interface SolidityUnitTestingEvent extends MatomoEventBase {
   category: 'solidityUnitTesting';
-  action: 
+  action:
     | 'runTest'
     | 'generateTest'
     | 'testPassed'
@@ -41,21 +41,21 @@ export interface SolidityUnitTestingEvent extends MatomoEventBase {
 
 export interface SolidityStaticAnalyzerEvent extends MatomoEventBase {
   category: 'solidityStaticAnalyzer';
-  action: 
+  action:
     | 'analyze'
     | 'warningFound';
 }
 
 export interface DesktopDownloadEvent extends MatomoEventBase {
   category: 'desktopDownload';
-  action: 
+  action:
     | 'download'
     | 'click';
 }
 
 export interface GridViewEvent extends MatomoEventBase {
   category: 'gridView';
-  action: 
+  action:
     | 'toggle'
     | 'resize'
     | 'rearrange'
@@ -64,14 +64,14 @@ export interface GridViewEvent extends MatomoEventBase {
 
 export interface XTERMEvent extends MatomoEventBase {
   category: 'xterm';
-  action: 
+  action:
     | 'terminal'
     | 'command';
 }
 
 export interface SolidityScriptEvent extends MatomoEventBase {
-  category: 'solidityScript';
-  action: 
+  category: 'SolidityScript';
+  action:
     | 'execute'
     | 'deploy'
     | 'run'
@@ -80,7 +80,7 @@ export interface SolidityScriptEvent extends MatomoEventBase {
 
 export interface RemixGuideEvent extends MatomoEventBase {
   category: 'remixGuide';
-  action: 
+  action:
     | 'start'
     | 'step'
     | 'complete'
@@ -90,22 +90,57 @@ export interface RemixGuideEvent extends MatomoEventBase {
 }
 
 export interface TemplateSelectionEvent extends MatomoEventBase {
-  category: 'templateSelection';
-  action: 
+  category: 'template-selection';
+  action:
     | 'selectTemplate'
     | 'createWorkspace'
     | 'cancel'
     | 'addToCurrentWorkspace';
 }
 
+export interface TemplateExplorerModalEvent extends MatomoEventBase {
+  category: 'templateExplorerModal';
+  action:
+    | 'openModal'
+    | 'closeModal'
+    | 'search'
+    | 'addScriptsToWorkspace'
+    | 'addContractFileToWorkspace'
+    | 'selectWorkspaceTemplate'
+    | 'createWorkspaceFromTemplate'
+    | 'createWorkspaceWithAiRequestSent'
+    | 'createWorkspaceWithAiFailed'
+    | 'createWorkspaceWithAiSucceeded'
+    | 'topCardImportProject'
+    | 'topCardContractWizard'
+    | 'topCardCreateWithAi'
+    | 'topCardCreateFileWithAi'
+    | 'topCardImportFiles'
+    | 'topCardCreateContractWithWizard'
+    | 'topCardContractWizardCreateFile'
+    | 'clearFilterButtonClick'
+    | 'tagSelected'
+    | 'topCardCreateBlankWorkspace'
+    | 'topCardCreateBlankFile'
+    | 'createWorkspaceWithBasicTemplate'
+    | 'contractTypeSelectedInContractWizard'
+    | 'initializeAsGitRepoSelectedInContractWizard'
+    | 'initializeAsGitRepoSelectedInOtherTemplates'
+    | 'createWorkspaceWithContractWizard'
+    | 'createFileWithContractWizard'
+    | 'createWorkspaceWithGenericTemplate'
+    | 'importFiles'
+    | 'importHttps'
+}
+
 export interface ScriptExecutorEvent extends MatomoEventBase {
-  category: 'scriptExecutor';
-  action: 
+  category: 'ScriptExecutor';
+  action:
     | 'execute'
     | 'deploy'
     | 'run'
     | 'compile'
-    | 'compileAndRun';
+    | 'CompileAndRun';
 }
 
 
@@ -154,7 +189,7 @@ export interface ScriptExecutorEvent extends MatomoEventBase {
  * Solidity UML Generation Events - Type-safe builders
  */
 export interface SolidityUMLGenEvent extends MatomoEventBase {
-  category: 'solidityUMLGen';
+  category: 'solidityumlgen';
   action:
     | 'umlpngdownload'
     | 'umlpdfdownload'
@@ -168,17 +203,32 @@ export interface SolidityUMLGenEvent extends MatomoEventBase {
 
 
 /**
+ * 
  * Circuit Compiler Events - Type-safe builders
  */
 export interface CircuitCompilerEvent extends MatomoEventBase {
-  category: 'circuitCompiler';
+  category: 'circuit-compiler';
   action:
     | 'compile'
     | 'generateProof'
     | 'error'
     | 'generateR1cs'
-    | 'computeWitness'
+    | 'compiler.generate_witness'
+    | 'template'
     | 'runSetupAndExport';
+}
+
+
+/**
+ * Noir Compiler Events - Type-safe builders
+ */
+export interface NoirCompilerEvent extends MatomoEventBase {
+  category: 'noir-compiler';
+  action:
+    | 'template'
+    | 'compile'
+    | 'generate_proof'
+    | 'view_file';
 }
 
 
@@ -204,14 +254,14 @@ export interface LearnethEvent extends MatomoEventBase {
     | 'lesson'
     | 'tutorial'
     | 'error'
-    | 'displayFile'
-    | 'displayFileError'
-    | 'testStep'
-    | 'testStepError'
-    | 'showAnswer'
-    | 'showAnswerError'
-    | 'testSolidityCompiler'
-    | 'testSolidityCompilerError'
+    | 'display_file'
+    | 'display_file_error'
+    | 'test_step'
+    | 'test_step_error'
+    | 'show_answer'
+    | 'show_answer_error'
+    | 'test_solidity_compiler'
+    | 'test_solidity_compiler_error'
     | 'start_workshop'
     | 'select_repo'
     | 'import_repo'
@@ -237,3 +287,16 @@ export interface ScriptRunnerPluginEvent extends MatomoEventBase {
     | 'configChanged';
 }
 
+
+/**
+ * Quick DApp V2 Events - Type-safe builders
+ */
+export interface QuickDappV2Event extends MatomoEventBase {
+  category: 'quick-dapp-v2';
+  action:
+    | 'generate'
+    | 'update'
+    | 'deploy_ipfs'
+    | 'register_ens'
+    | 'error';
+}

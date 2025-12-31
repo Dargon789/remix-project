@@ -9,11 +9,11 @@
 
 ### Executables
 
-Testing runs through nightwatch that treats an electron application as a special version of chrome, which it is. It basically calls the executable which is built by the ./rundist.bash script which creates executables based on the current channel configuration package.json, ie "version": "1.0.8-insiders"
+Testing runs through nightwatch that treats an electron application as a special version of chrome, which it is. It basically calls the executable which is built by the yarn dist -c test_only.json script which creates executables based on the current channel configuration package.json, ie "version": "1.0.8-insiders"
 
 Executables are stored in the ./release directory. Without that executable you cannot run tests. You cannot call tests on local development instance that is launched by yarn start:dev. You need to create an executable file first. 
 
-This is done by running ./rundist.bash
+This is done by running yarn dist -c test_only.json
 
 Normally when you would do a 'real' release you would package remix IDE into the distributable but for local e2e this is not  necessary because it will use the remix IDE that is being served.
 
@@ -40,7 +40,7 @@ In order to facilitate local testing nightwatch will boot the executable with th
 So to start testing locally 
 - run the IDE with 'yarn serve' as you would normally do.
 - build your release. You will always need to do this when the Desktop app itself changes its code. 
-    - ./rundist.bash
+    - yarn dist -c test_only.json
 - in apps/remixdesktop: 
     - yarn build:e2e
     - run the test you want, refer to the actual JS that is build, not the TS, ie 
