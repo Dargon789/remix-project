@@ -18,6 +18,7 @@ import { CustomTooltip } from 'libs/remix-ui/helper/src/lib/components/custom-to
 import { useCloneRepositoryModal } from '../components/CloneRepositoryModal'
 import { TrackingContext } from '@remix-ide/tracking'
 import { MatomoEvent, TopbarEvent, WorkspaceEvent } from '@remix-api'
+import { LoginButton } from '@remix-ui/login'
 import { appActionTypes } from 'libs/remix-ui/app/src/lib/remix-app/actions/app'
 
 export function RemixUiTopbar() {
@@ -54,6 +55,7 @@ export function RemixUiTopbar() {
 
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [enableLogin, setEnableLogin] = useState<boolean>(false);
 
   // Use the clone repository modal hook
   const { showCloneModal } = useCloneRepositoryModal({
@@ -66,6 +68,17 @@ export function RemixUiTopbar() {
   if (window.location.pathname === '/auth/github/callback') {
     return <GitHubCallback />;
   }
+
+  useEffect(() => {
+    const checkLoginEnabled = () => {
+      const enabled = localStorage.getItem('enableLogin') === 'true';
+      setEnableLogin(enabled);
+    };
+    checkLoginEnabled();
+    // Listen for storage changes
+    window.addEventListener('storage', checkLoginEnabled);
+    return () => window.removeEventListener('storage', checkLoginEnabled);
+  }, []);
 
   const handleLoginSuccess = (user: GitHubUser, token: string) => {
     setUser(user);
@@ -606,6 +619,14 @@ export function RemixUiTopbar() {
               publishToGist={publishToGist}
               loginWithGitHub={loginWithGitHub}
             />
+            {enableLogin && (
+              <LoginButton
+                plugin={plugin}
+                variant="compact"
+                showCredits={true}
+                className="ms-2"
+              />
+            )}
           </>
           <Dropdown className="ms-3" data-id="topbar-themeIcon" show={showTheme} ref={themeIconRef}>
             <Dropdown.Toggle

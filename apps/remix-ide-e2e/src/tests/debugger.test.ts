@@ -96,7 +96,7 @@ module.exports = {
       .waitForElementVisible({
         locateStrategy: 'xpath',
         selector: '//*[@data-id="treeViewLivm trace step" and contains(.,"475")]',
-      })
+      }).pause(1000)      
       .getEditorValue((content) => {
         browser.assert.ok(content.indexOf(`constructor (string memory name_, string memory symbol_) {
         _name = name_;
@@ -120,7 +120,8 @@ module.exports = {
     browser
       .refreshPage()
       .clickLaunchIcon('solidity')
-      .setSolidityCompilerVersion('soljson-v0.6.12+commit.27d51765.js')
+      //.pause()
+      //.setSolidityCompilerVersion('soljson-v0.6.12+commit.27d51765.js')
       .testContracts('withABIEncoderV2.sol', sources[2]['withABIEncoderV2.sol'], ['test'])
       .clickLaunchIcon('udapp')
       .selectContract('test')

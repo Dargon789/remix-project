@@ -108,7 +108,7 @@ export const GitHubCredentials = () => {
         </button>
       </div>
       {scopeWarning ?
-        <div className="text-warning">Your GitHub token may or may not have the correct permissions. Remix can't verify the permissions when using your own token. Please use the login with GitHub feature.</div> : null}
+        <div className="text-warning">Your GitHub token may or may not have the correct permissions. Remix can't verify the permissions when using your own token. Please use the connect with GitHub feature.</div> : null}
       <hr />
     </>
   );

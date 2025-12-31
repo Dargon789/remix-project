@@ -63,7 +63,11 @@ export class RemoteInferencer implements ICompletions, IGeneration {
     }
 
     try {
-      const options = AIRequestType.COMPLETION ? { headers: { 'Content-Type': 'application/json', }, timeout: 3000 } : { headers: { 'Content-Type': 'application/json', } }
+      const token = typeof window !== 'undefined' ? window.localStorage?.getItem('remix_pro_token') : undefined
+      const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {}
+      const options = AIRequestType.COMPLETION
+        ? { headers: { 'Content-Type': 'application/json', ...authHeader }, timeout: 3000 }
+        : { headers: { 'Content-Type': 'application/json', ...authHeader } }
       const result = await axios.post(requestURL, payload, options)
 
       switch (rType) {
@@ -104,10 +108,13 @@ export class RemoteInferencer implements ICompletions, IGeneration {
     try {
       this.event.emit('onInference')
       const requestURL = rType === AIRequestType.COMPLETION ? this.completion_url : this.api_url
+      const token = typeof window !== 'undefined' ? window.localStorage?.getItem('remix_pro_token') : undefined
+      const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {}
       const response = await fetch(requestURL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeader,
         },
         body: JSON.stringify(payload),
       });

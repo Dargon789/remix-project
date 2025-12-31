@@ -202,6 +202,10 @@ export const initialState: SettingsState = {
     value: mcpServerManagement,
     isLoading: false
   },
+  'account-manager': {
+    value: '',
+    isLoading: false
+  },
   'ollama-config': {
     value: ollamaConfig,
     isLoading: false

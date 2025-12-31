@@ -143,12 +143,15 @@ module.exports = {
   },
   'Test maximize panel with terminal open #group1': function (browser: NightwatchBrowser) {
     browser
+      // Right panel is maximized from previous test, which hides terminal
+      // Showing the terminal will auto-restore the right panel
       .waitForElementVisible('#right-side-panel.right-panel-maximized')
-      .click('*[data-id="maximizeRightSidePanel"]')
+      .click('*[data-id="toggleBottomPanelIcon"]')
       .pause(1500)
-      .assert.not.hasClass('#right-side-panel', 'right-panel-maximized')
       .waitForElementVisible('.terminal-wrap')
       .waitForElementVisible('#side-panel')
+      .assert.not.hasClass('#right-side-panel', 'right-panel-maximized')
+      // Now maximize the right panel again
       .click('*[data-id="maximizeRightSidePanel"]')
       .pause(1000)
       .waitForElementVisible('#right-side-panel.right-panel-maximized')
@@ -174,6 +177,7 @@ module.exports = {
   },
   'Maximize bottom panel #group2': function (browser: NightwatchBrowser) {
     browser
+      // Terminal is shown by init.ts for e2e tests
       .waitForElementVisible('.terminal-wrap')
       .waitForElementVisible('*[data-id="maximizeBottomPanel"]')
       .click('*[data-id="maximizeBottomPanel"]')

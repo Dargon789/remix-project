@@ -159,6 +159,9 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
       const contracts = await debuggerModule.fetchContractAndCompile(address || currentReceipt.contractAddress || currentReceipt.to, currentReceipt)
       if (contracts) {
         let path = contracts.getSourceName(rawLocation.file)
+        // Get the main contract (first source) as origin for resolution
+        const sources = contracts.getSourceCode().sources
+        const mainContract = sources ? Object.keys(sources)[0] : null
         if (!path) {
           // check in generated sources
           for (const source of generatedSources) {
@@ -183,7 +186,7 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
             return { ...prevState, sourceLocationStatus: '' }
           })
           await debuggerModule.discardHighlight()
-          await debuggerModule.highlight(lineColumnPos, path, rawLocation, stepDetail, lineGasCost)
+          await debuggerModule.highlight(lineColumnPos, path, rawLocation, stepDetail, lineGasCost, mainContract)
         }
       }
     })

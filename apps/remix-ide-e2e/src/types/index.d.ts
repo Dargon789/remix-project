@@ -85,6 +85,7 @@ declare module 'nightwatch' {
     selectFiles: (selelectedElements: any[]) => NightwatchBrowser
     waitForCompilerLoaded: () => NightwatchBrowser
     expandAllFolders: (targetDirectory?: string) => NightwatchBrowser
+    verifyArtifactsBuildInfo: (versionChecks: Array<{packagePath: string; versionComment: string; description: string}>) => NightwatchBrowser
   }
 
   export interface NightwatchBrowser {

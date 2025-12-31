@@ -7,6 +7,7 @@ import ManagePreferencesDialog from './components/modals/managePreferences'
 import OriginWarning from './components/modals/origin-warning'
 import DragBar from './components/dragbar/dragbar'
 import { AppProvider } from './context/provider'
+import { AuthProvider } from './context/auth-context'
 import AppDialogs from './components/modals/dialogs'
 import DialogViewPlugin from './components/modals/dialogViewPlugin'
 import { appProviderContextType, onLineContext, platformContext } from './context/context'
@@ -44,7 +45,7 @@ const RemixApp = (props: IRemixAppUi) => {
   const [appState, appStateDispatch] = useReducer(appReducer, {
     ...appInitialState,
     showPopupPanel: !window.localStorage.getItem('did_show_popup_panel') && !isElectron(),
-    connectedToDesktop: props.app.desktopClientMode ? desktopConnectionType .disconnected : desktopConnectionType .disabled,
+    connectedToDesktop: props.app.desktopClientMode ? desktopConnectionType.disconnected : desktopConnectionType.disabled,
     genericModalState: {
       id: '',
       title: <div>Default Title</div>,
@@ -62,7 +63,7 @@ const RemixApp = (props: IRemixAppUi) => {
   const [isAiWorkspaceBeingGenerated, setIsAiWorkspaceBeingGenerated] = useState<boolean>(false)
 
   useEffect(() => {
-    if (props.app.params && props.app.params.activate && props.app.params.activate.split(',').includes('desktopClient')){
+    if (props.app.params && props.app.params.activate && props.app.params.activate.split(',').includes('desktopClient')) {
       setHideSidePanel(true)
     }
     async function activateApp() {
@@ -82,10 +83,10 @@ const RemixApp = (props: IRemixAppUi) => {
     if (!appState.showPopupPanel) {
       window.localStorage.setItem('did_show_popup_panel', 'true')
     }
-  },[appState.showPopupPanel])
+  }, [appState.showPopupPanel])
 
   function setListeners() {
-    if (!props.app.desktopClientMode){
+    if (!props.app.desktopClientMode) {
       // Listen to explicit panel state events instead of toggle
       props.app.sidePanel.events.on('leftSidePanelHidden', () => {
         setHideSidePanel(true)
@@ -193,69 +194,71 @@ const RemixApp = (props: IRemixAppUi) => {
     <IntlProvider locale={locale.code} messages={locale.messages}>
       <platformContext.Provider value={props.app.platform}>
         <onLineContext.Provider value={online}>
-          <AppProvider value={value}>
-            <OriginWarning></OriginWarning>
-            <MatomoDialog hide={!appReady} managePreferencesFn={() => setShowManagePreferencesDialog(true)}></MatomoDialog>
-            {showManagePreferencesDialog && <ManagePreferencesDialog></ManagePreferencesDialog>}
-            <div className='d-flex flex-column'>
-              {!props.app.desktopClientMode && (
-                <div className='top-bar'>
-                  {props.app.topBar.render()}
-                </div>
-              )}
-              <div className={`remixIDE ${appReady ? '' : 'd-none'}`} data-id="remixIDE">
-                <div id="icon-panel" data-id="remixIdeIconPanel" className="custom_icon_panel iconpanel bg-light">
-                  {props.app.menuicons.render()}
-                </div>
-                <div
-                  ref={sidePanelRef}
-                  id="side-panel"
-                  data-id="remixIdeSidePanel"
-                  className={`sidepanel border-end border-start ${hideSidePanel ? 'd-none' : ''}`}
-                >
-                  {props.app.sidePanel.render()}
-                </div>
-                <DragBar
-                  enhanceTrigger={enhanceLeftTrigger}
-                  resetTrigger={resetLeftTrigger}
-                  maximiseTrigger={maximiseLeftTrigger}
-                  minWidth={305}
-                  refObject={sidePanelRef}
-                  hidden={hideSidePanel}
-                  setHideStatus={setHideSidePanel}
-                  layoutPosition='left'
-                ></DragBar>
-                <div id="main-panel" data-id="remixIdeMainPanel" className="mainpanel d-flex">
-                  <RemixUIMainPanel layout={props.app.layout}></RemixUIMainPanel>
-                </div>
-                <div id="right-side-panel" ref={pinnedPanelRef} data-id="remixIdePinnedPanel" className={`flex-row-reverse pinnedpanel border-end border-start ${hidePinnedPanel ? 'd-none' : 'd-flex'}`}>
-                  {props.app.rightSidePanel.render()}
-                </div>
-                {
-                  !hidePinnedPanel &&
+          <AuthProvider plugin={props.app.authPlugin}>
+            <AppProvider value={value}>
+              <OriginWarning></OriginWarning>
+              <MatomoDialog hide={!appReady} managePreferencesFn={() => setShowManagePreferencesDialog(true)}></MatomoDialog>
+              {showManagePreferencesDialog && <ManagePreferencesDialog></ManagePreferencesDialog>}
+              <div className='d-flex flex-column'>
+                {!props.app.desktopClientMode && (
+                  <div className='top-bar'>
+                    {props.app.topBar.render()}
+                  </div>
+                )}
+                <div className={`remixIDE ${appReady ? '' : 'd-none'}`} data-id="remixIDE">
+                  <div id="icon-panel" data-id="remixIdeIconPanel" className="custom_icon_panel iconpanel bg-light">
+                    {props.app.menuicons.render()}
+                  </div>
+                  <div
+                    ref={sidePanelRef}
+                    id="side-panel"
+                    data-id="remixIdeSidePanel"
+                    className={`sidepanel border-end border-start ${hideSidePanel ? 'd-none' : ''}`}
+                  >
+                    {props.app.sidePanel.render()}
+                  </div>
                   <DragBar
-                    enhanceTrigger={enhanceRightTrigger}
-                    resetTrigger={resetRightTrigger}
-                    maximiseTrigger={maximiseRightTrigger}
-                    minWidth={331}
-                    refObject={pinnedPanelRef}
-                    hidden={hidePinnedPanel}
-                    setHideStatus={setHidePinnedPanel}
-                    layoutPosition='right'
+                    enhanceTrigger={enhanceLeftTrigger}
+                    resetTrigger={resetLeftTrigger}
+                    maximiseTrigger={maximiseLeftTrigger}
+                    minWidth={305}
+                    refObject={sidePanelRef}
+                    hidden={hideSidePanel}
+                    setHideStatus={setHideSidePanel}
+                    layoutPosition='left'
                   ></DragBar>
-                }
-                <div>{props.app.hiddenPanel.render()}</div>
+                  <div id="main-panel" data-id="remixIdeMainPanel" className="mainpanel d-flex">
+                    <RemixUIMainPanel layout={props.app.layout}></RemixUIMainPanel>
+                  </div>
+                  <div id="right-side-panel" ref={pinnedPanelRef} data-id="remixIdePinnedPanel" className={`flex-row-reverse pinnedpanel border-end border-start ${hidePinnedPanel ? 'd-none' : 'd-flex'}`}>
+                    {props.app.rightSidePanel.render()}
+                  </div>
+                  {
+                    !hidePinnedPanel &&
+                    <DragBar
+                      enhanceTrigger={enhanceRightTrigger}
+                      resetTrigger={resetRightTrigger}
+                      maximiseTrigger={maximiseRightTrigger}
+                      minWidth={331}
+                      refObject={pinnedPanelRef}
+                      hidden={hidePinnedPanel}
+                      setHideStatus={setHidePinnedPanel}
+                      layoutPosition='right'
+                    ></DragBar>
+                  }
+                  <div>{props.app.hiddenPanel.render()}</div>
+                </div>
+                {/* <div>{props.app.popupPanel.render()}</div> */}
+                <div className="statusBar fixed-bottom">
+                  {props.app.statusBar.render()}
+                </div>
               </div>
-              {/* <div>{props.app.popupPanel.render()}</div> */}
-              <div className="statusBar fixed-bottom">
-                {props.app.statusBar.render()}
-              </div>
-            </div>
-            <AppDialogs></AppDialogs>
-            <DialogViewPlugin></DialogViewPlugin>
-            {appState.genericModalState.showModal && props.app.templateExplorerModal.render()
-            }
-          </AppProvider>
+              <AppDialogs></AppDialogs>
+              <DialogViewPlugin></DialogViewPlugin>
+              {appState.genericModalState.showModal && props.app.templateExplorerModal.render()
+              }
+            </AppProvider>
+          </AuthProvider>
         </onLineContext.Provider>
       </platformContext.Provider>
     </IntlProvider>

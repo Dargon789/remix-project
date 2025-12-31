@@ -9,7 +9,7 @@ import { CustomRemixApi, trackMatomoEvent } from "@remix-api";
 import { saveToken, statusChanged } from "./pluginActions";
 import { appPlatformTypes } from "@remix-ui/app";
 import { AppAction } from "@remix-ui/app";
-import { setLoginPlugin, startGitHubLogin, disconnectFromGitHub } from "./gitLoginActions";
+import { setLoginPlugin, startGitHubLogin, disconnectFromGitHub, registerGitHubWithSSO } from "./gitLoginActions";
 
 let plugin: Plugin<any, CustomRemixApi>, gitDispatch: React.Dispatch<gitActionDispatch>, loaderDispatch: React.Dispatch<any>, loadFileQueue: AsyncDebouncedQueue
 let callBackEnabled: boolean = false
@@ -251,6 +251,15 @@ export const setCallBacks = (viewPlugin: Plugin, gitDispatcher: React.Dispatch<g
   plugin.on('githubAuthHandler', 'onLogin', async (data: { token: string }) => {
     await saveToken(data.token)
     await loadGitHubUserFromToken()
+
+    // Register with SSO API for user creation and cookie setting
+    try {
+      await registerGitHubWithSSO(data.token)
+    } catch (error) {
+      console.error('[Git] Failed to register GitHub with SSO:', error)
+      // Don't fail the flow - GitHub still works for git operations
+    }
+
     trackMatomoEvent(plugin, {
       category: 'git',
       action: 'CONNECT_TO_GITHUB_SUCCESS',

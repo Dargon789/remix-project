@@ -29,6 +29,14 @@ export const GitHubLogin: React.FC<GitHubLoginProps> = ({
   const gitHubUser = appContext?.appState?.gitHubUser
   const isConnected = gitHubUser?.isConnected
 
+  // Persist minimal GH identity for billing callbacks
+  if (isConnected && gitHubUser?.login && gitHubUser?.id) {
+    try {
+      window.localStorage.setItem('gh_login', gitHubUser.login)
+      window.localStorage.setItem('gh_id', String(gitHubUser.id))
+    } catch {}
+  }
+
   // Simple login handler that delegates to the prop function
   const handleLogin = useCallback(async () => {
     try {
@@ -64,7 +72,7 @@ export const GitHubLogin: React.FC<GitHubLoginProps> = ({
         ) : (
           <div className="d-flex flex-nowrap align-items-center flex-row justify-content-center">
             <i className="fab fa-github me-1"></i>
-            <span>Login with GitHub</span>
+            <span>Connect with GitHub</span>
           </div>
         )}
       </Button>
@@ -104,6 +112,10 @@ export const GitHubLogin: React.FC<GitHubLoginProps> = ({
               data-id="github-dropdown-item-disconnect"
               onClick={async () => {
                 await logOutOfGithub()
+                try {
+                  window.localStorage.removeItem('gh_login')
+                  window.localStorage.removeItem('gh_id')
+                } catch {}
                 trackMatomoEvent({ category: 'topbar', action: 'GIT', name: 'logout', isClick: true })
               }}
               className="text-danger"

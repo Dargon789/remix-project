@@ -85,6 +85,17 @@ const settingsSections: SettingsSection[] = [
       }
     ]
   },
+  { key: 'account', label: 'settings.account', description: 'settings.accountDescription', subSections: [
+    {
+      options: [{
+        name: 'account-manager',
+        label: 'settings.linkedAccounts',
+        description: 'settings.linkedAccountsDescription',
+        type: 'custom' as const,
+        customComponent: 'accountManager'
+      }]
+    }
+  ]},
   { key: 'analytics', label: 'settings.analytics', description: 'settings.analyticsDescription', subSections: [
     { options: [{
       name: 'matomo-analytics',
@@ -271,6 +282,22 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
     props.plugin.on('settings', 'matomoPerfAnalyticsChoiceUpdated', (isChecked) => {
       dispatch({ type: 'SET_VALUE', payload: { name: 'matomo-perf-analytics', value: isChecked } })
     })
+
+    // Listen for plugin event to open a specific settings section
+    const onOpenSection = ({ sectionKey }: { sectionKey: string }) => {
+      // Validate section key exists; fallback to 'general'
+      const keys = settingsSections.map(s => s.key)
+      const target = keys.includes(sectionKey) ? sectionKey : 'general'
+      setSelected(target)
+      const section = settingsSections.find(s => s.key === target)
+      if (section) setFilteredSection(section)
+    }
+
+    props.plugin.on('settings', 'openSection', onOpenSection)
+
+    return () => {
+      props.plugin.off('settings', 'openSection')
+    }
 
   }, [])
 

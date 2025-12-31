@@ -7,6 +7,7 @@ import { ThemeContext } from '@remix-ui/home-tab'
 import type { ViewPlugin } from '@remixproject/engine-web'
 import { CustomTooltip } from '@remix-ui/helper'
 import { IMCPServerManager } from './mcp-server-manager'
+import { AccountManager } from './account-manager'
 
 type SettingsSectionUIProps = {
   plugin: ViewPlugin,
@@ -106,12 +107,18 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
                           {option.type === 'select' && <div style={{ minWidth: '110px' }}><SelectDropdown value={selectValue} options={option.selectOptions} name={option.name} dispatch={dispatch as any} /></div>}
                           {option.type === 'button' && <button className="btn btn-secondary btn-sm" onClick={() => handleButtonClick(option.buttonOptions)}><FormattedMessage id={option.buttonOptions.label} /></button>}
                           {option.type === 'custom' && option.customComponent === 'mcpServerManager' && <span></span>}
+                          {option.type === 'custom' && option.customComponent === 'accountManager' && <span></span>}
                         </div>
                       </div>
                       {option.description && <span className="text-secondary mt-1">{typeof option.description === 'string' ? <FormattedMessage id={option.description} /> : option.description}</span>}
                       {option.type === 'custom' && option.customComponent === 'mcpServerManager' && (
                         <div className="mt-3">
                           <IMCPServerManager plugin={plugin} />
+                        </div>
+                      )}
+                      {option.type === 'custom' && option.customComponent === 'accountManager' && (
+                        <div className="mt-3">
+                          <AccountManager plugin={plugin} />
                         </div>
                       )}
                       {
