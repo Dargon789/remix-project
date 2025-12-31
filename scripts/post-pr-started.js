@@ -85,8 +85,7 @@ function formatRunTime() {
     log(`Set commit status ${STATUS_CONTEXT}: pending`);
   }
 })().catch(e => {
-  const status = (e && typeof e.status !== 'undefined') ? ` status=${e.status}` : '';
-  console.error(`[post-pr-started] Error:${status} (details omitted to avoid logging sensitive data)`);
+  console.error('[post-pr-started] Error (details omitted to avoid logging sensitive data)');
   process.exit(1);
 });
 
