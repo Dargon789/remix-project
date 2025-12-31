@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, {useEffect, useReducer, useState} from 'react' // eslint-disable-line no-use-before-define
-import {ModalDialog} from '@remix-ui/modal-dialog'
-import {Toaster} from '@remix-ui/toaster'
-import {IframePlugin, WebsocketPlugin} from '@remixproject/engine-web'
-import {FormattedMessage, useIntl} from 'react-intl'
-import {localPluginReducerActionType, localPluginToastReducer} from '../reducers/pluginManagerReducer'
-import {canActivate, FormStateProps, PluginManagerComponent} from '../../types'
+import React, { useEffect, useReducer, useState } from 'react' // eslint-disable-line no-use-before-define
+import { ModalDialog } from '@remix-ui/modal-dialog'
+import { Toaster } from '@remix-ui/toaster'
+import { IframePlugin, WebsocketPlugin } from '@remixproject/engine-web'
+import { FormattedMessage, useIntl } from 'react-intl'
+import { localPluginReducerActionType, localPluginToastReducer } from '../reducers/pluginManagerReducer'
+import { canActivate, FormStateProps, PluginManagerComponent } from '../../types'
 
 interface LocalPluginFormProps {
   closeModal: () => void
@@ -34,7 +34,7 @@ const defaultProfile = {
   hash: ''
 }
 
-function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormProps) {
+function LocalPluginForm({ closeModal, visible, pluginManager }: LocalPluginFormProps) {
   const [errorMsg, dispatchToastMsg] = useReducer(localPluginToastReducer, '')
   const [name, setName] = useState<string>('')
   const [displayName, setDisplayName] = useState<string>('')
@@ -100,7 +100,7 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
       targetPlugin.description = localPlugin.profile.description !== undefined ? localPlugin.profile.description : ''
       targetPlugin.events = localPlugin.profile.events !== undefined ? localPlugin.profile.events : []
       targetPlugin.kind = localPlugin.profile.kind !== undefined ? localPlugin.profile.kind : ''
-      localPlugin.profile = {...localPlugin.profile, ...targetPlugin}
+      localPlugin.profile = { ...localPlugin.profile, ...targetPlugin }
       pluginManager.activateAndRegisterLocalPlugin(localPlugin)
     } catch (error) {
       const action: localPluginReducerActionType = {
@@ -120,14 +120,14 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
         handleHide={closeModal}
         id="pluginManagerLocalPluginModalDialog"
         hide={visible}
-        title={intl.formatMessage({id: 'pluginManager.localForm.title'})}
-        okLabel="OK"
+        title={intl.formatMessage({ id: 'pluginManager.localForm.title' })}
+        okLabel={intl.formatMessage({ id: 'pluginManager.localForm.ok' })}
         okFn={handleModalOkClick}
-        cancelLabel="Cancel"
+        cancelLabel={intl.formatMessage({ id: 'pluginManager.localForm.cancel' })}
         cancelFn={closeModal}
       >
         <form id="local-plugin-form">
-          <div className="form-group">
+          <div className="mb-3">
             <label htmlFor="plugin-name">
               <FormattedMessage id="pluginManager.localForm.pluginName" />
               &nbsp;
@@ -146,7 +146,7 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
               })}
             />
           </div>
-          <div className="form-group">
+          <div className="mb-3">
             <label htmlFor="plugin-displayname">
               <FormattedMessage id="pluginManager.localForm.displayName" />
             </label>
@@ -161,7 +161,7 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
               })}
             />
           </div>
-          <div className="form-group">
+          <div className="mb-3">
             <label htmlFor="plugin-methods">
               Api&nbsp; (
               <FormattedMessage id="pluginManager.localForm.commaSeparatedMethod" />)
@@ -172,10 +172,10 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
               value={methods || ''}
               id="plugin-methods"
               data-id="localPluginMethods"
-              placeholder="Methods"
+              placeholder={intl.formatMessage({ id: 'pluginManager.localForm.methods' })}
             />
           </div>
-          <div className="form-group">
+          <div className="mb-3">
             <label htmlFor="plugin-methods">
               <FormattedMessage id="pluginManager.localForm.pluginsItCanActivate" />
               &nbsp; (
@@ -187,11 +187,11 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
               value={canactivate || ''}
               id="plugin-canactivate"
               data-id="localPluginCanActivate"
-              placeholder="Plugin names"
+              placeholder={intl.formatMessage({ id: 'pluginManager.localForm.pluginNames' })}
             />
           </div>
 
-          <div className="form-group">
+          <div className="mb-3">
             <label htmlFor="plugin-url">
               Url&nbsp;
               <small>
@@ -214,7 +214,7 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
               (<FormattedMessage id="pluginManager.localForm.required" />)
             </small>
           </h6>
-          <div className="form-check form-group">
+          <div className="form-check mb-3">
             <div className="radio">
               <input
                 className="form-check-input"
@@ -253,7 +253,7 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
               (<FormattedMessage id="pluginManager.localForm.required" />)
             </small>
           </h6>
-          <div className="form-check form-group">
+          <div className="form-check mb-3">
             <div className="radio">
               <input
                 className="form-check-input"
@@ -265,7 +265,7 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
                 checked={location === 'sidePanel'}
                 onChange={(e) => setLocation(e.target.value as 'sidePanel' | 'mainPanel' | 'none')}
               />
-              <label className="form-check-label" htmlFor="sidePanel">
+              <label className="form-check-label" htmlFor="localPluginRadioButtonsidePanelSidePanel">
                 <FormattedMessage id="pluginManager.localForm.sidePanel" />
               </label>
             </div>
@@ -280,7 +280,7 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
                 checked={location === 'mainPanel'}
                 onChange={(e) => setLocation(e.target.value as 'sidePanel' | 'mainPanel' | 'none')}
               />
-              <label className="form-check-label" htmlFor="mainPanel">
+              <label className="form-check-label" htmlFor="localPluginRadioButtonsidePanelMainPanel">
                 <FormattedMessage id="pluginManager.localForm.mainPanel" />
               </label>
             </div>
@@ -295,7 +295,7 @@ function LocalPluginForm({closeModal, visible, pluginManager}: LocalPluginFormPr
                 checked={location === 'none'}
                 onChange={(e) => setLocation(e.target.value as 'sidePanel' | 'mainPanel' | 'none')}
               />
-              <label className="form-check-label" htmlFor="none">
+              <label className="form-check-label" htmlFor="localPluginRadioButtonsidePanelNone">
                 <FormattedMessage id="pluginManager.localForm.none" />
               </label>
             </div>

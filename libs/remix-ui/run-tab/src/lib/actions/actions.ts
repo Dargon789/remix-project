@@ -1,5 +1,5 @@
 import { ContractData } from "@remix-project/core-plugin"
-import { addNewInstance, addProvider, clearAllInstances, clearRecorderCount, hidePopUp, newProxyDeployment, removeExistingInstance, removeProvider, setBaseFeePerGas, setConfirmSettings, setCurrentContract, setExecutionEnvironment, setExternalEndpoint, setGasLimit, setGasPrice, setGasPriceStatus, setMatchPassphrase, setMaxFee, setMaxPriorityFee, setNetworkName, setPassphrase, setPathToScenario, setSelectedAccount, setSendUnit, setSendValue } from "./payload"
+import { addNewInstance, pinUnpinnedInstance, unpinPinnedInstance, addProvider, clearAllInstances, clearRecorderCount, hidePopUp, newProxyDeployment, removeExistingInstance, removeProvider, setBaseFeePerGas, setConfirmSettings, setCurrentContract, setExecutionEnvironment, setExternalEndpoint, setGasLimit, setGasPrice, setGasPriceStatus, setMatchPassphrase, setMaxFee, setMaxPriorityFee, setNetworkName, setChainId, setPassphrase, setPathToScenario, setSelectedAccount, setSendUnit, setSendValue } from "./payload"
 
 export const setAccount = (dispatch: React.Dispatch<any>, account: string) => {
   dispatch(setSelectedAccount(account))
@@ -19,6 +19,10 @@ export const setExecEnv = (dispatch: React.Dispatch<any>, env: string) => {
 
 export const setNetworkNameFromProvider = (dispatch: React.Dispatch<any>, networkName: string) => {
   dispatch(setNetworkName(networkName))
+}
+
+export const setPinnedChainId = (dispatch: React.Dispatch<any>, chainId: string) => {
+  dispatch(setChainId(chainId))
 }
 
 export const addExternalProvider = (dispatch: React.Dispatch<any>, network) => {
@@ -65,9 +69,17 @@ export const updateGasPrice = (dispatch: React.Dispatch<any>, price: string) => 
   dispatch(setGasPrice(price))
 }
 
-export const addInstance = (dispatch: React.Dispatch<any>, instance: { contractData?: ContractData, address: string, name: string, abi?: any, decodedResponse?: Record<number, any> }) => {
+export const addInstance = (dispatch: React.Dispatch<any>, instance: { contractData?: ContractData, address: string, name: string, abi?: any, decodedResponse?: Record<number, any>, isPinned?: boolean, pinnedAt?: number, filePath?: string }) => {
   instance.decodedResponse = {}
   dispatch(addNewInstance(instance))
+}
+
+export const pinInstance = (dispatch: React.Dispatch<any>, index: number, pinnedAt: number, filePath: string) => {
+  dispatch(pinUnpinnedInstance(index, pinnedAt, filePath))
+}
+
+export const unpinInstance = (dispatch: React.Dispatch<any>, index: number) => {
+  dispatch(unpinPinnedInstance(index))
 }
 
 export const removeInstance = (dispatch: React.Dispatch<any>, index: number) => {

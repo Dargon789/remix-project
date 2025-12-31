@@ -7,7 +7,7 @@
   left: 0px;
   top: 0px;
   height: 0.3em;
-  z-index: 1000;
+  z-index: 100;
 }
 
 .overlay {
@@ -22,6 +22,15 @@
 
 .dragbar_terminal:hover,
 .dragbar_terminal.ondrag {
-  background-color: var(--secondary);
+  background-color: var(--bs-secondary);
   cursor: row-resize;
+}
+
+/* Hide dragbar when terminal panel is maximized */
+.dragbar_terminal:has(+ .terminal-wrap.maximized):hover,
+.dragbar_terminal:has(+ .terminal-wrap.maximized).ondrag,
+.dragbar_terminal:has(+ .terminal-wrap.maximized) {
+  background-color: transparent !important;
+  cursor: default !important;
+  pointer-events: none !important;
 }

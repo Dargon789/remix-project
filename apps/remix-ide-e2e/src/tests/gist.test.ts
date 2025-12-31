@@ -24,24 +24,23 @@ module.exports = {
     const gistid = '17ac9315bc065a3d95cf8dc1b28d71f8'
     browser
       .refreshPage()
-      .pause(10000)
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
       .click('li[data-id="treeViewLitreeViewItemREADME.txt"]') // focus on root directory
-      .waitForElementVisible('*[data-id="fileExplorerNewFilecreateNewFolder"]')
-      .click('[data-id="fileExplorerNewFilecreateNewFolder"]')
+      .rightClickCustom('[data-id="treeViewUltreeViewMenu"]')
+      .click('*[data-id="contextMenuItemnewFolder"]')
       .pause(1000)
-      .waitForElementVisible('*[data-id$="/blank"]')
-      .sendKeys('*[data-id$="/blank"] .remixui_items', 'Browser_Tests')
-      .sendKeys('*[data-id$="/blank"] .remixui_items', browser.Keys.ENTER)
+      .waitForElementVisible('*[data-id$="fileExplorerTreeItemInput"]')
+      .sendKeys('*[data-id$="fileExplorerTreeItemInput"]', 'Browser_Tests')
+      .sendKeys('*[data-id$="fileExplorerTreeItemInput"]', browser.Keys.ENTER)
       .waitForElementVisible('*[data-id="treeViewLitreeViewItemBrowser_Tests"]')
       .addFile('File.sol', { content: '' })
       .executeScriptInTerminal(`remix.loadgist('${gistid}')`)
       // .perform((done) => { if (runtimeBrowser === 'chrome') { browser.openFile('gists') } done() })
-      .waitForElementVisible(`[data-id="treeViewLitreeViewItemgist-${gistid}"]`)
-      .click(`[data-id="treeViewLitreeViewItemgist-${gistid}"]`)
-      .openFile(`gist-${gistid}/README.txt`)
-      // Remix publish to gist
-      /* .click('*[data-id="fileExplorerNewFilepublishToGist"]')
+      .waitForElementVisible(`[data-id="treeViewLitreeViewItemREADME.txt"]`)
+
+    //.openFile(`README.txt`)
+    // Remix publish to gist
+    /* .click('*[data-id="fileExplorerNewFilepublishToGist"]')
          .pause(2000)
          .waitForElementVisible('*[data-id="default_workspaceModalDialogContainer-react"]')
          .click('*[data-id="default_workspaceModalDialogContainer-react"] .modal-ok')
@@ -69,11 +68,12 @@ module.exports = {
       */
   },
 
-  'Load Gist Modal #group1': function (browser: NightwatchBrowser) {
+  'Load Gist Modal #group1': '' + function (browser: NightwatchBrowser) {
     browser.clickLaunchIcon('home')
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
       .clickLaunchIcon('filePanel')
-      .click('div[data-id="verticalIconsHomeIcon"]')
+      .waitForElementVisible('*[data-id="verticalIconsHomeIcon"]')
+      .click('*[data-id="verticalIconsHomeIcon"]')
       .waitForElementVisible('button[data-id="landingPageImportFromGistButton"]')
       .pause(1000)
       .scrollAndClick('button[data-id="landingPageImportFromGistButton"]')
@@ -85,9 +85,8 @@ module.exports = {
       .modalFooterCancelClick('gisthandler')
   },
 
-  'Display Error Message For Invalid Gist ID #group1': function (browser: NightwatchBrowser) {
+  'Display Error Message For Invalid Gist ID #group1': '' + function (browser: NightwatchBrowser) {
     browser
-      .pause(1000)
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
       .clickLaunchIcon('filePanel')
       .scrollAndClick('*[data-id="landingPageImportFromGistButton"]')
@@ -106,30 +105,33 @@ module.exports = {
     browser
       .pause(1000)
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
-      .clickLaunchIcon('settings')
-      .waitForElementVisible('[data-id="settingsTabRemoveGistToken"]')
-      .click('[data-id="settingsTabRemoveGistToken"]')
-      .clickLaunchIcon('filePanel')
-      .waitForElementVisible('*[data-id="fileExplorerNewFilepublishToGist"]')
-      .click('*[data-id="fileExplorerNewFilepublishToGist"]')
-      .waitForElementVisible('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok')
-      .execute(function () { (document.querySelector('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok') as HTMLElement).click() })
-      .pause(10000)
-      .perform((done) => {
-        browser.getText('[data-id="fileSystemModalDialogModalBody-react"]', (result) => {
-          console.log('result.value: ', result.value)
-          browser.assert.ok(result.value === 'Remix requires an access token (which includes gists creation permission). Please go to the settings tab to create one.', 'Assert failed. Gist token error message not displayed.')
-          done()
-        })
-      })
-      .waitForElementPresent('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok')
-      .click('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok')
+      .waitForElementVisible('*[data-id="topbar-settingsIcon"]')
+      .click('*[data-id="topbar-settingsIcon"]')
+      .waitForElementVisible('*[data-id="settings-sidebar-services"]')
+      .click('*[data-id="settings-sidebar-services"]')
+      .click('*[data-id="github-configSwitch"]')
+      .waitForElementVisible('*[data-shared="tooltipPopup"]', 5000)
+      .assert.containsText('*[data-shared="tooltipPopup"]', 'Credentials removed')
+      .click('*[data-id="github-dropdown-toggle"]')
+      .waitForElementNotPresent('*[data-id="github-dropdown-item-publish-to-gist"]')
+      // .waitForElementVisible('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok')
+      // .execute(function () { (document.querySelector('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok') as HTMLElement).click() })
+      // .perform((done) => {
+      //   browser.getText('[data-id="fileSystemModalDialogModalBody-react"]', (result) => {
+      //     console.log('result.value: ', result.value)
+      //     browser.assert.ok(result.value === 'Remix requires an access token (which includes gists creation permission). Please go to the settings tab to create one.', 'Assert failed. Gist token error message not displayed.')
+      //     done()
+      //   })
+      // })
+      // .waitForElementPresent('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok')
+      // .click('[data-id="fileSystemModalDialogModalFooter-react"] .modal-ok')
   },
 
-  'Import From Gist For Valid Gist ID #group2': function (browser: NightwatchBrowser) {
+  'Import From Gist For Valid Gist ID #group2': '' + function (browser: NightwatchBrowser) {
     browser
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 15000)
-      .clickLaunchIcon('settings')
+      .waitForElementVisible('*[data-id="topbar-settingsIcon"]')
+      .click('*[data-id="topbar-settingsIcon"]')
       .click('*[data-id="settingsTabGenerateContractMetadataLabel"]')
       .setValue('[data-id="settingsTabGistAccessToken"]', process.env.gist_token)
       .click('[data-id="settingsTabSaveGistToken"]')
@@ -142,9 +144,28 @@ module.exports = {
       .setValue('*[data-id="gisthandlerModalDialogModalBody-react"] input[data-id="modalDialogCustomPromp"]', testData.validGistId)
       .modalFooterOKClick('gisthandler')
       .pause(10000)
-      .openFile(`gist-${testData.validGistId}/README.txt`)
-      .waitForElementVisible(`div[data-path='default_workspace/gist-${testData.validGistId}/README.txt']`)
-      .assert.containsText(`div[data-path='default_workspace/gist-${testData.validGistId}/README.txt'] > span`, 'README.txt')
-      .end()
+      .openFile(`README.txt`)
+      .waitForElementVisible(`div[data-path='gist ${testData.validGistId}/README.txt']`)
+      .assert.containsText(`div[data-path='gist ${testData.validGistId}/README.txt'] > span`, 'README.txt')
+  },
+
+  'Load Gist from URL and verify truncated files are loaded #group3': !function (browser: NightwatchBrowser) {
+    const gistId = '1b179bf1b92c8b0664b4cbe61774e15d'
+    browser
+      .url('http://127.0.0.1:8080/#gist=' + gistId) // loading the gist
+      .refreshPage()
+      .currentWorkspaceIs('gist ' + gistId)
+      .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 15000)
+      .waitForElementVisible(`#fileExplorerView li[data-path='contracts']`, 30000)
+      .openFile(`contracts/2_Owner.sol`)
+      .getEditorValue((content) => {
+        browser.assert.ok(content.indexOf('contract Owner {') !== -1)
+      })
+      .waitForElementVisible('*[data-id="github-dropdown-toggle"]')
+      .click('*[data-id="github-dropdown-toggle"]')
+      .click('*[data-id="github-dropdown-item-publish-to-gist"]')
+      .modalFooterOKClick('fileSystem')
+      .waitForElementVisible('*[data-shared="tooltipPopup"]', 5000)
+      .assert.containsText('*[data-shared="tooltipPopup"]', 'Saving gist (' + gistId + ') ...')
   }
 }

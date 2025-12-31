@@ -1,33 +1,64 @@
-import {CompilationResult, ABIDescription} from '@remixproject/plugin-api'
+import { ABIDescription } from '@remixproject/plugin-api'
+import axios from 'axios'
+import { remixClient } from './remix-client'
+import _ from 'lodash'
+import { VyperCompilationError , VyperCompilationOutput, VyperCompilationResult } from './types'
 
 export interface Contract {
   name: string
   content: string
 }
 
-export interface VyperCompilationResult {
-  status: 'success'
-  bytecode: string
-  bytecode_runtime: string
-  abi: ABIDescription[]
-  ir: string
-  method_identifiers: {
-    [method: string]: string
-  }
-}
-
-export interface VyperCompilationError {
-  status: 'failed'
-  column?: number
-  line?: number
-  message: string
-}
-
-export type VyperCompilationOutput = VyperCompilationResult | VyperCompilationError
-
 /** Check if the output is an error */
-export function isCompilationError(output: VyperCompilationOutput): output is VyperCompilationError {
-  return output.status === 'failed'
+export const isCompilationError = (output: VyperCompilationOutput): output is VyperCompilationError => output.status === 'failed'
+
+export function normalizeContractPath(contractPath: string): string[] {
+  const paths = contractPath.split('/')
+  const filename = paths[paths.length - 1].split('.')[0]
+  let folders = ''
+  for (let i = 0; i < paths.length - 1; i++) {
+    if (i !== paths.length -1) {
+      folders += `${paths[i]}/`
+    }
+  }
+  const resultingPath = `${folders}${filename}`
+  return [folders,resultingPath, filename]
+}
+
+const compileReturnType = (output, contract): VyperCompilationResult => {
+  const t: any = toStandardOutput(contract, output)
+  const temp = _.merge(t['contracts'][contract])
+  const normal = normalizeContractPath(contract)[2]
+  const abi = temp[normal]['abi']
+  const evm = _.merge(temp[normal]['evm'])
+  const methodIdentifiers = evm.methodIdentifiers
+  // TODO: verify this is correct
+  const version = output.version || '0.4.0'
+  const optimized = output.optimize || true
+  const evmVersion = ''
+
+  const result: {
+    contractName: any,
+    abi: any,
+    bytecode: any,
+    runtimeBytecode: any,
+    ir: '',
+    methodIdentifiers: any,
+    version?: '',
+    evmVersion?: ''
+    optimized?: boolean
+  } = {
+    contractName: normal,
+    abi,
+    bytecode: evm.bytecode,
+    runtimeBytecode: evm.deployedBytecode,
+    ir: '',
+    methodIdentifiers,
+    version,
+    evmVersion,
+    optimized
+  }
+  return result
 }
 
 /**
@@ -43,19 +74,44 @@ export async function compile(url: string, contract: Contract): Promise<VyperCom
   if (extension !== 'vy') {
     throw new Error('Use extension .vy for Vyper.')
   }
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({code: contract.content})
-  })
 
+  let contractName = contract['name']
+  const compilePackage = {
+    manifest: 'ethpm/3',
+    sources: {
+      [contractName] : { content : contract.content }
+    }
+  }
+
+  let response = await axios.post(`${url.endsWith('/') ? url + 'compile' : url + '/compile'}`, compilePackage )
   if (response.status === 404) {
     throw new Error(`Vyper compiler not found at "${url}".`)
   }
-  /*if (response.status === 400) {
+  if (response.status === 400) {
     throw new Error(`Vyper compilation failed: ${response.statusText}`)
-  }*/
-  return response.json()
+  }
+
+  const compileCode = response.data
+  contractName = null
+  response = null
+  let result: any
+
+  const status = await (await axios.get(`${url.endsWith('/') ? url + 'status/' : url + '/status/'}`+ compileCode , {
+    method: 'Get'
+  })).data
+  if (status === 'SUCCESS') {
+    result = await(await axios.get(`${url.endsWith('/') ? url + 'artifacts/' : url + '/artifacts/'}` + compileCode , {
+      method: 'Get'
+    })).data
+
+    return result
+  } else if (status === 'FAILED') {
+    const intermediate = await(await axios.get(`${url.endsWith('/') ? url + 'exceptions/' : url + '/exceptions/'}` + compileCode , {
+      method: 'Get'
+    })).data
+    return intermediate
+  }
+  await new Promise((resolve) => setTimeout(() => resolve({}), 3000))
 }
 
 /**
@@ -63,15 +119,21 @@ export async function compile(url: string, contract: Contract): Promise<VyperCom
  * @param name Name of the contract file
  * @param compilationResult Result returned by the compiler
  */
-export function toStandardOutput(fileName: string, compilationResult: VyperCompilationResult): CompilationResult {
-  const contractName = fileName.split('/').slice(-1)[0].split('.')[0]
-  const methodIdentifiers = JSON.parse(JSON.stringify(compilationResult['method_identifiers']).replace(/0x/g, ''))
+export function toStandardOutput(fileName: string, compilationResult: any): any {
+  const contractName = normalizeContractPath(fileName)[2]
+  const compiledAbi = compilationResult['contractTypes'][contractName].abi
+  const deployedBytecode = compilationResult['contractTypes'][contractName].deploymentBytecode.bytecode.replace('0x', '')
+  const bytecode = compilationResult['contractTypes'][contractName].runtimeBytecode.bytecode.replace('0x', '')
+  const compiledAst = compilationResult['contractTypes'][contractName].ast
+  const methodIds = compilationResult['contractTypes'][contractName].methodIdentifiers
+  const methodIdentifiers = Object.entries(methodIds as Record<any,string>).map(([key, value]) => {
+    return { [key]: value.replace('0x', '') }
+  })
   return {
     sources: {
       [fileName]: {
         id: 1,
-        ast: {} as any,
-        legacyAST: {} as any
+        ast: compiledAst
       }
     },
     contracts: {
@@ -80,16 +142,17 @@ export function toStandardOutput(fileName: string, compilationResult: VyperCompi
         [contractName]: {
           // The Ethereum Contract ABI. If empty, it is represented as an empty array.
           // See https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI
-          abi: compilationResult['abi'],
+          abi: compiledAbi,
+          contractName: contractName,
           evm: {
             bytecode: {
               linkReferences: {},
-              object: compilationResult['bytecode'].replace('0x', ''),
+              object: deployedBytecode,
               opcodes: ''
             },
             deployedBytecode: {
               linkReferences: {},
-              object: compilationResult['bytecode_runtime'].replace('0x', ''),
+              object: bytecode,
               opcodes: ''
             },
             methodIdentifiers: methodIdentifiers
@@ -98,6 +161,111 @@ export function toStandardOutput(fileName: string, compilationResult: VyperCompi
       } as any
     }
   }
+}
+
+export async function compileContract(contract: string, compilerUrl: string, setOutput?: any, setLoadingSpinnerState?: React.Dispatch<React.SetStateAction<boolean>>, spinner?: boolean) {
+  remixClient.eventEmitter.emit('resetCompilerState', {})
+  spinner && spinner === true ? setLoadingSpinnerState && setLoadingSpinnerState(true) : null
+
+  try {
+    // await remixClient.discardHighlight()
+    let _contract: any
+    try {
+      _contract = await remixClient.getContract()
+    } catch (e: any) {
+      const errorGettingContract: VyperCompilationError = {
+        status: 'failed',
+        message: e.message,
+        error_type: 'fetch_contract'
+      }
+
+      remixClient.eventEmitter.emit('setOutput', { status: 'failed', errors: [errorGettingContract] } )
+      return
+    }
+    remixClient.changeStatus({
+      key: 'loading',
+      type: 'info',
+      title: 'Compiling'
+    })
+    // try {
+    const output = await compile(compilerUrl, _contract)
+    if (output && output[0] && output[0].status === 'failed') {
+      remixClient.changeStatus({
+        key: 'failed',
+        type: 'error',
+        title: 'Compilation failed...'
+      })
+
+      setLoadingSpinnerState && setLoadingSpinnerState(false)
+      remixClient.eventEmitter.emit('setOutput', { status: 'failed', errors: output })
+      return
+    }
+
+    // SUCCESS
+    remixClient.changeStatus({
+      key: 'succeed',
+      type: 'success',
+      title: 'success'
+    })
+
+    setLoadingSpinnerState && setLoadingSpinnerState(false)
+    const data = toStandardOutput(_contract.name, output)
+    remixClient.compilationFinish(_contract.name, _contract.content, data)
+    const contractName = _contract['name']
+    const compileResult = compileReturnType(output, contractName)
+    if (setOutput === null || setOutput === undefined) {
+      remixClient.eventEmitter.emit('setOutput', { status: 'success', contractName, compileResult })
+    } else {
+      remixClient.eventEmitter.emit('setOutput', { status: 'success', contractName, compileResult })
+    }
+  } catch (err: any) {
+    remixClient.changeStatus({
+      key: 'failed',
+      type: 'error',
+      title: `1 error occurred ${err.message}`
+    })
+
+    const errorGettingContract: VyperCompilationError = {
+      status: 'failed',
+      message: err.message,
+      error_type: 'unknown_error'
+    }
+
+    setLoadingSpinnerState && setLoadingSpinnerState(false)
+    remixClient.eventEmitter.emit('setOutput', { status: 'failed', errors: [errorGettingContract] })
+  }
+}
+
+export type StandardOutput = {
+  sources: {
+    [fileName: string]: {
+      id: number,
+      ast: AST
+    }
+  },
+  contracts: {
+    [fileName: string]: {
+      [contractName: string]: {
+        abi: ABI,
+        contractName: string,
+        evm: {
+          bytecode: BytecodeObject,
+          deployedBytecode: BytecodeObject,
+          methodIdentifiers: {
+            [method: string]: string
+          }
+        }
+      }
+    }
+  }
+}
+
+type AST = any // Replace with the actual AST type
+type ABI = ABIDescription[] // Replace with the actual ABI type
+type BytecodeObject = {
+  linkReferences: Record<string, any>,
+  object: string,
+  opcodes: string
 }
 
 /*

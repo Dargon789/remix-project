@@ -6,7 +6,9 @@ import { confirmationHandler, continueHandler, promptHandler, terminalLogger } f
 import { displayNotification } from "./payload"
 
 const saveScenario = async (plugin: RunTab, newPath: string, provider, promptCb, cb) => {
-  const txJSON = JSON.stringify(plugin.recorder.getAll(), null, 2)
+  const txJSON = JSON.stringify(plugin.recorder.getAll(), (key, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  , 2)
 
   promptCb(async () => {
     try {
@@ -37,7 +39,7 @@ export const storeScenario = async (plugin: RunTab, dispatch: React.Dispatch<any
 }
 
 const runScenario = (liveMode: boolean, plugin: RunTab, dispatch: React.Dispatch<any>, file: string, gasEstimationPrompt: (msg: string) => JSX.Element, passphrasePrompt: (msg: string) => JSX.Element, confirmDialogContent: MainnetPrompt) => {
-  if (!file) return dispatch(displayNotification('Alert', 'Unable to run scenerio, no specified scenario file', 'OK', null))
+  if (!file) return dispatch(displayNotification('Alert', 'Unable to run scenario, no specified scenario file', 'OK', null))
 
   plugin.fileManager.readFile(file).then((json) => {
     // TODO: there is still a UI dependency to remove here, it's still too coupled at this point to remove easily

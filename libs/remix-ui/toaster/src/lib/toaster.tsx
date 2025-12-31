@@ -1,155 +1,236 @@
-import React, {useEffect, useState} from 'react' // eslint-disable-line
-import {ModalDialog} from '@remix-ui/modal-dialog' // eslint-disable-line
+import React, {useEffect} from 'react' // eslint-disable-line
+import { Toaster as SonnerToaster, toast } from 'sonner'
 
 import './toaster.css'
+
+// Export toast so callers can use toast.dismiss(id)
+export { toast }
 
 /* eslint-disable-next-line */
 export interface ToasterProps {
   message: string | JSX.Element
-  timeOut?: number
+  timeout?: number
   handleHide?: () => void
   timestamp?: number
+  id?: string | number
+  onToastCreated?: (toastId: string | number) => void
 }
 
-export const Toaster = (props: ToasterProps) => {
-  const [state, setState] = useState<{
-    message: string | JSX.Element
-    hide: boolean
-    hiding: boolean
-    timeOutId: any
-    timeOut: number
-    showModal: boolean
-    showFullBtn: boolean
-  }>({
-    message: '',
-    hide: true,
-    hiding: false,
-    timeOutId: null,
-    timeOut: props.timeOut || 7000,
-    showModal: false,
-    showFullBtn: false
-  })
+export interface ToasterContainerProps {
+  toasts: ToasterProps[]
+}
+
+// Individual toast trigger component (no UI, just triggers toast)
+export const ToastTrigger = (props: ToasterProps) => {
+  const mountedRef = React.useRef(false)
 
   useEffect(() => {
-    if (props.message) {
-      const timeOutId = setTimeout(() => {
-        setState((prevState) => {
-          return {...prevState, hiding: true}
-        })
-      }, state.timeOut)
+    // Only trigger on mount, not on updates
+    if (!mountedRef.current && props.message && props.id) {
+      mountedRef.current = true
 
-      setState((prevState) => {
-        if (typeof props.message === 'string' && props.message.length > 201) {
-          const shortTooltipText = props.message.substring(0, 200) + '...'
+      // Show toast using Sonner - Sonner handles deduplication via ID automatically
+      const duration = props.timeout || 2000
+      const showCloseButton = true
+      const showLoadingIcon = duration > 2000
 
-          return {
-            ...prevState,
-            hide: false,
-            hiding: false,
-            timeOutId,
-            message: shortTooltipText
+      if (typeof props.message === 'string') {
+        const toastId = toast.custom(
+          () => (
+            <div data-shared="tooltipPopup" className="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+              <div className="toast-header">
+                {showLoadingIcon && (
+                  <span className="spinner-border spinner-border-sm me-2" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </span>
+                )}
+                <strong className="me-auto">Remix</strong>
+                {showCloseButton && (
+                  <button type="button" className="btn-close" onClick={() => toast.dismiss(toastId)} aria-label="Close"></button>
+                )}
+              </div>
+              <div className="toast-body">
+                {props.message}
+              </div>
+            </div>
+          ),
+          {
+            id: props.id,
+            unstyled: true,
+            duration,
+            closeButton: false,
+            onDismiss: () => {
+              props.handleHide && props.handleHide()
+            },
+            onAutoClose: () => {
+              props.handleHide && props.handleHide()
+            }
           }
-        } else {
-          const shortTooltipText = props.message
-
-          return {
-            ...prevState,
-            hide: false,
-            hiding: false,
-            timeOutId,
-            message: shortTooltipText
-          }
+        )
+        // Call the callback with the toast ID so caller can dismiss it later
+        if (props.onToastCreated) {
+          props.onToastCreated(toastId)
         }
-      })
+      } else {
+        // For JSX elements, use toast.custom
+        const toastId = toast.custom(
+          () => (
+            <div data-shared="tooltipPopup" className="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+              <div className="toast-header">
+                {showLoadingIcon && (
+                  <span className="spinner-border spinner-border-sm me-2" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </span>
+                )}
+                <strong className="me-auto">Remix</strong>
+                {showCloseButton && (
+                  <button type="button" className="btn-close" onClick={() => toast.dismiss(toastId)} aria-label="Close"></button>
+                )}
+              </div>
+              <div className="toast-body">
+                {props.message}
+              </div>
+            </div>
+          ),
+          {
+            id: props.id,
+            duration,
+            closeButton: false,
+            onDismiss: () => {
+              props.handleHide && props.handleHide()
+            },
+            onAutoClose: () => {
+              props.handleHide && props.handleHide()
+            }
+          }
+        )
+        // Call the callback with the toast ID so caller can dismiss it later
+        if (props.onToastCreated) {
+          props.onToastCreated(toastId)
+        }
+      }
+    }
+  }, [])
+
+  return null
+}
+
+// Container component that renders the Sonner toaster and all toast triggers
+export const ToasterContainer = (props: ToasterContainerProps) => {
+  return (
+    <>
+      <SonnerToaster
+        position="top-right"
+        gap={0}
+        expand={false}
+        visibleToasts={9}
+        toastOptions={{
+          className: 'remixui_sonner_toast',
+          unstyled: true,
+          style: {
+            transform: 'none',
+            transition: 'none'
+          }
+        }}
+      />
+      {props.toasts.map((toastProps) => (
+        <ToastTrigger
+          key={toastProps.id || toastProps.timestamp}
+          {...toastProps}
+        />
+      ))}
+    </>
+  )
+}
+
+// Legacy component for backward compatibility
+export const Toaster = (props: ToasterProps) => {
+  useEffect(() => {
+    if (props.message) {
+      // Show toast using Sonner
+      const duration = props.timeout || 2000
+      const showCloseButton = true
+      const showLoadingIcon = duration > 2000
+
+      let toastId: string | number
+
+      if (typeof props.message === 'string') {
+
+        toastId = toast.custom(
+          () => (
+            <div data-shared="tooltipPopup" className="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+              <div className="toast-header">
+                {showLoadingIcon && (
+                  <span className="spinner-border spinner-border-sm me-2" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </span>
+                )}
+                <strong className="me-auto">Remix</strong>
+                {showCloseButton && (
+                  <button type="button" className="btn-close" onClick={() => toast.dismiss(toastId)} aria-label="Close"></button>
+                )}
+              </div>
+              <div className="toast-body">
+                {props.message}
+              </div>
+            </div>
+          ),
+          {
+            id: props.id,
+            unstyled: true,
+            duration,
+            closeButton: false,
+            onDismiss: () => {
+              props.handleHide && props.handleHide()
+            },
+            onAutoClose: () => {
+              props.handleHide && props.handleHide()
+            }
+          }
+        )
+      } else {
+        // For JSX elements, use toast.custom
+        toastId = toast.custom(
+          () => (
+            <div data-shared="tooltipPopup" className="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+              <div className="toast-header">
+                {showLoadingIcon && (
+                  <span className="spinner-border spinner-border-sm me-2" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </span>
+                )}
+                <strong className="me-auto">Remix</strong>
+                {showCloseButton && (
+                  <button type="button" className="btn-close" onClick={() => toast.dismiss(toastId)} aria-label="Close"></button>
+                )}
+              </div>
+              <div className="toast-body">
+                {props.message}
+              </div>
+            </div>
+          ),
+          {
+            id: props.id,
+            duration,
+            closeButton: false,
+            onDismiss: () => {
+              props.handleHide && props.handleHide()
+            },
+            onAutoClose: () => {
+              props.handleHide && props.handleHide()
+            }
+          }
+        )
+      }
+
+      // Call the callback with the toast ID so caller can dismiss it later
+      if (props.onToastCreated) {
+        props.onToastCreated(toastId)
+      }
     }
   }, [props.message, props.timestamp])
 
-  useEffect(() => {
-    if (state.hiding) {
-      setTimeout(() => {
-        closeTheToaster()
-      }, 1800)
-    }
-  }, [state.hiding])
-
-  const showFullMessage = () => {
-    setState((prevState) => {
-      return {...prevState, showModal: true}
-    })
-  }
-
-  const hideFullMessage = () => {
-    //eslint-disable-line
-    setState((prevState) => {
-      return {...prevState, showModal: false}
-    })
-  }
-
-  const closeTheToaster = () => {
-    if (state.timeOutId) {
-      clearTimeout(state.timeOutId)
-    }
-    props.handleHide && props.handleHide()
-    setState((prevState) => {
-      return {
-        ...prevState,
-        message: '',
-        hide: true,
-        hiding: false,
-        timeOutId: null,
-        showModal: false
-      }
-    })
-  }
-
-  const handleMouseEnter = () => {
-    if (state.timeOutId) {
-      clearTimeout(state.timeOutId)
-    }
-    setState((prevState) => {
-      return {...prevState, timeOutId: null}
-    })
-  }
-
-  const handleMouseLeave = () => {
-    if (!state.timeOutId) {
-      const timeOutId = setTimeout(() => {
-        setState((prevState) => {
-          return {...prevState, hiding: true}
-        })
-      }, state.timeOut)
-
-      setState((prevState) => {
-        return {...prevState, timeOutId}
-      })
-    }
-  }
-
-  return (
-    <>
-      <ModalDialog id="toaster" message={props.message} cancelLabel="Close" cancelFn={() => {}} hide={!state.showModal} handleHide={hideFullMessage} />
-      {!state.hide && (
-        <div
-          data-shared="tooltipPopup"
-          className={`remixui_tooltip alert alert-info p-2 ${state.hiding ? 'remixui_animateTop' : 'remixui_animateBottom'}`}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          <span className="px-2">
-            {state.message}
-            {state.showFullBtn && (
-              <button className="btn btn-secondary btn-sm mx-3" style={{whiteSpace: 'nowrap'}} onClick={showFullMessage}>
-                Show full message
-              </button>
-            )}
-          </span>
-          <span style={{alignSelf: 'baseline'}}>
-            <button data-id="tooltipCloseButton" className="fas fa-times btn-info mx-1 p-0" onClick={closeTheToaster}></button>
-          </span>
-        </div>
-      )}
-    </>
-  )
+  return <div></div>
 }
 
 export default Toaster

@@ -1,5 +1,6 @@
-import {CustomTooltip} from '@remix-ui/helper'
+import { CustomTooltip } from '@remix-ui/helper'
 import React, {useState, useEffect} from 'react' // eslint-disable-line
+import { useIntl } from 'react-intl'
 import './button-navigator.css'
 
 export const ButtonNavigation = ({
@@ -15,6 +16,7 @@ export const ButtonNavigation = ({
   stepState,
   jumpOutDisabled
 }) => {
+  const intl = useIntl()
   const [state, setState] = useState({
     intoBackDisabled: true,
     overBackDisabled: true,
@@ -64,25 +66,23 @@ export const ButtonNavigation = ({
   }
 
   const stepBtnStyle = 'd-flex align-items-center justify-content-center btn btn-primary btn-sm stepButton h-75 m-0 p-1'
-  const disableStepBtnStyle = 'stepButtonDisabled'
-  const disableJumpBtnStyle = 'jumpButtonDisabled'
   const stepMarkupStructure = {
     stepOverBackJSX: {
       markup: (
         <div
-          className={state.overBackDisabled ? `${stepBtnStyle} ${disableStepBtnStyle}` : `${stepBtnStyle}`}
+          className={`${state.overBackDisabled ? 'disabled ' : ''} ${stepBtnStyle}`}
           onClick={() => {
             stepOverBack && stepOverBack()
           }}
         >
           <button
             id="overback"
-            className="btn btn-link btn-sm stepButton m-0 p-0"
+            className="btn btn-primary btn-sm stepButton m-0 p-0"
             onClick={() => {
               stepOverBack && stepOverBack()
             }}
             disabled={state.overBackDisabled}
-            style={{pointerEvents: 'none', color: 'white'}}
+            style={{ pointerEvents: 'none' }}
           >
             <span className="fas fa-reply"></span>
           </button>
@@ -90,12 +90,12 @@ export const ButtonNavigation = ({
       ),
       placement: 'top-start',
       tagId: 'overbackTooltip',
-      tooltipMsg: 'Step over back'
+      tooltipMsg: intl.formatMessage({ id: 'debugger.stepOverBack' })
     },
     stepBackJSX: {
       markup: (
         <div
-          className={state.intoBackDisabled ? `${stepBtnStyle} ${disableStepBtnStyle}` : `${stepBtnStyle}`}
+          className={`${state.intoBackDisabled ? 'disabled ' : ''} ${stepBtnStyle}`}
           onClick={() => {
             stepIntoBack && stepIntoBack()
           }}
@@ -105,12 +105,12 @@ export const ButtonNavigation = ({
           <button
             id="intoback"
             data-id="buttonNavigatorIntoBack"
-            className="btn btn-link btn-sm stepButton m-0 p-0"
+            className="btn btn-primary btn-sm stepButton m-0 p-0"
             onClick={() => {
               stepIntoBack && stepIntoBack()
             }}
             disabled={state.intoBackDisabled}
-            style={{pointerEvents: 'none', color: 'white'}}
+            style={{ pointerEvents: 'none' }}
           >
             <span className="fas fa-level-up-alt"></span>
           </button>
@@ -118,13 +118,13 @@ export const ButtonNavigation = ({
       ),
       placement: 'top-start',
       tagId: 'intobackTooltip',
-      tooltipMsg: 'Step back'
+      tooltipMsg: intl.formatMessage({ id: 'debugger.stepBack' })
     },
 
     stepIntoJSX: {
       markup: (
         <div
-          className={state.intoForwardDisabled ? `${stepBtnStyle} ${disableStepBtnStyle}` : `${stepBtnStyle}`}
+          className={`${state.intoForwardDisabled ? 'disabled ' : ''} ${stepBtnStyle}`}
           onClick={() => {
             stepIntoForward && stepIntoForward()
           }}
@@ -134,12 +134,12 @@ export const ButtonNavigation = ({
           <button
             id="intoforward"
             data-id="buttonNavigatorIntoForward"
-            className="btn btn-link btn-sm stepButton m-0 p-0"
+            className="btn btn-primary btn-sm stepButton m-0 p-0"
             onClick={() => {
               stepIntoForward && stepIntoForward()
             }}
             disabled={state.intoForwardDisabled}
-            style={{pointerEvents: 'none', color: 'white'}}
+            style={{ pointerEvents: 'none' }}
           >
             <span className="fas fa-level-down-alt"></span>
           </button>
@@ -147,12 +147,12 @@ export const ButtonNavigation = ({
       ),
       placement: 'top-start',
       tagId: 'intoforwardTooltip',
-      tooltipMsg: 'Step into'
+      tooltipMsg: intl.formatMessage({ id: 'debugger.stepInto' })
     },
     stepOverForwardJSX: {
       markup: (
         <div
-          className={state.overForwardDisabled ? `${stepBtnStyle} ${disableStepBtnStyle}` : `${stepBtnStyle}`}
+          className={`${state.overForwardDisabled ? 'disabled ' : ''} ${stepBtnStyle}`}
           onClick={() => {
             stepOverForward && stepOverForward()
           }}
@@ -161,12 +161,12 @@ export const ButtonNavigation = ({
         >
           <button
             id="overforward"
-            className="btn btn-link btn-sm stepButton m-0 p-0"
+            className="btn btn-primary btn-sm stepButton m-0 p-0"
             onClick={() => {
               stepOverForward && stepOverForward()
             }}
             disabled={state.overForwardDisabled}
-            style={{pointerEvents: 'none', color: 'white'}}
+            style={{ pointerEvents: 'none' }}
           >
             <span className="fas fa-share"></span>
           </button>
@@ -174,14 +174,14 @@ export const ButtonNavigation = ({
       ),
       placement: 'top-end',
       tagId: 'overbackTooltip',
-      tooltipMsg: 'Step over forward'
+      tooltipMsg: intl.formatMessage({ id: 'debugger.stepOverForward' })
     }
   }
   const jumpMarkupStructure = {
     jumpPreviousBreakpointJSX: {
       markup: (
         <div
-          className={state.jumpPreviousBreakpointDisabled ? `${stepBtnStyle} ${disableJumpBtnStyle}` : `${stepBtnStyle}`}
+          className={`${state.jumpPreviousBreakpointDisabled ? 'disabled ' : ''} ${stepBtnStyle}`}
           id="buttonNavigatorJumpPreviousBreakpointContainer"
           onClick={() => {
             jumpPreviousBreakpoint && jumpPreviousBreakpoint()
@@ -189,7 +189,7 @@ export const ButtonNavigation = ({
           data-id="buttonNavigatorJumpPreviousBreakpoint"
         >
           <button
-            className="btn btn-link btn-sm jumpButton m-0 p-0"
+            className="btn btn-primary btn-sm m-0 p-0"
             id="jumppreviousbreakpoint"
             data-id="buttonNavigatorJumpPreviousBreakpoint"
             onClick={() => {
@@ -199,7 +199,6 @@ export const ButtonNavigation = ({
             style={{
               pointerEvents: 'none',
               backgroundColor: 'inherit',
-              color: 'white'
             }}
           >
             <span className="fas fa-step-backward"></span>
@@ -208,12 +207,12 @@ export const ButtonNavigation = ({
       ),
       placement: 'bottom-start',
       tagId: 'jumppreviousbreakpointTooltip',
-      tooltipMsg: 'Jump to the previous breakpoint'
+      tooltipMsg: intl.formatMessage({ id: 'debugger.jumpPreviousBreakpoint' })
     },
     jumpOutJSX: {
       markup: (
         <div
-          className={state.jumpOutDisabled ? `${stepBtnStyle} ${disableStepBtnStyle}` : `${stepBtnStyle}`}
+          className={`${state.jumpOutDisabled ? 'disabled ' : ''} ${stepBtnStyle}`}
           onClick={() => {
             jumpOut && jumpOut()
           }}
@@ -221,7 +220,7 @@ export const ButtonNavigation = ({
           id="buttonNavigatorJumpOutContainer"
         >
           <button
-            className="btn btn-link btn-sm jumpButton m-0 p-0"
+            className="btn btn-primary btn-sm m-0 p-0"
             id="jumpout"
             onClick={() => {
               jumpOut && jumpOut()
@@ -230,7 +229,6 @@ export const ButtonNavigation = ({
             style={{
               pointerEvents: 'none',
               backgroundColor: 'inherit',
-              color: 'white'
             }}
             data-id="buttonNavigatorJumpOut"
           >
@@ -240,12 +238,12 @@ export const ButtonNavigation = ({
       ),
       placement: 'bottom-end',
       tagId: 'jumpoutTooltip',
-      tooltipMsg: 'Jump out'
+      tooltipMsg: intl.formatMessage({ id: 'debugger.jumpOut' })
     },
     jumpNextBreakpointJSX: {
       markup: (
         <div
-          className={state.jumpNextBreakpointDisabled ? `${stepBtnStyle} ${disableStepBtnStyle}` : `${stepBtnStyle}`}
+          className={`${state.jumpNextBreakpointDisabled ? 'disabled ' : ''} ${stepBtnStyle}`}
           onClick={() => {
             jumpNextBreakpoint && jumpNextBreakpoint()
           }}
@@ -253,14 +251,14 @@ export const ButtonNavigation = ({
           id="buttonNavigatorJumpNextBreakpointContainer"
         >
           <button
-            className="btn btn-link btn-sm jumpButton m-0 p-0"
+            className={`${state.jumpNextBreakpointDisabled ? 'disabled' : ''} btn btn-primary btn-sm m-0 p-0`}
             id="jumpnextbreakpoint"
             data-id="buttonNavigatorJumpNextBreakpoint"
             onClick={() => {
               jumpNextBreakpoint && jumpNextBreakpoint()
             }}
             disabled={state.jumpNextBreakpointDisabled}
-            style={{pointerEvents: 'none', color: 'white'}}
+            style={{ pointerEvents: 'none' }}
           >
             <span className="fas fa-step-forward"></span>
           </button>
@@ -268,13 +266,13 @@ export const ButtonNavigation = ({
       ),
       placement: 'bottom-end',
       tagId: 'jumpnextbreakpointTooltip',
-      tooltipMsg: 'Jump to the next breakpoint'
+      tooltipMsg: intl.formatMessage({ id: 'debugger.jumpNextBreakpoint' })
     }
   }
 
   return (
     <div className="buttons">
-      <div className="stepButtons btn-group py-1">
+      <div className="w-100 btn-group py-1">
         {Object.keys(stepMarkupStructure).map((x) => (
           <CustomTooltip
             placement={stepMarkupStructure[x].placement}
@@ -287,7 +285,7 @@ export const ButtonNavigation = ({
         ))}
       </div>
 
-      <div className="jumpButtons btn-group py-1">
+      <div className="w-100 btn-group py-1">
         {Object.keys(jumpMarkupStructure).map((x) => (
           <CustomTooltip
             placement={jumpMarkupStructure[x].placement}
@@ -299,9 +297,9 @@ export const ButtonNavigation = ({
           </CustomTooltip>
         ))}
       </div>
-      <div id="reverted" style={{display: revertedReason === '' ? 'none' : 'block'}}>
+      <div id="reverted" style={{ display: revertedReason === '' ? 'none' : 'block' }}>
         <span className="text-warning">This call has reverted, state changes made during the call will be reverted.</span>
-        <span className="text-warning" id="outofgas" style={{display: revertedReason === 'outofgas' ? 'inline' : 'none'}}>
+        <span className="text-warning" id="outofgas" style={{ display: revertedReason === 'outofgas' ? 'inline' : 'none' }}>
           This call will run out of gas.
         </span>
         <span

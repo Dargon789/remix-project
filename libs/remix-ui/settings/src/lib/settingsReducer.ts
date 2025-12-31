@@ -1,150 +1,245 @@
-import { textSecondary } from './constants'
+import { Registry } from '@remix-project/remix-lib'
+import { SettingsActions, SettingsState } from '../types'
+import { resetOllamaHostOnSettingsChange } from '@remix/remix-ai-core';
+const config = Registry.getInstance().get('config').api
+const settingsConfig = Registry.getInstance().get('settingsConfig').api
+const defaultTheme = config.get('settings/theme') ? settingsConfig.themes.find((theme) => theme.name.toLowerCase() === config.get('settings/theme').toLowerCase()) : settingsConfig.themes[0]
+const gistAccessToken = config.get('settings/gist-access-token') || ''
+const githubUserName = config.get('settings/github-user-name') || ''
+const githubEmail = config.get('settings/github-email') || ''
+const ipfsUrl = config.get('settings/ipfs-url') || ''
+const ipfsProtocol = config.get('settings/ipfs-protocol') || ''
+const ipfsPort = config.get('settings/ipfs-port') || ''
+const ipfsProjectId = config.get('settings/ipfs-project-id') || ''
+const ipfsProjectSecret = config.get('settings/ipfs-project-secret') || ''
+const swarmPrivateBeeAddress = config.get('settings/swarm-private-bee-address') || ''
+const swarmPostageStampId = config.get('settings/swarm-postage-stamp-id') || ''
+const sindriAccessToken = config.get('settings/sindri-access-token') || ''
+const etherscanAccessToken = config.get('settings/etherscan-access-token') || ''
+const mcpServersEnable = config.get('settings/mcp/servers/enable') || false
+const mcpServerManagement = config.get('settings/mcp-server-management') || false
+const ollamaEndpoint = config.get('settings/ollama-endpoint') || 'http://localhost:11434'
 
-export const initialState = {
-  elementState: [
-    {
-      name: 'contractMetadata',
-      isChecked: false,
-      textClass: textSecondary
-    },
-    {
-      name: 'ethereumVM',
-      isChecked: false,
-      textClass: textSecondary
-    },
-    {
-      name: 'textWrap',
-      isChecked: false,
-      textClass: textSecondary
-    },
-    {
-      name: 'personal',
-      isChecked: false,
-      textClass: textSecondary
-    },
-    {
-      name: 'useMatomoAnalytics',
-      isChecked: false,
-      textClass: textSecondary
-    },
-    {
-      name: 'useAutoCompletion',
-      isChecked: true,
-      textClass: textSecondary
-    },
-    {
-      name: 'useShowGasInEditor',
-      isChecked: true,
-      textClass: textSecondary
-    },
-    {
-      name: 'displayErrors',
-      isChecked: true,
-      textClass: textSecondary
-    }
-  ]
+let githubConfig = config.get('settings/github-config') || false
+let ipfsConfig = config.get('settings/ipfs-config') || false
+let swarmConfig = config.get('settings/swarm-config') || false
+let sindriConfig = config.get('settings/sindri-config') || false
+let etherscanConfig = config.get('settings/etherscan-config') || false
+let ollamaConfig = config.get('settings/ollama-config') || false
+let generateContractMetadata = config.get('settings/generate-contract-metadata')
+let autoCompletion = config.get('settings/auto-completion')
+let showGas = config.get('settings/show-gas')
+let displayErrors = config.get('settings/display-errors')
+let saveEvmState = config.get('settings/save-evm-state')
+
+if (!githubConfig && (githubUserName || githubEmail || gistAccessToken)) {
+  config.set('settings/github-config', true)
+  githubConfig = true
+}
+if (!ipfsConfig && (ipfsUrl || ipfsProtocol || ipfsPort || ipfsProjectId || ipfsProjectSecret)) {
+  config.set('settings/ipfs-config', true)
+  ipfsConfig = true
+}
+if (!swarmConfig && (swarmPrivateBeeAddress || swarmPostageStampId)) {
+  config.set('settings/swarm-config', true)
+  swarmConfig = true
+}
+if (!sindriConfig && sindriAccessToken) {
+  config.set('settings/sindri-config', true)
+  sindriConfig = true
+}
+if (!etherscanConfig && etherscanAccessToken) {
+  config.set('settings/etherscan-config', true)
+  etherscanConfig = true
+}
+if (!ollamaConfig && ollamaEndpoint !== 'http://localhost:11434') {
+  config.set('settings/ollama-config', true)
+  ollamaConfig = true
+}
+if (typeof generateContractMetadata !== 'boolean') {
+  config.set('settings/generate-contract-metadata', true)
+  generateContractMetadata = true
+}
+if (typeof autoCompletion !== 'boolean') {
+  config.set('settings/auto-completion', true)
+  autoCompletion = true
+}
+if (typeof showGas !== 'boolean') {
+  config.set('settings/show-gas', true)
+  showGas = true
+}
+if (typeof displayErrors !== 'boolean') {
+  config.set('settings/display-errors', true)
+  displayErrors = true
+}
+if (typeof saveEvmState !== 'boolean') {
+  config.set('settings/save-evm-state', true)
+  saveEvmState = true
 }
 
-export const settingReducer = (state, action) => {
-  switch (action.type) {
-  case 'contractMetadata':
-    state.elementState.map(element => {
-      if (element.name === 'contractMetadata') {
-        element.isChecked = action.payload.isChecked
-        element.textClass = action.payload.textClass
-      }
-    })
-    return {
-      ...state
-    }
-  case 'ethereumVM':
-    state.elementState.map(element => {
-      if (element.name === 'ethereumVM') {
-        element.isChecked = action.payload.isChecked
-        element.textClass = action.payload.textClass
-      }
-    })
-    return {
-      ...state
-    }
-  case 'textWrap':
-    state.elementState.map(element => {
-      if (element.name === 'textWrap') {
-        element.isChecked = action.payload.isChecked
-        element.textClass = action.payload.textClass
-      }
-    })
-    return {
-      ...state
-    }
-  case 'personal':
-    state.elementState.map(element => {
-      if (element.name === 'personal') {
-        element.isChecked = action.payload.isChecked
-        element.textClass = action.payload.textClass
-      }
-    })
-    return {
-      ...state
-    }
-  case 'useMatomoAnalytics':
-    state.elementState.map(element => {
-      if (element.name === 'useMatomoAnalytics') {
-        element.isChecked = action.payload.isChecked
-        element.textClass = action.payload.textClass
-      }
-    })
-    return {
-      ...state
-    }
-    
-  case 'useAutoCompletion':
-    state.elementState.map(element => {
-      if (element.name === 'useAutoCompletion') {
-        element.isChecked = action.payload.isChecked
-        element.textClass = action.payload.textClass
-      }
-    })
-    return {
-      ...state
-    }
-  case 'displayErrors':
-    state.elementState.map(element => {
-      if (element.name === 'displayErrors') {
-        element.isChecked = action.payload.isChecked
-        element.textClass = action.payload.textClass
-      }
-    })
-    return {
-      ...state
-    }
-  case 'useShowGasInEditor':
-    state.elementState.map(element => {
-      if (element.name === 'useShowGasInEditor') {
-        element.isChecked = action.payload.isChecked
-        element.textClass = action.payload.textClass
-      }
-    })
-    return {
-      ...state
-    }
-  default:
-    return initialState
+export const initialState: SettingsState = {
+  'generate-contract-metadata': {
+    value: generateContractMetadata,
+    isLoading: false
+  },
+  'text-wrap': {
+    value: config.get('settings/text-wrap') || false,
+    isLoading: false
+  },
+  'personal-mode': {
+    value: config.get('settings/personal-mode') || false,
+    isLoading: false
+  },
+  'matomo-perf-analytics': {
+    value: config.get('settings/matomo-perf-analytics') || false,
+    isLoading: false
+  },
+  'matomo-analytics': {
+    value: true, // Deprecated --- IGNORE ---
+    isLoading: false
+  },
+  'auto-completion': {
+    value: autoCompletion,
+    isLoading: false
+  },
+  'show-gas': {
+    value: showGas,
+    isLoading: false
+  },
+  'display-errors': {
+    value: displayErrors,
+    isLoading: false
+  },
+  'copilot/suggest/activate': {
+    value: config.get('settings/copilot/suggest/activate') || true,
+    isLoading: false
+  },
+  'save-evm-state': {
+    value: saveEvmState,
+    isLoading: false
+  },
+  'theme': {
+    value: defaultTheme ? defaultTheme.name : "Dark",
+    isLoading: false
+  },
+  'github-config': {
+    value: githubConfig,
+    isLoading: false
+  },
+  'ipfs-config': {
+    value: ipfsConfig,
+    isLoading: false
+  },
+  'swarm-config': {
+    value: swarmConfig,
+    isLoading: false
+  },
+  'sindri-config': {
+    value: sindriConfig,
+    isLoading: false
+  },
+  'etherscan-config': {
+    value: etherscanConfig,
+    isLoading: false
+  },
+  'gist-access-token': {
+    value: gistAccessToken,
+    isLoading: false
+  },
+  'github-user-name': {
+    value: githubUserName,
+    isLoading: false
+  },
+  'github-email': {
+    value: githubEmail,
+    isLoading: false
+  },
+  'ipfs-url': {
+    value: ipfsUrl,
+    isLoading: false
+  },
+  'ipfs-protocol': {
+    value: ipfsProtocol,
+    isLoading: false
+  },
+  'ipfs-port': {
+    value: ipfsPort,
+    isLoading: false
+  },
+  'ipfs-project-id': {
+    value: ipfsProjectId,
+    isLoading: false
+  },
+  'ipfs-project-secret': {
+    value: ipfsProjectSecret,
+    isLoading: false
+  },
+  'swarm-private-bee-address': {
+    value: swarmPrivateBeeAddress,
+    isLoading: false
+  },
+  'swarm-postage-stamp-id': {
+    value: swarmPostageStampId,
+    isLoading: false
+  },
+  'sindri-access-token': {
+    value: sindriAccessToken,
+    isLoading: false
+  },
+  'etherscan-access-token': {
+    value: etherscanAccessToken,
+    isLoading: false
+  },
+  'ai-privacy-policy': {
+    value: '',
+    isLoading: false
+  },
+  'mcp/servers/enable': {
+    value: mcpServersEnable,
+    isLoading: false
+  },
+  'mcp-server-management': {
+    value: mcpServerManagement,
+    isLoading: false
+  },
+  'account-manager': {
+    value: '',
+    isLoading: false
+  },
+  'ollama-config': {
+    value: ollamaConfig,
+    isLoading: false
+  },
+  'ollama-endpoint': {
+    value: ollamaEndpoint,
+    isLoading: false
+  },
+  toaster: {
+    value: '',
+    isLoading: false
   }
-  
 }
 
-export const toastInitialState = {
-  message: ''
-}
-
-export const toastReducer = (state, action) => {
+export const settingReducer = (state: SettingsState, action: SettingsActions): SettingsState => {
   switch (action.type) {
-  case 'save' :
-    return { ...state, message: action.payload.message }
-  case 'removed' :
-    return { ...state, message: action.payload.message }
-  default :
-    return { ...state, message: '' }
+  case 'SET_VALUE':
+    config.set('settings/' + action.payload.name, action.payload.value)
+    // Reset Ollama host cache when endpoint is changed
+    if (action.payload.name === 'ollama-endpoint') {
+      try {
+        resetOllamaHostOnSettingsChange();
+      } catch (error) {
+        // Ignore errors - Ollama functionality is optional
+      }
+    }
+
+    return { ...state, [action.payload.name]: { ...state[action.payload.name], value: action.payload.value, isLoading: false } }
+  case 'SET_LOADING':
+    return { ...state, [action.payload.name]: { ...state[action.payload.name], isLoading: true } }
+
+  case 'SET_TOAST_MESSAGE':
+    return { ...state, toaster: { ...state.toaster, value: action.payload.value, isLoading: false } }
+  default:
+    return state
   }
 }

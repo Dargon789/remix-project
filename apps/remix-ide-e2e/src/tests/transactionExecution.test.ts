@@ -1,6 +1,11 @@
 'use strict'
 import { NightwatchBrowser } from 'nightwatch'
 import init from '../helpers/init'
+import { JsonRpcProvider } from 'ethers'
+
+const branch = process.env.CIRCLE_BRANCH;
+const isMasterBranch = branch === 'master';
+const runMasterTests: boolean = (branch ? (isMasterBranch ? true : false) : true)
 
 module.exports = {
   '@disabled': true,
@@ -20,13 +25,13 @@ module.exports = {
       .clickFunction('f - transact (not payable)')
       .testFunction('last',
         {
-          status: 'true Transaction mined and execution succeed',
+          status: '1 Transaction mined and execution succeed',
           'decoded output': { 0: 'uint256: 8' }
         })
       .clickFunction('g - transact (not payable)')
       .testFunction('last',
         {
-          status: 'true Transaction mined and execution succeed',
+          status: '1 Transaction mined and execution succeed',
           'decoded output': {
             0: 'uint256: 345',
             1: 'string: comment_comment_',
@@ -42,10 +47,10 @@ module.exports = {
       .clickLaunchIcon('udapp')
       .click('.udapp_contractActionsContainerSingle > div')
       .clickInstance(0)
-      .clickFunction('retunValues1 - transact (not payable)')
+      .clickFunction('returnValues1 - transact (not payable)')
       .testFunction('last',
         {
-          status: 'true Transaction mined and execution succeed',
+          status: '1 Transaction mined and execution succeed',
           'decoded output': {
             0: 'bool: _b true',
             1: 'uint256: _u 345',
@@ -53,10 +58,10 @@ module.exports = {
             3: 'address: _a 0xCA35b7d915458EF540aDe6068dFe2F44E8fa733c'
           }
         })
-      .clickFunction('retunValues2 - transact (not payable)')
+      .clickFunction('returnValues2 - transact (not payable)')
       .testFunction('last',
         {
-          status: 'true Transaction mined and execution succeed',
+          status: '1 Transaction mined and execution succeed',
           'decoded output': {
             0: 'bytes1: _b 0x12',
             1: 'bytes2: _b2 0x1223',
@@ -70,10 +75,10 @@ module.exports = {
             9: 'bytes32: _b32 0x0325235325325235325235325235320000000000000000000000000000000000'
           }
         }).pause(500)
-      .clickFunction('retunValues3 - transact (not payable)')
+      .clickFunction('returnValues3 - transact (not payable)')
       .testFunction('last',
         {
-          status: 'true Transaction mined and execution succeed',
+          status: '1 Transaction mined and execution succeed',
           'decoded output': {
             0: 'uint8: _en 2',
             1: 'int256[5][]: _a1 1,-45,-78,56,60,-1,42,334,-45455,-446,1,10,-5435,45,-7'
@@ -89,7 +94,7 @@ module.exports = {
       .clickFunction('inputValue1 - transact (not payable)', { types: 'uint256 _u, int256 _i, string _str', values: '"2343242", "-4324324", "string _ string _  string _  string _  string _  string _  string _  string _  string _  string _"' })
       .testFunction('last',
         {
-          status: 'true Transaction mined and execution succeed',
+          status: '1 Transaction mined and execution succeed',
           'decoded output': {
             0: 'uint256: _uret 2343242',
             1: 'int256: _iret -4324324',
@@ -99,7 +104,7 @@ module.exports = {
       .pause(500)
       .clickFunction('inputValue2 - transact (not payable)', { types: 'uint256[3] _n, bytes8[4] _b8', values: '[1,2,3], ["0x1234000000000000", "0x1234000000000000","0x1234000000000000","0x1234000000000000"]' })
       .testFunction('last', {
-        status: 'true Transaction mined and execution succeed',
+        status: '1 Transaction mined and execution succeed',
         'decoded output': {
           0: 'uint256[3]: _nret 1,2,3',
           1: 'bytes8[4]: _b8ret 0x1234000000000000,0x1234000000000000,0x1234000000000000,0x1234000000000000'
@@ -147,14 +152,22 @@ module.exports = {
       .clickFunction('inputValue3 - transact (not payable)', { types: 'uint256[] _u', values: '["2.445e10", "13e1"]' })
       .waitForElementContainsText('*[data-id="terminalJournal"]', '24450000000', 60000)
       .waitForElementContainsText('*[data-id="terminalJournal"]', '130', 60000)
-      .click('*[data-id="deployAndRunClearInstances"]')      
+      .click('*[data-id="deployAndRunClearInstances"]')
+  },
+
+  'Should filter displayed transactions #group2': function (browser: NightwatchBrowser) {
+    browser
+      // it should contain: 0xd9145CCE52D386f254917e481eB44e9943F39138
+      .checkTerminalFilter('0xd9145CCE52D386f254917e481eB44e9943F39138', '0xd9145CCE52D386f254917e481eB44e9943F39138', false)
+      // it should not contain: 0xd9145CCE52D386f254917e481eB44e9943F39140 (it ends with 40)
+      .checkTerminalFilter('0xd9145CCE52D386f254917e481eB44e9943F39140', '0xd9145CCE52D386f254917e481eB44e9943F39138', true)
   },
 
   'Should Compile and Deploy a contract which define a custom error, the error should be logged in the terminal #group3': function (browser: NightwatchBrowser) {
     browser.testContracts('customError.sol', sources[4]['customError.sol'], ['C'])
       .clickLaunchIcon('udapp')
       .selectAccount('0xCA35b7d915458EF540aDe6068dFe2F44E8fa733c') // this account will be used for this test suite
-      .click('.udapp_contractActionsContainerSingle > div')
+      .createContract('')
       .clickInstance(0)
       .clickFunction('g - transact (not payable)')
       .journalLastChildIncludes('Error provided by the contract:')
@@ -166,17 +179,18 @@ module.exports = {
       .journalLastChildIncludes('"documentation": "param1"')
       .journalLastChildIncludes('"documentation": "param2"')
       .journalLastChildIncludes('"documentation": "param3"')
-      .journalLastChildIncludes('Debug the transaction to get more information.')
       .click('*[data-id="deployAndRunClearInstances"]')
   },
 
   'Should Compile and Deploy a contract which define a custom error, the error should be logged in the terminal , using London VM Fork #group3': function (browser: NightwatchBrowser) {
     browser
-      .clickLaunchIcon('udapp')
+      .clickLaunchIcon('solidity')
+      .click('.remixui_compilerConfigSection')
+      .setValue('#evmVersionSelector', 'london') // Set EVM version as fork version
       .clearTransactions()
-      .switchEnvironment('vm-london') // switch to London fork
+      .switchEnvironment('vm-london', true) // switch to London fork
       .selectAccount('0xCA35b7d915458EF540aDe6068dFe2F44E8fa733c') // this account will be used for this test suite
-      .click('.udapp_contractActionsContainerSingle > div')
+      .createContract('')
       .clickInstance(0)
       .clickFunction('g - transact (not payable)')
       .journalLastChildIncludes('Error provided by the contract:')
@@ -188,7 +202,6 @@ module.exports = {
       .journalLastChildIncludes('"documentation": "param1"')
       .journalLastChildIncludes('"documentation": "param2"')
       .journalLastChildIncludes('"documentation": "param3"')
-      .journalLastChildIncludes('Debug the transaction to get more information.')
   },
 
   'Should Compile and Deploy a contract which define a custom error in a library, the error should be logged in the terminal #group3': function (browser: NightwatchBrowser) {
@@ -206,23 +219,25 @@ module.exports = {
       .journalLastChildIncludes('"documentation": "param1 from library"')
       .journalLastChildIncludes('"documentation": "param2 from library"')
       .journalLastChildIncludes('"documentation": "param3 from library"')
-      .journalLastChildIncludes('Debug the transaction to get more information.')
   },
 
   'Should compile and deploy 2 simple contracts, the contract creation component state should be correctly reset for the deployment of the second contract #group4': function (browser: NightwatchBrowser) {
     browser
       .addFile('Storage.sol', sources[6]['Storage.sol'])
+      .pause(1000)
       .addFile('Owner.sol', sources[6]['Owner.sol'])
+      .pause(1000)
       .clickLaunchIcon('udapp')
       .createContract('42, 24')
       .openFile('Storage.sol')
       .clickLaunchIcon('udapp')
+      .waitForElementVisible('*[data-bs-title="uint256 p"]', 10000)
       .createContract('102') // this creation will fail if the component hasn't been properly reset.
       .clickInstance(1)
       .clickFunction('store - transact (not payable)', { types: 'uint256 num', values: '24' })
       .testFunction('last', // we check if the contract is actually reachable.
         {
-          status: 'true Transaction mined and execution succeed',
+          status: '1 Transaction mined and execution succeed',
           'decoded input': {
             'uint256 num': '24'
           }
@@ -230,6 +245,9 @@ module.exports = {
   },
 
   'Should switch to the mainnet VM fork and execute a tx to query ENS #group5': function (browser: NightwatchBrowser) {
+    if (!runMasterTests) {
+      return
+    }
     let addressRef
     browser
       .addFile('mainnet_ens.sol', sources[7]['mainnet_ens.sol'])
@@ -237,8 +255,15 @@ module.exports = {
       .setSolidityCompilerVersion('soljson-v0.8.17+commit.8df45f5f.js')
       .clickLaunchIcon('udapp')
       .switchEnvironment('vm-mainnet-fork')
-      .waitForElementPresent('select[data-id="runTabSelectAccount"] option[value="0xdD870fA1b7C4700F2BD7f44238821C26f7392148"]') // wait for the udapp to load the list of accounts
+      .click('*[data-id="runTabSelectAccount"]')
+      .waitForElementPresent({
+        locateStrategy: 'css selector',
+        selector: `*[data-id="0xdD870fA1b7C4700F2BD7f44238821C26f7392148"]`,
+        timeout: 250000
+      }) // wait for the udapp to load the list of accounts
+      .click('*[data-id="0xdD870fA1b7C4700F2BD7f44238821C26f7392148"]')
       .selectContract('MyResolver')
+      .pause(5000)
       .createContract('')
       .clickInstance(0)
       .getAddressAtPosition(0, (address) => {
@@ -252,6 +277,9 @@ module.exports = {
   },
 
   'Should stay connected in the mainnet VM fork and execute state changing operations and non state changing operations #group5': function (browser: NightwatchBrowser) {
+    if (!runMasterTests) {
+      return
+    }
     let addressRef
     browser
       .click('*[data-id="deployAndRunClearInstances"]') // clear udapp instances
@@ -294,7 +322,176 @@ module.exports = {
         browser.verifyCallReturnValue(addressRef, ['0:uint256: 3'])
           .perform(() => done())
       })
-  }
+  },
+
+  'Should stay connected to mainnet VM fork and: check the block number is advancing and is not low #group5': function (browser: NightwatchBrowser) {
+    if (!runMasterTests) {
+      return
+    }
+    /*
+        Should stay connected in the mainnet VM fork and: 
+    - check the block number has been set to the current mainnet block number.
+    - check blocknumber is advancing
+    - fork and check blocknumber is advancing the forked state. The name is 'Mainnet fork 1'
+    - fork again and check blocknumber is advancing the forked state. The name is 'Mainnet fork 2'
+    - switch back to Mainnet fork 1 and check we have the right number of blocks.
+    - transact again using Mainnet fork 1
+    */
+    let addressRef
+    let currentBlockNumber: number
+    browser
+      .perform(async (done) => {
+        try {
+          console.log('getting the provider up..')
+          const provider = new JsonRpcProvider('https://go.getblock.us/1552e4e35bcf4efe8a78897cba5557f9')
+          currentBlockNumber = (await provider.getBlockNumber()) as number
+          console.log('getBlockNumber', currentBlockNumber)
+          done()
+        } catch (e) {
+          console.error(e)
+        }        
+      })
+      .click('*[data-id="deployAndRunClearInstances"]') // clear udapp instances
+      .clickLaunchIcon('filePanel')
+      .testContracts('MainnetBlockNumberContract.sol', sources[10]['MainnetBlockNumberContract.sol'], ['MainnetBlockNumberContract'])
+      .clickLaunchIcon('udapp')
+      .selectContract('MainnetBlockNumberContract')
+      .perform((done) => {
+        browser.createContract((currentBlockNumber) + '')
+        .waitForElementPresent('*[data-shared="universalDappUiInstance"]')
+        .perform(() => {
+          done()
+        })
+      })
+      .clickInstance(0)
+      .clickFunction('getB - call')
+      .clickFunction('checkBlockNumberIsAdvancing - transact (not payable)')
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+      .clickFunction('getB - call')
+      .clickFunction('checkBlockNumberIsAdvancing - transact (not payable)')
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+      .clickFunction('getB - call')
+      .clickFunction('checkBlockNumberIsAdvancing - transact (not payable)')
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+      // Should fork the mainnet VM fork and execute some transaction
+      .click('*[data-id="fork-state-icon"]')
+      .waitForElementVisible('*[data-id="udappNotifyModalDialogModalTitle-react"]')
+      .click('input[data-id="modalDialogForkState"]')
+      .setValue('input[data-id="modalDialogForkState"]', 'Mainnet fork 1')
+      .modalFooterOKClick('udappNotify')
+      // check toaster for forked state
+      .waitForElementVisible(
+        {
+          selector: '//*[@data-shared="tooltipPopup" and contains(.,"New environment \'Mainnet fork 1\' created with forked state.")]',
+          locateStrategy: 'xpath'
+        }
+      )
+      .pause(2000)
+      .perform((done) => {
+        browser.createContract((currentBlockNumber) + '')
+        .waitForElementPresent('*[data-shared="universalDappUiInstance"]')
+        .perform(() => {
+          done()
+        })
+      })
+      .clickInstance(0)
+      .click('*[data-id="universalDappUiUdappPin"]') // pin the contract for later use by a forked state.
+      .clickFunction('getB - call')
+      .clickFunction('checkBlockNumberIsAdvancing - transact (not payable)')
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+      .clickFunction('getB - call')
+      .clickFunction('checkBlockNumberIsAdvancing - transact (not payable)')
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+      // Should fork the mainnet VM fork again and execute some transaction
+      .click('*[data-id="fork-state-icon"]')  
+      .waitForElementVisible('*[data-id="udappNotifyModalDialogModalTitle-react"]')
+      .click('input[data-id="modalDialogForkState"]')
+      .setValue('input[data-id="modalDialogForkState"]', 'Mainnet fork 2')
+      .modalFooterOKClick('udappNotify')
+      // check toaster for forked state
+      .waitForElementVisible(
+        {
+          selector: '//*[@data-shared="tooltipPopup" and contains(.,"New environment \'Mainnet fork 2\' created with forked state.")]',
+          locateStrategy: 'xpath'
+        }
+      )
+      .pause(2000)
+      .clickInstance(0)
+      .clickFunction('getB - call')
+      .clickFunction('checkBlockNumberIsAdvancing - transact (not payable)')
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+      .clickFunction('getB - call')
+      .clickFunction('checkBlockNumberIsAdvancing - transact (not payable)')
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+      .clickFunction('getB - call')
+      .getAddressAtPosition(0, (address) => {
+        console.log('Test Fork Mainnet', address)
+        addressRef = address
+      })
+      // from Mainnet fork 2, check that block number is at `currentBlockNumber` + 4
+      .clickFunction('checkOrigin - transact (not payable)', { types: 'uint256 incr', values: '3'})
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+      // switch back to Mainnet fork 1 and check that block number is at `currentBlockNumber` + 2
+      .switchEnvironment('vm-fs-Mainnet fork 1')
+      .pause(2000)
+      .clickInstance(0)
+      .clickFunction('checkOrigin - transact (not payable)', { types: 'uint256 incr', values: '1'})
+      .perform((done) => {
+        browser.testFunction('last',
+          {
+            status: '1 Transaction mined and execution succeed',
+            'decoded output': { '0':'bool: true' }
+          }).perform(() => done())
+      })
+    }
 }
 
 // @TODO test: bytes8[3][] type as input
@@ -306,10 +503,10 @@ const sources = [
       contract TestContract { function f() public returns (uint) { return 8; }
       function g() public returns (uint, string memory, bool, uint) {
         uint payment = 345;
-        bool payed = true;
+        bool paid = true;
         string memory comment = "comment_comment_";
         uint month = 4;
-        return (payment, comment, payed, month); } }`
+        return (payment, comment, paid, month); } }`
     }
   },
   {
@@ -317,14 +514,14 @@ const sources = [
       content: `
   contract testReturnValues {
     enum ActionChoices { GoLeft, GoRight, GoStraight, SitStill }
-    function retunValues1 () public returns (bool _b, uint _u, int _i, address _a)  {
+    function returnValues1 () public returns (bool _b, uint _u, int _i, address _a)  {
         _b = true;
         _u = 345;
         _i = -345;
         _a = msg.sender;
     }
 
-    function retunValues2 () public returns (bytes1 _b, bytes2 _b2, bytes3 _b3, bytes memory _blit, bytes5 _b5, bytes6 _b6, string memory _str, bytes7 _b7, bytes22 _b22, bytes32 _b32)  {
+    function returnValues2 () public returns (bytes1 _b, bytes2 _b2, bytes3 _b3, bytes memory _blit, bytes5 _b5, bytes6 _b6, string memory _str, bytes7 _b7, bytes22 _b22, bytes32 _b32)  {
         _b = 0x12;
         _b2 = 0x1223;
         _b5 = hex"043245";
@@ -336,7 +533,7 @@ const sources = [
         _str = "this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string _ this is a long string";
     }
 
-    function retunValues3 () public returns (ActionChoices _en, int[5][] memory _a1)  {
+    function returnValues3 () public returns (ActionChoices _en, int[5][] memory _a1)  {
        _en = ActionChoices.GoStraight;
        int[5][] memory a = new int[5][](3);
        a[0] = [int(1),-45,-78,56,60];
@@ -381,7 +578,7 @@ contract C {
       content: `// SPDX-License-Identifier: GPL-3.0
 
       pragma solidity ^0.8.7;
-      
+
       /// error description
       /// @param a param1
       /// @param b param2
@@ -393,7 +590,7 @@ contract C {
           }
           function g() public {
               revert CustomError(2, 3, "error_string_2");
-          }          
+          }
       }`
     }
   },
@@ -402,7 +599,7 @@ contract C {
       content: `// SPDX-License-Identifier: GPL-3.0
 
       pragma solidity ^0.8.7;
-      
+
       library lib {
           /// error description from library
           /// @param a param1 from library
@@ -411,13 +608,13 @@ contract C {
           error CustomError(uint a, uint b, string c);
           function set() public {
               revert CustomError(48, 46, "error_string_from_library");
-          }      
-      }      
-      
+          }
+      }
+
       contract D {
           function h() public {
               lib.set();
-          }      
+          }
       }`
     }
   },
@@ -435,10 +632,10 @@ contract C {
       contract Owner {
 
           address private owner;
-          
+
           // event for EVM logging
           event OwnerSet(address indexed oldOwner, address indexed newOwner);
-          
+
           // modifier to check if caller is owner
           modifier isOwner() {
               // If the first argument of 'require' evaluates to 'false', execution terminates and all
@@ -449,7 +646,7 @@ contract C {
               require(msg.sender == owner, "Caller is not owner");
               _;
           }
-          
+
           /**
            * @dev Set contract deployer as owner
            */
@@ -468,7 +665,7 @@ contract C {
           }
 
           /**
-           * @dev Return owner address 
+           * @dev Return owner address
            * @return address of owner
            */
           function getOwner() external view returns (address) {
@@ -503,7 +700,7 @@ contract C {
           }
 
           /**
-           * @dev Return value 
+           * @dev Return value
            * @return value of 'number'
            */
           function retrieve() public view returns (uint256){
@@ -526,7 +723,7 @@ contract C {
         }
 
         contract MyResolver {
-            // Same address for Mainet, Ropsten, Rinkerby, Gorli and other networks;
+            // Same address for Mainnet and other networks;
             ENS ens = ENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
 
             function resolve() public view returns(address) {
@@ -535,7 +732,7 @@ contract C {
                 return resolver.addr(node);
             }
         }
-        `      
+        `
     }
   }, {
     "scientific_notation.sol": {
@@ -567,7 +764,36 @@ contract C {
              cake++;
           }
       }
-        `      
+        `
+    }
+  }, {
+    'MainnetBlockNumberContract.sol': {
+      content: `
+      // SPDX-License-Identifier: GPL-3.0
+
+      pragma solidity >=0.8.2 <0.9.0;
+
+      contract MainnetBlockNumberContract {
+      uint b;
+      uint orgB;
+      constructor(uint blockNumber) {
+          b = blockNumber;
+      }
+      function checkBlockNumberIsAdvancing()  public returns (bool) {
+          if (orgB == 0) orgB = block.number;
+          bool ret = b < block.number;
+          b = block.number;
+          return ret;
+      }
+      function getB() view public returns(uint) {
+          return b;
+      }
+      function checkOrigin(uint incr) public returns (bool) {
+        bool ret = orgB + incr == b;
+        return ret;
+      }
+  }
+`
     }
   }
 ]

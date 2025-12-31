@@ -9,7 +9,7 @@ pre {
 }
 .remixIDE            {
   width              : 100%;
-  height             : 100vh;
+  height             : 95vh;
   overflow           : hidden;
   flex-direction     : row;
   display            : flex;
@@ -20,6 +20,7 @@ pre {
   overflow           : hidden;
   flex               : 1;
   min-width          : 320px;
+  padding-bottom     : 1.4rem;
 }
 .iconpanel           {
   display            : flex;
@@ -27,12 +28,34 @@ pre {
   overflow           : hidden;
   width              : 50px;
   user-select        : none;
+  padding-bottom     : 1.4rem;
 }
 .sidepanel           {
   display            : flex;
   flex-direction     : row-reverse;
   width              : 320px;
   transition         : width 0.25s;
+  padding-bottom     : 0.4rem;
+}
+.statusBar           {
+
+}
+
+.top-bar {
+
+}
+.pinnedpanel           {
+  width              : 320px;
+  transition         : width 0.25s;
+  padding-bottom     : 1.4rem;
+}
+.right-panel-maximized {
+  width              : 50% !important;
+  max-width          : 50%;
+  margin             : 0 auto;
+  flex               : none;
+  border-left        : none !important;
+  border-right       : none !important;
 }
 .highlightcode       {
   position           : absolute;
@@ -53,10 +76,10 @@ pre {
   height             : 200px;
 }
 .centered svg path {
-  fill               : var(--secondary);
+  fill               : var(--bs-secondary);
 }
 .centered svg polygon {
-  fill               : var(--secondary);
+  fill               : var(--bs-secondary);
 }
 .onboarding {
   color              : var(--text-info);

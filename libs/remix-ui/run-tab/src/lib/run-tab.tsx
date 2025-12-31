@@ -1,15 +1,17 @@
 // eslint-disable-next-line no-use-before-define
-import React, {Fragment, useEffect, useReducer, useState} from 'react'
-import {ModalDialog} from '@remix-ui/modal-dialog'
+import React, { Fragment, useCallback, useEffect, useReducer, useState } from 'react'
+import semver from 'semver'
+import { FormattedMessage } from 'react-intl'
+import { ModalDialog } from '@remix-ui/modal-dialog'
 // eslint-disable-next-line no-unused-vars
-import {Toaster} from '@remix-ui/toaster'
-import {ContractDropdownUI} from './components/contractDropdownUI'
-import {InstanceContainerUI} from './components/instanceContainerUI'
-import {RecorderUI} from './components/recorderCardUI'
-import {SettingsUI} from './components/settingsUI'
-import {Modal, Network, RunTabProps, Tx} from './types'
-import {ContractData} from '@remix-project/core-plugin'
-import {runTabInitialState, runTabReducer} from './reducers/runTab'
+import { Toaster } from '@remix-ui/toaster'
+import { ContractDropdownUI } from './components/contractDropdownUI'
+import { InstanceContainerUI } from './components/instanceContainerUI'
+import { RecorderUI } from './components/recorderCardUI'
+import { SettingsUI } from './components/settingsUI'
+import { Modal, Network, RunTabProps, Tx } from './types'
+import { ContractData } from '@remix-project/core-plugin'
+import { runTabInitialState, runTabReducer } from './reducers/runTab'
 import {
   initRunTab,
   setAccountAddress,
@@ -20,6 +22,8 @@ import {
   createNewAddress,
   setPassphraseModal,
   setMatchPassphraseModal,
+  createNewSmartAccount,
+  internalDelegationAuthorization,
   signMessage,
   fetchSelectedContract,
   createNewInstance,
@@ -30,6 +34,8 @@ import {
   setGasPriceStatus,
   setMaxFee,
   setMaxPriorityFee,
+  unpinPinnedInstance,
+  pinUnpinnedInstance,
   removeInstances,
   removeSingleInstance,
   getExecutionContext,
@@ -43,17 +49,21 @@ import {
   updateSelectedContract,
   syncContracts,
   isValidProxyAddress,
-  isValidProxyUpgrade
+  isValidProxyUpgrade,
+  addFile
 } from './actions'
 import './css/run-tab.css'
-import {PublishToStorage} from '@remix-ui/publish-to-storage'
-import {PassphrasePrompt} from './components/passphrase'
-import {MainnetPrompt} from './components/mainnet'
-import {ScenarioPrompt} from './components/scenario'
-import {setIpfsCheckedState, setRemixDActivated} from './actions/payload'
+import { PublishToStorage } from '@remix-ui/publish-to-storage'
+import { PassphrasePrompt } from './components/passphrase'
+import { MainnetPrompt } from './components/mainnet'
+import { ScenarioPrompt } from './components/scenario'
+import { setIpfsCheckedState, setRemixDActivated } from './actions/payload'
+import { ChainCompatibleInfo, getCompatibleChain, getCompatibleChains, HardFork, isChainCompatible, isChainCompatibleWithAnyFork } from './actions/evmmap'
+
+export type CheckStatus = 'Passed' | 'Failed' | 'Not Found'
 
 export function RunTabUI(props: RunTabProps) {
-  const {plugin} = props
+  const { plugin } = props
   const [focusModal, setFocusModal] = useState<Modal>({
     hide: true,
     title: '',
@@ -73,18 +83,103 @@ export function RunTabUI(props: RunTabProps) {
     storage: null,
     contract: null
   })
-  runTabInitialState.selectExEnv = plugin.blockchain.getProvider()
-  const [runTab, dispatch] = useReducer(runTabReducer, runTabInitialState)
-  const REACT_API = {runTab}
+  const initialState = props.initialState || runTabInitialState
+
+  initialState.selectExEnv = plugin.blockchain.getProvider()
+  const [runTab, dispatch] = useReducer(runTabReducer, initialState)
+  const REACT_API = { runTab }
   const currentfile = plugin.config.get('currentFile')
+  const [solcVersion, setSolcVersion] = useState<{version: string, canReceive: boolean}>({ version: '', canReceive: true })
+  const [evmCheckComplete, setEvmCheckComplete] = useState(false)
+
+  const getVersion = () => {
+    let version = '0.8.25'
+    try {
+      const regVersion = window.location.href.match(/soljson-v(.*)\+commit/g)
+      if (regVersion && regVersion[1]) version = regVersion[1]
+      if (semver.lt(version, '0.6.0')) {
+        setSolcVersion({ version: version, canReceive: false })
+      } else {
+        setSolcVersion({ version: version, canReceive: true })
+      }
+    } catch (e) {
+      setSolcVersion({ version, canReceive: true })
+    }
+  }
+
+  const getCompilerDetails = async () => await checkEvmChainCompatibility()
+
+  const returnCompatibleChain = async (evmVersion: HardFork, targetChainId: number) => {
+    const result = getCompatibleChain(evmVersion ?? 'paris', targetChainId) // using paris evm as a default fallback version
+    return result
+  }
+
+  const checkEvmChainCompatibilityOkFunction = async (fetchDetails: ChainCompatibleInfo) => {
+    const compilerParams = {
+      evmVersion: fetchDetails.evmVersion,
+      optimize: false,
+      language: 'Solidity',
+      runs: '200',
+      version: fetchDetails.minCompilerVersion
+    }
+    await plugin.call('solidity', 'setCompilerConfig', compilerParams)
+    const currentFile = await plugin.call('fileManager', 'getCurrentFile')
+    await plugin.call('solidity', 'compile', currentFile)
+    setEvmCheckComplete(true)
+  }
+
+  const checkEvmChainCompatibility = async () => {
+    const fetchDetails = await plugin.call('solidity', 'getCompilerQueryParameters')
+    const compilerState = await plugin.call('solidity', 'getCompilerState')
+
+    // if no contract file is open, don't do anything
+    if (compilerState.target !== null) {
+      const targetChainId = runTab.chainId
+      const ideDefault = fetchDetails && fetchDetails.evmVersion !== null ? fetchDetails.evmVersion : 'osaka'
+      const IsCompatible = isChainCompatible(ideDefault, targetChainId)
+      const chain = await returnCompatibleChain(ideDefault, targetChainId)
+      if (chain === undefined) {
+        return 'Not Found'
+      } else {
+        if (!IsCompatible) {
+        //show modal
+          plugin.call('notification', 'modal', {
+            id: 'evm-chainId-incompatible',
+            title: 'Incompatible EVM for the selected chain',
+            message: <div className="px-3">
+              <p>The smart contract has not been compiled with an EVM version that is compatible with the selected chain.</p>
+              <ul className="px-3">
+                <li>Have Remix switch to a compatible EVM version for this chain and recompile the contract.</li>
+                <li>Cancel to keep the current EVM version.</li>
+              </ul>
+              <p>To manually change the EVM version, go to the Advanced Configurations section of the Solidity compiler.</p>
+            </div>,
+            modalType: 'modal',
+            okLabel: 'Switch EVM and Recompile',
+            cancelLabel: 'Cancel',
+            okFn: () => checkEvmChainCompatibilityOkFunction(chain),
+            cancelFn: () => {}
+          })
+          return 'Failed'
+        } else {
+          return 'Passed'
+        }
+      }
+    }
+  }
 
   useEffect(() => {
-    initRunTab(plugin)(dispatch)
-    plugin.onInitDone()
+    if (!props.initialState) {
+      initRunTab(plugin, true)(dispatch)
+      plugin.onInitDone()
+    } else {
+      initRunTab(plugin, false)(dispatch)
+    }
   }, [plugin])
 
   useEffect(() => {
     plugin.onReady(runTab)
+    plugin.call('pluginStateLogger', 'logPluginState', 'udapp', runTab)
   }, [REACT_API])
 
   useEffect(() => {
@@ -141,6 +236,16 @@ export function RunTabUI(props: RunTabProps) {
     }
   }, [runTab.popup])
 
+  useEffect(() => {
+    if (runTab.selectExEnv.includes('injected') &&
+      Object.entries(runTab.accounts.loadedAccounts).length === 0 &&
+    runTab.accounts.selectedAccount.length > 0) {
+      // switch to vm-cancum because no account is loaded from injected provider
+      const context = plugin.blockchain.defaultPinnedProviders[0] // vm-cancun
+      setExecutionEnvironment({ context, fork: '' })
+    }
+  }, [runTab.accounts.loadedAccounts])
+
   const setCheckIpfs = (value: boolean) => {
     dispatch(setIpfsCheckedState(value))
   }
@@ -172,7 +277,7 @@ export function RunTabUI(props: RunTabProps) {
 
   const handleHideModal = () => {
     setFocusModal((modal) => {
-      return {...modal, hide: true, message: null}
+      return { ...modal, hide: true, message: null }
     })
   }
 
@@ -205,7 +310,7 @@ export function RunTabUI(props: RunTabProps) {
   const gasEstimationPrompt = (msg: string) => {
     return (
       <div>
-        Gas estimation errored with the following message (see below). The transaction execution will likely fail. Do you want to force sending? <br />
+        <FormattedMessage id="udapp.gasEstimationPromptText" /> <br />
         {msg}
       </div>
     )
@@ -250,11 +355,13 @@ export function RunTabUI(props: RunTabProps) {
   return (
     <Fragment>
       <div className="udapp_runTabView run-tab" id="runTabView" data-id="runTabView">
-        <div className="list-group list-group-flush">
+        <div className="list-group pb-4 list-group-flush">
           <SettingsUI
+            addFile={addFile}
             networkName={runTab.networkName}
             personalMode={runTab.personalMode}
             selectExEnv={runTab.selectExEnv}
+            EvaluateEnvironmentSelection={checkEvmChainCompatibility}
             accounts={runTab.accounts}
             setAccount={setAccountAddress}
             setUnit={setUnitValue}
@@ -264,14 +371,19 @@ export function RunTabUI(props: RunTabProps) {
             gasLimit={runTab.gasLimit}
             setGasFee={setGasFeeAmount}
             providers={runTab.providers}
+            runTabPlugin={plugin}
             setExecutionContext={setExecutionEnvironment}
             createNewBlockchainAccount={createNewAddress}
+            createNewSmartAccount={createNewSmartAccount}
+            delegationAuthorization={internalDelegationAuthorization}
             setPassphrase={setPassphraseModal}
             setMatchPassphrase={setMatchPassphraseModal}
             modal={modal}
             tooltip={toast}
             signMessageWithAddress={signMessage}
             passphrase={runTab.passphrase}
+            udappState={runTab}
+            envLabel={runTab.selectExEnv}
           />
           <ContractDropdownUI
             selectedAccount={runTab.accounts.selectedAccount}
@@ -298,8 +410,17 @@ export function RunTabUI(props: RunTabProps) {
             isValidProxyAddress={isValidProxyAddress}
             isValidProxyUpgrade={isValidProxyUpgrade}
             proxy={runTab.proxy}
+            solCompilerVersion={solcVersion}
+            setCompilerVersion={setSolcVersion}
+            getCompilerVersion={getVersion}
+            getCompilerDetails={getCompilerDetails}
+            evmCheckComplete={evmCheckComplete}
+            setEvmCheckComplete={setEvmCheckComplete}
+            plugin={plugin}
+            runTabState={runTab}
           />
           <RecorderUI
+            plugin={plugin}
             gasEstimationPrompt={gasEstimationPrompt}
             passphrasePrompt={passphrasePrompt}
             mainnetPrompt={mainnetPrompt}
@@ -310,8 +431,14 @@ export function RunTabUI(props: RunTabProps) {
             currentFile={currentfile}
           />
           <InstanceContainerUI
+            plugin={plugin}
+            getCompilerDetails={getCompilerDetails}
+            evmCheckComplete={evmCheckComplete}
+            runTabState={runTab}
             instances={runTab.instances}
             clearInstances={removeInstances}
+            unpinInstance={unpinPinnedInstance}
+            pinInstance={pinUnpinnedInstance}
             removeInstance={removeSingleInstance}
             getContext={getExecutionContext}
             gasEstimationPrompt={gasEstimationPrompt}
@@ -319,7 +446,73 @@ export function RunTabUI(props: RunTabProps) {
             mainnetPrompt={mainnetPrompt}
             runTransactions={executeTransactions}
             sendValue={runTab.sendValue}
+            solcVersion={solcVersion}
+            getVersion={getVersion}
             getFuncABIInputs={getFuncABIValues}
+            exEnvironment={runTab.selectExEnv}
+            editInstance={(addressOrInstance, abi, name, devdoc, metadata, htmlTemplate) => {
+
+              const payload = {
+                address: '',
+                abi: null,
+                name: '',
+                network: runTab.networkName,
+                devdoc: null,
+                methodIdentifiers: null,
+                solcVersion: '',
+                htmlTemplate: null
+              }
+
+              let targetPlugin = 'quick-dapp'
+
+              try {
+                if (typeof addressOrInstance === 'object' && addressOrInstance !== null) {
+                  targetPlugin = 'quick-dapp'
+
+                  const instance = addressOrInstance as any
+                  const { metadata: metaFromInst, abi: abiFromInst, object } = instance.contractData || {}
+
+                  payload.address = instance.address
+                  payload.abi = abiFromInst
+                  payload.name = instance.name
+
+                  if (object) {
+                    payload.devdoc = object.devdoc
+                    payload.methodIdentifiers = object.evm?.methodIdentifiers
+                  }
+
+                  if (metaFromInst) {
+                    try {
+                      payload.solcVersion = JSON.parse(metaFromInst).compiler.version
+                    } catch (e) {
+                      console.warn('[RunTab] Failed to parse solcVersion from V1 metadata', e)
+                    }
+                  }
+
+                } else {
+                  targetPlugin = 'quick-dapp-v2'
+
+                  payload.address = addressOrInstance as string
+                  payload.abi = abi
+                  payload.name = name
+                  payload.devdoc = devdoc
+                  payload.htmlTemplate = htmlTemplate
+
+                  if (metadata) {
+                    try {
+                      payload.solcVersion = JSON.parse(metadata).compiler.version
+                    } catch (e) {
+                      console.warn('[RunTab] Failed to parse solcVersion from V2 metadata', e)
+                    }
+                  }
+                }
+
+                plugin.call(targetPlugin, 'edit', payload)
+
+              } catch (error) {
+                console.error('[RunTab] Critical Error in editInstance:', error)
+              }
+            }}
           />
         </div>
       </div>

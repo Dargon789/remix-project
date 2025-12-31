@@ -1,101 +1,86 @@
 'use strict'
 import { Plugin } from '@remixproject/engine'
-import { util } from '@remix-project/remix-lib'
+import { util, execution } from '@remix-project/remix-lib'
 import { CompilerAbstract } from '@remix-project/remix-solidity'
+import { toChecksumAddress } from '@ethereumjs/util'
+import { ContractData } from '../types/contract'
 
 const profile = {
   name: 'compilerArtefacts',
-  methods: ['get', 'addResolvedContract', 'getCompilerAbstract', 'getAllContractDatas', 'getLastCompilationResult', 'getArtefactsByContractName', 'getContractDataFromAddress', 'getContractDataFromByteCode'],
-  events: [],
-  version: '0.0.1'
+  methods: ['get', 'addResolvedContract', 'getCompilerAbstract', 'getAllContractDatas', 'getLastCompilationResult', 'getArtefactsByContractName', 'getContractDataFromAddress', 'getContractDataFromByteCode', 'saveCompilerAbstract', 'getAllCompilerAbstracts'],
+  events: ['compilationSaved'],
+  version: '0.0.1',
 }
 
 export class CompilerArtefacts extends Plugin {
   compilersArtefactsPerFile: any
   compilersArtefacts: any
-  constructor () {
+  constructor() {
     super(profile)
     this.compilersArtefacts = {}
     this.compilersArtefactsPerFile = {}
   }
 
-  clear () {
+  clear() {
     this.compilersArtefacts = {}
     this.compilersArtefactsPerFile = {}
   }
 
-  onActivation () {
-    const saveCompilationPerFileResult = (file, source, languageVersion, data, input?) => {
+  saveCompilerAbstract(file: string, compilerAbstract: CompilerAbstract) {
+    this.compilersArtefactsPerFile[file] = compilerAbstract
+  }
+
+  getAllCompilerAbstracts() {
+    return this.compilersArtefactsPerFile
+  }
+
+  onActivation() {
+    const saveCompilationResult = (file, source, languageVersion, data, input?) => {
       this.compilersArtefactsPerFile[file] = new CompilerAbstract(languageVersion, data, source, input)
+      this.compilersArtefacts.__last = this.compilersArtefactsPerFile[file]
+      this.emit('compilationSaved', { [file]: this.compilersArtefactsPerFile[file] })
     }
 
-    this.on('solidity', 'compilationFinished', (file, source, languageVersion, data, input, version) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source, input)
-      saveCompilationPerFileResult(file, source, languageVersion, data)
-    })
+    this.on('solidity', 'compilationFinished', saveCompilationResult)
 
-    this.on('vyper', 'compilationFinished', (file, source, languageVersion, data) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source)
-      saveCompilationPerFileResult(file, source, languageVersion, data)
-    })
+    this.on('vyper', 'compilationFinished', saveCompilationResult)
 
-    this.on('lexon', 'compilationFinished', (file, source, languageVersion, data) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source)
-      saveCompilationPerFileResult(file, source, languageVersion, data)
-    })
+    this.on('lexon', 'compilationFinished', saveCompilationResult)
 
-    this.on('yulp', 'compilationFinished', (file, source, languageVersion, data) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source)
-      saveCompilationPerFileResult(file, source, languageVersion, data)
-    })
+    this.on('yulp', 'compilationFinished', saveCompilationResult)
 
-    this.on('solidityUnitTesting', 'compilationFinished', (file, source, languageVersion, data, input, version) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source, input)
-      saveCompilationPerFileResult(file, source, languageVersion, data, input)
-    })
+    this.on('solidityUnitTesting', 'compilationFinished', saveCompilationResult)
 
-    this.on('nahmii-compiler', 'compilationFinished', (file, source, languageVersion, data) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source)
-      saveCompilationPerFileResult(file, source, languageVersion, data)
-    })
+    this.on('nahmii-compiler', 'compilationFinished', saveCompilationResult)
 
-    this.on('hardhat', 'compilationFinished', (file, source, languageVersion, data) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source)
-      saveCompilationPerFileResult(file, source, languageVersion, data)
-    })
+    this.on('hardhat', 'compilationFinished', saveCompilationResult)
 
-    this.on('truffle', 'compilationFinished', (file, source, languageVersion, data) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source)
-      saveCompilationPerFileResult(file, source, languageVersion, data)
-    })
+    this.on('truffle', 'compilationFinished', saveCompilationResult)
 
-    this.on('foundry', 'compilationFinished', (file, source, languageVersion, data) => {
-      this.compilersArtefacts.__last = new CompilerAbstract(languageVersion, data, source)
-      saveCompilationPerFileResult(file, source, languageVersion, data)
-    })
+    this.on('foundry', 'compilationFinished', saveCompilationResult)
   }
-  
+
   /**
-   * Get artefacts for last compiled contract 
+   * Get artefacts for last compiled contract
    * * @returns last compiled contract compiler abstract
    */
-  getLastCompilationResult () {
+  getLastCompilationResult() {
     return this.compilersArtefacts.__last
   }
 
   /**
    * Get compilation output for contracts compiled during a session of Remix IDE
-   * @returns compilatin output
+   * @returns compilation output
    */
-  getAllContractDatas () {
+  getAllContractDatas() {
     return this.filterAllContractDatas(() => true)
   }
 
   /**
    * filter compilation output for contracts compiled during a session of Remix IDE
-   * @returns compilatin output
+   * @returns compilation output
    */
-  filterAllContractDatas (filter) {
+  filterAllContractDatas(filter) {
     const contractsData = {}
     Object.keys(this.compilersArtefactsPerFile).map((targetFile) => {
       const artefact = this.compilersArtefactsPerFile[targetFile]
@@ -116,14 +101,14 @@ export class CompilerArtefacts extends Plugin {
 
   /**
    * Get a particular contract output/artefacts from a compiler output of a Solidity file compilation
-   * @param compilerOutput compiler output 
+   * @param compilerOutput compiler output
    * @param contractName contract name
-   * @returns arefacts object, with fully qualified name (e.g; contracts/1_Storage.sol:Storage) as key
+   * @returns artefacts object, with fully qualified name (e.g; contracts/1_Storage.sol:Storage) as key
    */
-  _getAllContractArtefactsfromOutput (compilerOutput, contractName) {
+  _getAllContractArtefactsfromOutput(compilerOutput, contractName) {
     const contractArtefacts = {}
     for (const filename in compilerOutput) {
-      if(Object.keys(compilerOutput[filename]).includes(contractName)) contractArtefacts[filename + ':' + contractName] = compilerOutput[filename][contractName]
+      if (Object.keys(compilerOutput[filename]).includes(contractName)) contractArtefacts[filename + ':' + contractName] = compilerOutput[filename][contractName]
     }
     return contractArtefacts
   }
@@ -135,12 +120,12 @@ export class CompilerArtefacts extends Plugin {
    * @param contractArtefacts populated resultant artefacts object, with fully qualified name (e.g: contracts/1_Storage.sol:Storage) as key
    * Once method execution completes, contractArtefacts object will hold all possible artefacts for contract
    */
-  async _populateAllContractArtefactsFromFE (path, contractName, contractArtefacts) {
+  async _populateAllContractArtefactsFromFE(path, contractName, contractArtefacts) {
     const dirList = await this.call('fileManager', 'dirList', path)
-    if(dirList && dirList.length) {
+    if (dirList && dirList.length) {
       for (const dirPath of dirList) {
         // check if directory contains an 'artifacts' folder and a 'build-info' folder inside 'artifacts'
-        if(dirPath === path + '/artifacts' && await this.call('fileManager', 'exists', dirPath + '/build-info')) {
+        if (dirPath === path + '/artifacts' && (await this.call('fileManager', 'exists', dirPath + '/build-info'))) {
           const buildFileList = await this.call('fileManager', 'fileList', dirPath + '/build-info')
           // process each build-info file to populate the artefacts for contractName
           for (const buildFile of buildFileList) {
@@ -151,17 +136,17 @@ export class CompilerArtefacts extends Plugin {
             // populate the resultant object with artefacts
             Object.assign(contractArtefacts, artefacts)
           }
-        } else await this._populateAllContractArtefactsFromFE (dirPath, contractName, contractArtefacts)
-      } 
+        } else await this._populateAllContractArtefactsFromFE(dirPath, contractName, contractArtefacts)
+      }
     } else return
   }
 
   /**
    * Get artefacts for a contract (called by script-runner)
-   * @param name contract name or fully qualified name i.e. <filename>:<contractname> e.g: contracts/1_Storage.sol:Storage 
+   * @param name contract name or fully qualified name i.e. <filename>:<contractname> e.g: contracts/1_Storage.sol:Storage
    * @returns artefacts for the contract
    */
-  async getArtefactsByContractName (name) {
+  async getArtefactsByContractName(name) {
     const contractsDataByFilename = this.getAllContractDatas()
     // check if name is a fully qualified name
     if (name.includes(':')) {
@@ -169,12 +154,11 @@ export class CompilerArtefacts extends Plugin {
       const nameArr = fullyQualifiedName.split(':')
       const filename = nameArr[0]
       const contract = nameArr[1]
-      if(Object.keys(contractsDataByFilename).includes(filename) && contractsDataByFilename[filename][contract]) 
-        return contractsDataByFilename[filename][contract]
+      if (Object.keys(contractsDataByFilename).includes(filename) && contractsDataByFilename[filename][contract]) return contractsDataByFilename[filename][contract]
       else {
         const allContractsData = {}
-        await this._populateAllContractArtefactsFromFE ('contracts', contract, allContractsData)
-        if(allContractsData[fullyQualifiedName]) return { fullyQualifiedName, artefact: allContractsData[fullyQualifiedName]}
+        await this._populateAllContractArtefactsFromFE('contracts', contract, allContractsData)
+        if (allContractsData[fullyQualifiedName]) return { fullyQualifiedName, artefact: allContractsData[fullyQualifiedName] }
         else throw new Error(`Could not find artifacts for ${fullyQualifiedName}. Compile contract to generate artifacts.`)
       }
     } else {
@@ -182,7 +166,7 @@ export class CompilerArtefacts extends Plugin {
       const contractArtefacts = this._getAllContractArtefactsfromOutput(contractsDataByFilename, contractName)
       let keys = Object.keys(contractArtefacts)
       if (!keys.length) {
-        await this._populateAllContractArtefactsFromFE ('contracts', contractName, contractArtefacts)
+        await this._populateAllContractArtefactsFromFE('contracts', contractName, contractArtefacts)
         keys = Object.keys(contractArtefacts)
       }
       if (keys.length === 1) return { fullyQualifiedName: keys[0], artefact: contractArtefacts[keys[0]] }
@@ -195,7 +179,7 @@ export class CompilerArtefacts extends Plugin {
     }
   }
 
-  async getCompilerAbstract (file) {
+  async getCompilerAbstract(file) {
     if (!file) return null
     if (this.compilersArtefactsPerFile[file]) return this.compilersArtefactsPerFile[file]
     const path = await this.call('fileManager', 'getPathFromUrl', file)
@@ -211,24 +195,25 @@ export class CompilerArtefacts extends Plugin {
     return artefact
   }
 
-  addResolvedContract (address: string, compilerData: CompilerAbstract) {
+  addResolvedContract(address: string, compilerData: CompilerAbstract) {
     this.compilersArtefacts[address] = compilerData
   }
 
-  isResolved (address) {
+  isResolved(address) {
     return this.compilersArtefacts[address] !== undefined
   }
 
-  get (key) {
-    return this.compilersArtefacts[key]
+  get(key) {
+    const checksumed = (key && key.startsWith('0x')) ? toChecksumAddress(key) : key
+    return this.compilersArtefacts[key] || this.compilersArtefacts[checksumed]
   }
 
-  async getContractDataFromAddress (address) {
+  async getContractDataFromAddress(address) {
     const code = await this.call('blockchain', 'getCode', address)
     return this.getContractDataFromByteCode(code)
   }
 
-  async getContractDataFromByteCode (code) {
+  async getContractDataFromByteCode(code) {
     let found
     this.filterAllContractDatas((file, contractsData) => {
       for (const name of Object.keys(contractsData)) {
@@ -241,5 +226,46 @@ export class CompilerArtefacts extends Plugin {
       return true
     })
     return found
+  }
+}
+
+export const getContractData = (contractName: string, compiler: CompilerAbstract): ContractData => {
+  if (!contractName) return null
+  // const compiler = plugin.compilersArtefacts[compilerAttributeName]
+
+  if (!compiler) return null
+
+  const contract = compiler.getContract(contractName)
+
+  return {
+    name: contractName,
+    contract: contract,
+    compiler: compiler,
+    abi: contract.object.abi,
+    bytecodeObject: contract.object.evm.bytecode.object,
+    bytecodeLinkReferences: contract.object.evm.bytecode.linkReferences,
+    object: contract.object,
+    deployedBytecode: contract.object.evm.deployedBytecode,
+    getConstructorInterface: () => {
+      return execution.txHelper.getConstructorInterface(contract.object.abi)
+    },
+    getConstructorInputs: () => {
+      const constructorInterface = execution.txHelper.getConstructorInterface(contract.object.abi)
+      return execution.txHelper.inputParametersDeclarationToString(constructorInterface.inputs)
+    },
+    isOverSizeLimit: async (args: string) => {
+      const encodedParams = await execution.txFormat.encodeParams(args, execution.txHelper.getConstructorInterface(contract.object.abi))
+      const bytecode = contract.object.evm.bytecode.object + (encodedParams as any).dataHex
+      // https://eips.ethereum.org/EIPS/eip-3860
+      const initCodeOversize = bytecode && (bytecode.length / 2 > 2 * 24576)
+      const deployedBytecode = contract.object.evm.deployedBytecode
+      // https://eips.ethereum.org/EIPS/eip-170
+      const deployedBytecodeOversize = deployedBytecode && (deployedBytecode.object.length / 2 > 24576)
+      return {
+        overSizeEip3860: initCodeOversize,
+        overSizeEip170: deployedBytecodeOversize
+      }
+    },
+    metadata: contract.object.metadata
   }
 }

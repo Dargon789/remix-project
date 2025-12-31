@@ -4,9 +4,9 @@ let provider: Provider = null
 self.onmessage = (e: MessageEvent) => {
   const data = e.data
   switch (data.cmd) {
-  case 'init': 
+  case 'init':
   {
-    provider = new Provider({ fork: data.fork, nodeUrl: data.nodeUrl, blockNumber: data.blockNumber })
+    provider = new Provider({ baseBlockNumber: data.baseBlockNumer, fork: data.fork, nodeUrl: data.nodeUrl, blockNumber: data.blockNumber, stateDb: data.stateDb, blocks: data.blocks })
     provider.init().then(() => {
       self.postMessage({
         cmd: 'initiateResult',
@@ -40,7 +40,38 @@ self.onmessage = (e: MessageEvent) => {
         stamp: data.stamp
       })
     }
-      
+
+    break
+  }
+  case 'request':
+  {
+    (function (data) {
+      const stamp = data.stamp
+      if (provider) {
+        provider.request(data.query).then((result) => {
+          self.postMessage({
+            cmd: 'requestResult',
+            error: null,
+            result: result,
+            stamp: stamp
+          })
+        }).catch((error) => {
+          self.postMessage({
+            cmd: 'requestResult',
+            error: error,
+            result: null,
+            stamp: stamp
+          })
+        })
+      } else {
+        self.postMessage({
+          cmd: 'requestResult',
+          error: 'Provider not instantiated',
+          result: null,
+          stamp: stamp
+        })
+      }
+    })(data)
     break
   }
   case 'addAccount':
@@ -48,7 +79,7 @@ self.onmessage = (e: MessageEvent) => {
     if (provider) {
       provider.Accounts._addAccount(data.privateKey, data.balance)
     }
-      
+
     break
   }
   case 'newAccount':
@@ -67,11 +98,11 @@ self.onmessage = (e: MessageEvent) => {
             result: address,
             stamp: data.stamp
           })
-        }          
+        }
       })
     }
-      
+
     break
-  }  
+  }
   }
 }

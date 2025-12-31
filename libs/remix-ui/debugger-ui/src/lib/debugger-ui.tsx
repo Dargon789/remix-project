@@ -1,5 +1,5 @@
-import React, {useState, useEffect, useRef} from 'react' // eslint-disable-line
-import {FormattedMessage} from 'react-intl'
+import React, {useState, useEffect, useRef, useContext} from 'react' // eslint-disable-line
+import { FormattedMessage, useIntl } from 'react-intl'
 import TxBrowser from './tx-browser/tx-browser' // eslint-disable-line
 import StepManager from './step-manager/step-manager' // eslint-disable-line
 import VmDebugger from './vm-debugger/vm-debugger' // eslint-disable-line
@@ -7,12 +7,18 @@ import VmDebuggerHead from './vm-debugger/vm-debugger-head' // eslint-disable-li
 import {TransactionDebugger as Debugger} from '@remix-project/remix-debug' // eslint-disable-line
 import {DebuggerUIProps} from './idebugger-api' // eslint-disable-line
 import {Toaster} from '@remix-ui/toaster' // eslint-disable-line
-import {CustomTooltip, isValidHash} from '@remix-ui/helper'
+import { CustomTooltip, isValidHash } from '@remix-ui/helper'
+import { DebuggerEvent, MatomoEvent } from '@remix-api';
+import { TrackingContext } from '@remix-ide/tracking'
 /* eslint-disable-next-line */
 import './debugger-ui.css'
-const _paq = ((window as any)._paq = (window as any)._paq || [])
 
 export const DebuggerUI = (props: DebuggerUIProps) => {
+  const intl = useIntl()
+  const { trackMatomoEvent: baseTrackEvent } = useContext(TrackingContext)
+  const trackMatomoEvent = <T extends MatomoEvent = DebuggerEvent>(event: T) => {
+    baseTrackEvent?.<T>(event)
+  }
   const debuggerModule = props.debuggerAPI
   const [state, setState] = useState({
     isActive: false,
@@ -92,7 +98,7 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
       })
 
       debuggerModule.onBreakpointAdded((fileName, row) => {
-        if (state.debugger) state.debugger.breakPointManager.add({fileName: fileName, row: row})
+        if (state.debugger) state.debugger.breakPointManager.add({ fileName: fileName, row: row })
       })
 
       debuggerModule.onEditorContentChanged(() => {
@@ -105,8 +111,8 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
     const providerChanged = () => {
       debuggerModule.onEnvChanged((provider) => {
         setState((prevState) => {
-          const isLocalNodeUsed = !provider.startsWith('vm') && provider !== 'injected'
-          return {...prevState, isLocalNodeUsed: isLocalNodeUsed}
+          const isLocalNodeUsed = !provider.startsWith('vm') && !provider.startsWith('injected')
+          return { ...prevState, isLocalNodeUsed: isLocalNodeUsed }
         })
       })
     }
@@ -120,7 +126,7 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
     debuggerInstance.event.register('debuggerStatus', async (isActive) => {
       await debuggerModule.discardHighlight()
       setState((prevState) => {
-        return {...prevState, isActive}
+        return { ...prevState, isActive }
       })
     })
 
@@ -128,14 +134,14 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
       setState((prevState) => {
         return {
           ...prevState,
-          sourceLocationStatus: 'Locating breakpoint, this might take a while...'
+          sourceLocationStatus: intl.formatMessage({ id: 'debugger.sourceLocationStatus1' })
         }
       })
     })
 
     debuggerInstance.event.register('noBreakpointHit', async (isActive) => {
       setState((prevState) => {
-        return {...prevState, sourceLocationStatus: ''}
+        return { ...prevState, sourceLocationStatus: '' }
       })
     })
 
@@ -145,7 +151,7 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
         setState((prevState) => {
           return {
             ...prevState,
-            sourceLocationStatus: 'Source location not available, neither in Sourcify nor in Etherscan. Please make sure the Etherscan api key is provided in the settings.'
+            sourceLocationStatus: intl.formatMessage({ id: 'debugger.sourceLocationStatus2' })
           }
         })
         return
@@ -153,6 +159,9 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
       const contracts = await debuggerModule.fetchContractAndCompile(address || currentReceipt.contractAddress || currentReceipt.to, currentReceipt)
       if (contracts) {
         let path = contracts.getSourceName(rawLocation.file)
+        // Get the main contract (first source) as origin for resolution
+        const sources = contracts.getSourceCode().sources
+        const mainContract = sources ? Object.keys(sources)[0] : null
         if (!path) {
           // check in generated sources
           for (const source of generatedSources) {
@@ -174,10 +183,10 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
         }
         if (path) {
           setState((prevState) => {
-            return {...prevState, sourceLocationStatus: ''}
+            return { ...prevState, sourceLocationStatus: '' }
           })
           await debuggerModule.discardHighlight()
-          await debuggerModule.highlight(lineColumnPos, path, rawLocation, stepDetail, lineGasCost)
+          await debuggerModule.highlight(lineColumnPos, path, rawLocation, stepDetail, lineGasCost, mainContract)
         }
       }
     })
@@ -255,19 +264,10 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
       return
     }
 
-    const web3 = optWeb3 || (state.opt.debugWithLocalNode ? await debuggerModule.web3() : await debuggerModule.getDebugWeb3())
+    const web3 = optWeb3 || (state.opt.debugWithLocalNode ? await debuggerModule.web3() : await debuggerModule.getDebugProvider())
     try {
-      const networkId = await web3.eth.net.getId()
-      _paq.push(['trackEvent', 'debugger', 'startDebugging', networkId])
-      if (networkId === 42) {
-        setState((prevState) => {
-          return {
-            ...prevState,
-            validationError: 'Unfortunately, the Kovan network is not supported.'
-          }
-        })
-        return
-      }
+      const networkId = (await web3.getNetwork()).chainId
+      trackMatomoEvent({ category: 'debugger', action: 'startDebugging', value: networkId, isClick: true })
     } catch (e) {
       console.error(e)
     }
@@ -275,9 +275,9 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
     let currentBlock
     let currentTransaction
     try {
-      currentReceipt = await web3.eth.getTransactionReceipt(txNumber)
-      currentBlock = await web3.eth.getBlock(currentReceipt.blockHash)
-      currentTransaction = await web3.eth.getTransaction(txNumber)
+      currentReceipt = await web3.getTransactionReceipt(txNumber)
+      currentBlock = await web3.getBlock(currentReceipt.blockHash)
+      currentTransaction = await web3.getTransaction(txNumber)
     } catch (e) {
       setState((prevState) => {
         return {
@@ -378,19 +378,19 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
   const customJSX = (
     <span className="p-0 m-0">
       <input
-        className="custom-control-input"
+        className="form-check-input"
         id="debugGeneratedSourcesInput"
-        onChange={({target: {checked}}) => {
+        onChange={({ target: { checked } }) => {
           setState((prevState) => {
             return {
               ...prevState,
-              opt: {...prevState.opt, debugWithGeneratedSources: checked}
+              opt: { ...prevState.opt, debugWithGeneratedSources: checked }
             }
           })
         }}
         type="checkbox"
       />
-      <label data-id="debugGeneratedSourcesLabel" className="form-check-label custom-control-label" htmlFor="debugGeneratedSourcesInput">
+      <label data-id="debugGeneratedSourcesLabel" className="form-check-label" htmlFor="debugGeneratedSourcesInput">
         <FormattedMessage id="debugger.useGeneratedSources" />
         (Solidity {'>='} v0.7.2)
       </label>
@@ -399,31 +399,31 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
   return (
     <div>
       <Toaster message={state.toastMessage} />
-      <div className="px-2" ref={debuggerTopRef}>
+      <div className="px-2 pb-3" ref={debuggerTopRef}>
         <div>
-          <div className="mt-2 mb-2 debuggerConfig custom-control custom-checkbox">
+          <div className="mt-2 mb-2 debuggerConfig form-check">
             <CustomTooltip tooltipId="debuggerGenSourceCheckbox" tooltipText={<FormattedMessage id="debugger.debugWithGeneratedSources" />} placement="bottom-start">
               {customJSX}
             </CustomTooltip>
           </div>
           {state.isLocalNodeUsed && (
-            <div className="mb-2 debuggerConfig custom-control custom-checkbox">
-              <CustomTooltip tooltipId="debuggerGenSourceInput" tooltipText="Force the debugger to use the current local node" placement="right">
+            <div className="mb-2 debuggerConfig form-check">
+              <CustomTooltip tooltipId="debuggerGenSourceInput" tooltipText={<FormattedMessage id="debugger.forceToUseCurrentLocalNode" />} placement="right">
                 <input
-                  className="custom-control-input"
+                  className="form-check-input"
                   id="debugWithLocalNodeInput"
-                  onChange={({target: {checked}}) => {
+                  onChange={({ target: { checked } }) => {
                     setState((prevState) => {
                       return {
                         ...prevState,
-                        opt: {...prevState.opt, debugWithLocalNode: checked}
+                        opt: { ...prevState.opt, debugWithLocalNode: checked }
                       }
                     })
                   }}
                   type="checkbox"
                 />
               </CustomTooltip>
-              <label data-id="debugLocaNodeLabel" className="form-check-label custom-control-label" htmlFor="debugWithLocalNodeInput">
+              <label data-id="debugLocaNodeLabel" className="form-check-label" htmlFor="debugWithLocalNodeInput">
                 <FormattedMessage id="debugger.debugLocaNodeLabel" />
               </label>
             </div>
@@ -448,7 +448,7 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
             <span>
               <FormattedMessage id="debugger.introduction" />:{' '}
               <a href="https://docs.sourcify.dev/docs/chains/" target="__blank">
-                Sourcify docs
+                <FormattedMessage id="debugger.sourcifyDocs" />
               </a>{' '}
               &{' '}
               <a href="https://etherscan.io/contractsVerified" target="__blank">
@@ -460,7 +460,7 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
         {state.debugging && <StepManager stepManager={stepManager} />}
       </div>
       <div className="debuggerPanels" ref={panelsRef}>
-        {state.debugging && <VmDebuggerHead debugging={state.debugging} vmDebugger={vmDebugger} />}
+        {state.debugging && <VmDebuggerHead debugging={state.debugging} vmDebugger={vmDebugger} stepManager={stepManager} />}
         {state.debugging && (
           <VmDebugger
             debugging={state.debugging}
@@ -470,6 +470,7 @@ export const DebuggerUI = (props: DebuggerUIProps) => {
             currentTransaction={state.currentTransaction}
           />
         )}
+        <div id="bottomSpacer" className="p-1 mt-3"></div>
       </div>
     </div>
   )

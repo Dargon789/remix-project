@@ -1,0 +1,32 @@
+{
+  "remixApp.scrollToSeeAllTabs": "Scroll to see all tabs",
+  "remixApp.alert": "Alert",
+  "remixApp.ok": "OK",
+  "remixApp.enterText1": "Welcome to Remix IDE",
+  "remixApp.enterText2": "In order to understand your needs better, we would like to know how you typically use Remix",
+  "remixApp.enterText3": "Learning - discovering web3 development",
+  "remixApp.enterText4": "Prototyping - trying out concepts and techniques",
+  "remixApp.enterText5": "Developing  projects - Remix as your main dev tool",
+  "remixApp.enterText6": "Production - only deployments",
+  "remixApp.matomoText1": "Remix features an AI coding assistant called <a>RemixAI</a> with Model Context Protocol (MCP) integration, which enables enhanced AI capabilities by connecting to external servers and processing your workspace data. By using RemixAI with MCP, you consent to the transmission of workspace files, code context, and development data to configured MCP servers and AI providers. MCP processes smart contract code, compilation artifacts, and deployment information to provide intelligent assistance. External MCP servers (including third-party services) may retain data according to their own policies. You can disable MCP at any time through AI assistant settings. For full details on data collection, security, and your rights, please review the MCP Terms and Data Privacy policy when prompted. Your approval is required to use RemixAI with MCP features.",
+  "remixApp.matomoText1Old": "Remix features an AI coding assistant called <a>RemixAI</a>, that needs your approval to use.",
+  "remixApp.matomoText2": "We also use <a>Matomo</a>, an open-source analytics platform, that helps us improve your experience.",
+  "remixApp.matomoTitle": "AI and Analytics Preferences",
+  "remixApp.accept": "Accept",
+  "remixApp.managePreferences": "Manage Preferences",
+  "remixApp.savePreferences": "Save Preferences",
+  "remixApp.declineCookies": "Decline Cookies",
+  "remixApp.decline": "Decline",
+
+  "remixApp.mpOp1Title": "Matomo Anonymous Analytics (Necessary)",
+  "remixApp.mpOp1Details": "Our use of anonymous analytics data helps us improve your experience by identifying bugs and important UX improvements. This data can also be used in overall statistics on Remix use in the wider Web3 ecosystem",
+  "remixApp.mpOp1Tooltip": "This is a necessary selection for a better experience of Remix IDE",
+
+  "remixApp.mpOp2Title": "Matomo Performance Analytics",
+  "remixApp.mpOp2Details": "Remix believes your privacy is of primary importance. Your help in making Remix the best possible open source public good toolset is also very important. Approval of performance analytics tracking greatly helps us refine and improve the toolset. Rest assured, we will never share this data with any third parties.",
+  "remixApp.mpOp2Link": "<a>Learn more about analytics</a>",
+
+  "remixApp.mpOp3Title": "RemixAI",
+  "remixApp.mpOp3Details": "RemixAI helps by offering code suggestions and improvements",
+  "remixApp.mpOp3Link": "<a>Learn more about RemixAI Copilot</a>"
+}

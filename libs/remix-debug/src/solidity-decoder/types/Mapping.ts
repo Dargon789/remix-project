@@ -2,7 +2,7 @@
 import { hash } from '@remix-project/remix-lib'
 import { RefType } from './RefType'
 import { normalizeHex } from './util'
-import { toBuffer, setLengthLeft, bufferToHex, addHexPrefix } from '@ethereumjs/util'
+import { toBytes, setLengthLeft, bytesToHex, addHexPrefix } from '@ethereumjs/util'
 import BN from 'bn.js'
 
 export class Mapping extends RefType {
@@ -44,7 +44,7 @@ export class Mapping extends RefType {
   }
 
   async decodeMappingsLocation (preimages, location, storageResolver) {
-    const mapSlot = normalizeHex(bufferToHex(location.slot))
+    const mapSlot = normalizeHex('0x' + location.slot.toString(16))
     if (!preimages[mapSlot]) {
       return {}
     }
@@ -62,15 +62,15 @@ export class Mapping extends RefType {
 }
 
 function getMappingLocation (key, position) {
-  // mapping storage location decribed at http://solidity.readthedocs.io/en/develop/miscellaneous.html#layout-of-state-variables-in-storage
+  // mapping storage location described at https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html
   // > the value corresponding to a mapping key k is located at keccak256(k . p) where . is concatenation.
 
   // key should be a hex string, and position an int
-  const mappingK = toBuffer(addHexPrefix(key))
-  let mappingP = toBuffer(addHexPrefix(position))
+  const mappingK = toBytes(addHexPrefix(key))
+  let mappingP = toBytes(addHexPrefix(position))
   mappingP = setLengthLeft(mappingP, 32)
   const mappingKeyBuf = concatTypedArrays(mappingK, mappingP)
-  const mappingStorageLocation: Buffer = hash.keccak(mappingKeyBuf)
+  const mappingStorageLocation: Uint8Array = hash.keccak(mappingKeyBuf)
   const mappingStorageLocationinBn: BN = new BN(mappingStorageLocation, 16)
   return mappingStorageLocationinBn
 }

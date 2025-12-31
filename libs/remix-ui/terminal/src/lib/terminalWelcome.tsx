@@ -1,7 +1,15 @@
 import React, {useEffect} from 'react' // eslint-disable-line
-import {FormattedMessage} from 'react-intl'
+import { FormattedMessage } from 'react-intl'
+import { Registry } from '@remix-project/remix-lib'
 
-const TerminalWelcomeMessage = ({packageJson, storage}) => {
+const TerminalWelcomeMessage = ({ packageJson, storage }) => {
+  // Don't show the welcome message in Electron - desktop client shows its own version
+  const isDesktop = Registry.getInstance().get('platform')?.api?.isDesktop?.() || false
+
+  if (isDesktop) {
+    return null
+  }
+
   return (
     <div className="remix_ui_terminal_block px-4 " data-id="block_null">
       <div className="remix_ui_terminal_welcome">
@@ -16,7 +24,7 @@ const TerminalWelcomeMessage = ({packageJson, storage}) => {
       <div>
         <FormattedMessage id="terminal.welcomeText3" />:{' '}
       </div>
-      <ul className="ml-0 mr-4">
+      <ul className="ms-0 me-4">
         <li key="details-and-debug">
           <FormattedMessage id="terminal.welcomeText4" />.
         </li>
@@ -43,18 +51,12 @@ const TerminalWelcomeMessage = ({packageJson, storage}) => {
       <div>
         <FormattedMessage id="terminal.welcomeText9" />:
       </div>
-      <ul className="ml-0 mr-4">
-        <li key="web3-152">
-          <a target="_blank" href="https://web3js.readthedocs.io/en/1.0/">
-            web3 version 1.5.2
-          </a>
-        </li>
+      <ul className="ms-0 me-4">
         <li key="ethers-console">
           <a target="_blank" href="https://docs.ethers.io">
             ethers.js
           </a>{' '}
         </li>
-        <li key="remix-console">remix</li>
       </ul>
       <div>
         <FormattedMessage id="terminal.welcomeText10" />.

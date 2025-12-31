@@ -1,5 +1,5 @@
 'use strict'
-import { ethers } from 'ethers'
+import { AbiCoder } from 'ethers'
 import { encodeParams as encodeParamsHelper, encodeFunctionId, makeFullTypeDefinition } from './txHelper'
 import { eachOfSeries } from 'async'
 import { linkBytecode as linkBytecodeSolc } from 'solc/linker'
@@ -32,7 +32,7 @@ export function encodeData (funABI, values, contractbyteCode) {
 /**
 * encode function / constructor parameters
 *
-* @param {Object} params    - input paramater of the function to call
+* @param {Object} params    - input parameter of the function to call
 * @param {Object} funAbi    - abi definition of the function to call. null if building data for the ctor.
 * @param {Function} callback    - callback
 */
@@ -88,13 +88,13 @@ export function encodeParams (params, funAbi, callback?) {
     const result = { data: data, dataHex: dataHex, funArgs: funArgs }
     callback && callback(null, result)
     resolve(result)
-  })  
+  })
 }
 
 /**
 * encode function call (function id + encoded parameters)
 *
-* @param {Object} params    - input paramater of the function to call
+* @param {Object} params    - input parameter of the function to call
 * @param {Object} funAbi    - abi definition of the function to call. null if building data for the ctor.
 * @param {Function} callback    - callback
 */
@@ -108,8 +108,8 @@ export function encodeFunctionCall (params, funAbi, callback) {
 /**
 * encode constructor creation and link with provided libraries if needed
 *
-* @param {Object} contract    - input paramater of the function to call
-* @param {Object} params    - input paramater of the function to call
+* @param {Object} contract    - input parameter of the function to call
+* @param {Object} params    - input parameter of the function to call
 * @param {Object} funAbi    - abi definition of the function to call. null if building data for the ctor.
 * @param {Object} linkLibraries    - contains {linkReferences} object which list all the addresses to be linked
 * @param {Object} linkReferences    - given by the compiler, contains the proper linkReferences
@@ -127,7 +127,7 @@ export function encodeConstructorCallAndLinkLibraries (contract, params, funAbi,
 /**
 * link with provided libraries if needed
 *
-* @param {Object} contract    - input paramater of the function to call
+* @param {Object} contract    - input parameter of the function to call
 * @param {Object} linkLibraries    - contains {linkReferences} object which list all the addresses to be linked
 * @param {Object} linkReferences    - given by the compiler, contains the proper linkReferences
 * @param {Function} callback    - callback
@@ -152,12 +152,12 @@ export function linkLibraries (contract, linkLibraries, linkReferences, callback
 }
 
 /**
-* encode constructor creation and deploy librairies if needed
+* encode constructor creation and deploy libraries if needed
 *
 * @param {String} contractName    - current contract name
-* @param {Object} contract    - input paramater of the function to call
+* @param {Object} contract    - input parameter of the function to call
 * @param {Object} contracts    - map of all compiled contracts.
-* @param {Object} params    - input paramater of the function to call
+* @param {Object} params    - input parameter of the function to call
 * @param {Object} funAbi    - abi definition of the function to call. null if building data for the ctor.
 * @param {Function} callback    - callback
 * @param {Function} callbackStep  - callbackStep
@@ -195,7 +195,7 @@ export function encodeConstructorCallAndDeployLibraries (contractName, contract,
 * @param {Object} contracts    - map of all compiled contracts.
 * @param {Bool} isConstructor    - isConstructor.
 * @param {Object} funAbi    - abi definition of the function to call. null if building data for the ctor.
-* @param {Object} params    - input paramater of the function to call
+* @param {Object} params    - input parameter of the function to call
 * @param {Function} callback    - callback
 * @param {Function} callbackStep  - callbackStep
 * @param {Function} callbackDeployLibrary  - callbackDeployLibrary
@@ -205,13 +205,15 @@ export function buildData (contractName, contract, contracts, isConstructor, fun
   let data: Buffer | string = ''
   let dataHex = ''
 
-  if (params.indexOf('raw:0x') === 0) {
+  if (!Array.isArray(params) && params.indexOf('raw:0x') === 0) {
     // in that case we consider that the input is already encoded and *does not* contain the method signature
     dataHex = params.replace('raw:0x', '')
     data = Buffer.from(dataHex, 'hex')
   } else {
     try {
-      if (params.length > 0) {
+      if (Array.isArray(params)) {
+        funArgs = params
+      } else if (params.length > 0) {
         funArgs = parseFunctionParams(params)
       }
     } catch (e) {
@@ -230,9 +232,11 @@ export function buildData (contractName, contract, contracts, isConstructor, fun
       dataHex = data.slice(2)
     }
   }
-  let contractBytecode
+  let contractBytecode, contractDeployedBytecode
   if (isConstructor) {
     contractBytecode = contract.evm.bytecode.object
+    // yul contract doesn't have deployedBytecode
+    if (contract.evm.deployedBytecode && contract.evm.deployedBytecode.object) contractDeployedBytecode = contract.evm.deployedBytecode.object
     let bytecodeToDeploy = contract.evm.bytecode.object
     if (bytecodeToDeploy.indexOf('_') >= 0) {
       linkBytecode(contract, contracts, (err, bytecode) => {
@@ -250,7 +254,7 @@ export function buildData (contractName, contract, contracts, isConstructor, fun
   } else {
     dataHex = encodeFunctionId(funAbi) + dataHex
   }
-  callback(null, { dataHex, funAbi, funArgs, contractBytecode, contractName: contractName })
+  callback(null, { dataHex, funAbi, funArgs, contractBytecode, contractDeployedBytecode, contractName: contractName })
 }
 
 export function atAddress () {}
@@ -399,9 +403,9 @@ export function decodeResponse (response, fnabi) {
         const type = fnabi.outputs[i].type
         outputTypes.push(type.indexOf('tuple') === 0 ? makeFullTypeDefinition(fnabi.outputs[i]) : type)
       }
-      if (!response || !response.length) response = new Uint8Array(32 * fnabi.outputs.length) // ensuring the data is at least filled by 0 cause `AbiCoder` throws if there's not engouh data
+      if (!response || !response.length) response = new Uint8Array(32 * fnabi.outputs.length) // ensuring the data is at least filled by 0 cause `AbiCoder` throws if there's not enough data
       // decode data
-      const abiCoder = new ethers.utils.AbiCoder()
+      const abiCoder = new AbiCoder()
       const decodedObj = abiCoder.decode(outputTypes, response)
 
       const json = {}
@@ -485,16 +489,16 @@ export const normalizeParam = (param) => {
       try {
         let paramTrimmed = param.replace(/^'/g, '').replace(/'$/g, '')
         paramTrimmed = paramTrimmed.replace(/^"/g, '').replace(/"$/g, '')
-        param = fromExponential(paramTrimmed)     
+        param = fromExponential(paramTrimmed)
       } catch (e) {
         console.log(e)
       }
     }
-  }  
+  }
 
-  if (typeof param === 'string') {          
+  if (typeof param === 'string') {
     if (param === 'true') param = true
-    if (param === 'false') param = false        
+    if (param === 'false') param = false
   }
   return param
 }

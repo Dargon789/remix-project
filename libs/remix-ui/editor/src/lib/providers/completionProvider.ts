@@ -70,13 +70,13 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
       // handle completion for global THIS.
       if (lastNodeInExpression.name === 'this') {
         dotCompleted = true
-        nodes = [...nodes, ...await this.getThisCompletions()]
+        nodes = [...nodes, ...await this.getThisCompletions(model.getOffsetAt(position))]
       }
       // handle completion for other dot completions
       if (expressionElements.length > 1 && !dotCompleted) {
 
         const nameOfLastTypedExpression = lastNodeInExpression.name || lastNodeInExpression.memberName
-        const dotCompletions = await this.getDotCompletions(nameOfLastTypedExpression, range)
+        const dotCompletions = await this.getDotCompletions(nameOfLastTypedExpression, range, model.getOffsetAt(position))
         nodes = [...nodes, ...dotCompletions.nodes]
         suggestions = [...suggestions, ...dotCompletions.suggestions]
       }
@@ -92,7 +92,7 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
         ...GeCompletionUnits(range, this.monaco),
       ]
 
-      let contractCompletions = await this.getContractCompletions()
+      let contractCompletions = await this.getContractCompletions(model.getOffsetAt(position))
 
       // we can't have external nodes without using this.
       contractCompletions = contractCompletions.filter(node => {
@@ -157,7 +157,6 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
       }
       return variableDeclaration
     }
-
 
     for (const node of Object.values(filteredNodes) as any[]) {
       if (!node.name) continue
@@ -250,9 +249,9 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
     }
   }
 
-  private getContractCompletions = async () => {
+  private getContractCompletions = async (offset: number) => {
     let nodes: any[] = []
-    const { nodesAtPosition, block } = await retrieveNodesAtPosition(this.props.editorAPI, this.props.plugin)
+    const { nodesAtPosition, block } = await retrieveNodesAtPosition(offset, this.props.plugin)
     const fileNodes = await this.props.plugin.call('codeParser', 'getCurrentFileNodes')
     // find the contract and get the nodes of the contract and the base contracts and imports
     if (isArray(nodesAtPosition) && nodesAtPosition.length) {
@@ -282,7 +281,7 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
           } else { // we use the block info from the nodesAtPosition
             const contractNodes = fileNodes.contracts[node.name].contractNodes
             for (const contractNode of Object.values(contractNodes)) {
-              if((contractNode as any).nodeType === 'Block'){
+              if ((contractNode as any).nodeType === 'Block'){
                 const nodeOfScope = await this.props.plugin.call('codeParser', 'getNodesWithScope', (contractNode as any).id)
                 nodes = [...nodes, ...nodeOfScope]
               }
@@ -311,9 +310,9 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
     return nodes
   }
 
-  private getThisCompletions = async () => {
+  private getThisCompletions = async (offset: number) => {
     let nodes: any[] = []
-    let thisCompletionNodes = await this.getContractCompletions()
+    let thisCompletionNodes = await this.getContractCompletions(offset)
     const allowedTypesForThisCompletion = ['VariableDeclaration', 'FunctionDefinition']
     // with this. you can't have internal nodes and no contractDefinitions
     thisCompletionNodes = thisCompletionNodes.filter(node => {
@@ -329,8 +328,8 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
     return nodes
   }
 
-  private getDotCompletions = async (nameOfLastTypedExpression: string, range) => {
-    const contractCompletions = await this.getContractCompletions()
+  private getDotCompletions = async (nameOfLastTypedExpression: string, range, offset: number) => {
+    const contractCompletions = await this.getContractCompletions(offset)
     let nodes: any[] = []
     let suggestions: monacoTypes.languages.CompletionItem[] = []
 
@@ -347,7 +346,6 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
         return true
       })
     }
-
 
     for (const nodeOfScope of contractCompletions) {
       if (nodeOfScope.name === nameOfLastTypedExpression) {
@@ -373,8 +371,6 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
 
     }
 
-
-
     return { nodes, suggestions }
   }
 
@@ -392,9 +388,9 @@ export class RemixCompletionProvider implements monacoTypes.languages.Completion
   }
 
   /**
-     * 
-     * @param lineTextBeforeCursor 
-     * @returns 
+     *
+     * @param lineTextBeforeCursor
+     * @returns
      */
   private async getLastNodeInExpression(lineTextBeforeCursor: string) {
 

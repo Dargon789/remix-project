@@ -19,8 +19,8 @@ module.exports = {
       .clickLaunchIcon('solidity').click('*[data-id="compilerContainerCompileBtn"]')
       .pause(4000)
       .clickLaunchIcon('udapp')
-      .waitForElementPresent('*[data-title="Deploy - transact (not payable)"]', 60000)
-      .click('*[data-title="Deploy - transact (not payable)"]')
+      .waitForElementPresent('*[data-bs-title="Deploy - transact (not payable)"]', 60000)
+      .click('*[data-bs-title="Deploy - transact (not payable)"]')
       .debugTransaction(0)
       .waitForElementContainsText('*[data-id="sidePanelSwapitTitle"]', 'DEBUGGER', 60000)
       .clearConsole()
@@ -30,8 +30,8 @@ module.exports = {
     browser.waitForElementVisible('*[data-id="verticalIconsKindudapp"]')
       .clickLaunchIcon('udapp')
       .clickInstance(0)
-      .scrollAndClick('*[data-title="string name, uint256 goal"]')
-      .setValue('*[data-title="string name, uint256 goal"]', '"toast", 999')
+      .scrollAndClick('*[data-bs-title="string name, uint256 goal"]')
+      .setValue('*[data-bs-title="string name, uint256 goal"]', '"toast", 999')
       .click('*[data-id="createProject - transact (not payable)"]')
       .debugTransaction(0)
       .pause(2000)
@@ -88,15 +88,15 @@ module.exports = {
       .clickLaunchIcon('solidity')
       .testContracts('externalImport.sol', sources[1]['externalImport.sol'], ['ERC20'])
       .clickLaunchIcon('udapp')
-      .waitForElementPresent('*[data-title="Deploy - transact (not payable)"]', 35000)
+      .waitForElementPresent('*[data-bs-title="Deploy - transact (not payable)"]', 35000)
       .selectContract('ERC20')
       .createContract('"tokenName", "symbol"')
       .debugTransaction(0)
       .waitForElementVisible('#stepdetail')
       .waitForElementVisible({
         locateStrategy: 'xpath',
-        selector: '//*[@data-id="treeViewLivm trace step" and contains(.,"531")]',
-      })
+        selector: '//*[@data-id="treeViewLivm trace step" and contains(.,"475")]',
+      }).pause(1000)      
       .getEditorValue((content) => {
         browser.assert.ok(content.indexOf(`constructor (string memory name_, string memory symbol_) {
         _name = name_;
@@ -118,11 +118,10 @@ module.exports = {
       This is still an issue @todo(https://github.com/ethereum/remix-project/issues/481), so this test will fail when this issue is fixed
     */
     browser
-      .clearConsole().clearTransactions()
+      .refreshPage()
       .clickLaunchIcon('solidity')
-      .setSolidityCompilerVersion('soljson-v0.6.12+commit.27d51765.js')
-      .clickLaunchIcon('filePanel')
-      .click('li[data-id="treeViewLitreeViewItemexternalImport.sol"')
+      //.pause()
+      //.setSolidityCompilerVersion('soljson-v0.6.12+commit.27d51765.js')
       .testContracts('withABIEncoderV2.sol', sources[2]['withABIEncoderV2.sol'], ['test'])
       .clickLaunchIcon('udapp')
       .selectContract('test')
@@ -159,7 +158,7 @@ module.exports = {
       .clickLaunchIcon('solidity')
       .testContracts('locals.sol', sources[3]['locals.sol'], ['testLocals'])
       .clickLaunchIcon('udapp')
-      .waitForElementPresent('*[data-title="Deploy - transact (not payable)"]', 40000)
+      .waitForElementPresent('*[data-bs-title="Deploy - transact (not payable)"]', 40000)
       .createContract('')
       .pause(2000)
       .clearConsole()
@@ -172,7 +171,7 @@ module.exports = {
         locateStrategy: 'xpath',
         selector: '//*[@data-id="treeViewLivm trace step" and contains(.,"29")]',
       })
-      .goToVMTraceStep(7453)
+      .goToVMTraceStep(5453)
       .waitForElementPresent('*[data-id="treeViewDivtreeViewItemarray"]')
       .click('*[data-id="treeViewDivtreeViewItemarray"]')
       .waitForElementPresent('*[data-id="treeViewDivtreeViewLoadMore"]')
@@ -206,16 +205,40 @@ module.exports = {
   },
   // depends on Should debug using generated sources
   'Should call the debugger api: getTrace #group4': function (browser: NightwatchBrowser) {
+    let txhash
     browser
-      .addFile('test_jsGetTrace.js', { content: jsGetTrace })
+      .clickLaunchIcon('udapp')
+      .perform((done) => {
+        browser.getLastTransactionHash((hash) => {
+          txhash = hash
+          done()
+        })
+      })
+      .perform((done) => {
+        browser.addFile('test_jsGetTrace.js', { content: jsGetTrace.replace('<txhash>', txhash) }).perform(() => {
+          done()
+        })
+      })
       .executeScriptInTerminal('remix.exeCurrent()')
       .pause(3000)
-      .waitForElementContainsText('*[data-id="terminalJournal"]', '{"gas":"0x575f","return":"0x0000000000000000000000000000000000000000000000000000000000000000","structLogs":', 60000)
+      .waitForElementContainsText('*[data-id="terminalJournal"]', '{"gas":"0x5752","return":"0x0000000000000000000000000000000000000000000000000000000000000000","structLogs":', 60000)
   },
   // depends on Should debug using generated sources
   'Should call the debugger api: debug #group4': function (browser: NightwatchBrowser) {
+    let txhash
     browser
-      .addFile('test_jsDebug.js', { content: jsDebug })
+      .clickLaunchIcon('udapp')
+      .perform((done) => {
+        browser.getLastTransactionHash((hash) => {
+          txhash = hash
+          done()
+        })
+      })
+      .perform((done) => {
+        browser.addFile('test_jsDebug.js', { content: jsDebug.replace('<txhash>', txhash) }).perform(() => {
+          done()
+        })
+      })      
       .executeScriptInTerminal('remix.exeCurrent()')
       .pause(3000)
       .clickLaunchIcon('debugger')
@@ -258,10 +281,10 @@ module.exports = {
       .clickFunction('callA - transact (not payable)')
       .debugTransaction(1)
       .pause(4000)
-      .goToVMTraceStep(79)
+      .goToVMTraceStep(80)
       .waitForElementVisible('*[data-id="debugGoToRevert"]', 60000)
       .click('*[data-id="debugGoToRevert"]')
-      .waitForElementContainsText('*[data-id="asmitems"] div[selected="selected"]', '117 REVERT')
+      .waitForElementContainsText('*[data-id="asmitems"] div[selected="selected"]', '114 REVERT')
   }
 }
 
@@ -495,7 +518,7 @@ const localVariable_step717_ABIEncoder = { // eslint-disable-line
 
 const jsGetTrace = `(async () => {
   try {
-      const result = await remix.call('debugger', 'getTrace', '0x65f0813753462414f9a91f0aabea946188327995f54b893b63a8d7ff186cfca3')
+      const result = await remix.call('debugger', 'getTrace', '<txhash>')
       console.log('result ', result)
   } catch (e) {
       console.log(e.message)
@@ -504,7 +527,7 @@ const jsGetTrace = `(async () => {
 
 const jsDebug = `(async () => {
   try {
-      const result = await remix.call('debugger', 'debug', '0x65f0813753462414f9a91f0aabea946188327995f54b893b63a8d7ff186cfca3')
+      const result = await remix.call('debugger', 'debug', '<txhash>')
       console.log('result ', result)
   } catch (e) {
       console.log(e.message)

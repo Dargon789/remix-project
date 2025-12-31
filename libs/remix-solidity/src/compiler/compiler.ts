@@ -24,6 +24,7 @@ export class Compiler {
     this.event = new EventManager()
     this.handleImportCall = handleImportCall
     this.state = {
+      viaIR: false,
       compileJSON: null,
       worker: null,
       currentVersion: null,
@@ -32,10 +33,11 @@ export class Compiler {
       runs: 200,
       evmVersion: null,
       language: 'Solidity',
+      remappings: [],
       compilationStartTime: null,
       target: null,
       useFileConfiguration: false,
-      configFileContent: '',
+      configFileContent: {},
       compilerRetriggerMode: CompilerRetriggerMode.none,
       lastCompilationResult: {
         data: null,
@@ -49,7 +51,6 @@ export class Compiler {
       if (success && this.state.compilationStartTime) {
         this.event.trigger('compilationDuration', [(new Date().getTime()) - this.state.compilationStartTime])
       }
-      this.state.compilationStartTime = null
     })
 
     this.event.register('compilationStarted', () => {
@@ -81,12 +82,15 @@ export class Compiler {
    * @param missingInputs missing import file path list
    */
 
-  internalCompile(files: Source, missingInputs?: string[]): void {
+  internalCompile(files: Source, missingInputs?: string[], timeStamp?: number): void {
+    if (timeStamp < this.state.compilationStartTime && this.state.compilerRetriggerMode == CompilerRetriggerMode.retrigger ) {
+      return
+    }
     this.gatherImports(files, missingInputs, (error, input) => {
       if (error) {
         this.state.lastCompilationResult = null
         this.event.trigger('compilationFinished', [false, { error: { formattedMessage: error, severity: 'error' } }, files, input, this.state.currentVersion])
-      } else if (this.state.compileJSON && input) { this.state.compileJSON(input) }
+      } else if (this.state.compileJSON && input) { this.state.compileJSON(input, timeStamp) }
     })
   }
 
@@ -100,7 +104,7 @@ export class Compiler {
     this.state.target = target
     this.state.compilationStartTime = new Date().getTime()
     this.event.trigger('compilationStarted', [])
-    this.internalCompile(files)
+    this.internalCompile(files, null, this.state.compilationStartTime)
   }
 
   /**
@@ -131,12 +135,12 @@ export class Compiler {
         let input = ""
         try {
           if (source && source.sources) {
-            const { optimize, runs, evmVersion, language, useFileConfiguration, configFileContent } = this.state
+            const { optimize, runs, evmVersion, language, useFileConfiguration, configFileContent, remappings, viaIR } = this.state
 
             if (useFileConfiguration) {
-              input = compilerInputForConfigFile(source.sources, JSON.parse(configFileContent))
+              input = compilerInputForConfigFile(source.sources, configFileContent)
             } else {
-              input = compilerInput(source.sources, { optimize, runs, evmVersion, language })
+              input = compilerInput(source.sources, { optimize, runs, evmVersion, language, remappings, viaIR })
             }
 
             result = JSON.parse(compiler.compile(input, { import: missingInputsCallback }))
@@ -157,7 +161,7 @@ export class Compiler {
    * @param source Source
    */
 
-  onCompilationFinished(data: CompilationResult, missingInputs?: string[], source?: SourceWithTarget, input?: string, version?: string): void {
+  onCompilationFinished(data: CompilationResult, missingInputs?: string[], source?: SourceWithTarget, input?: string, version?: string, timeStamp?: number): void {
     let noFatalErrors = true // ie warnings are ok
 
     const checkIfFatalError = (error: CompilationError) => {
@@ -173,7 +177,7 @@ export class Compiler {
       this.event.trigger('compilationFinished', [false, data, source, input, version])
     } else if (missingInputs !== undefined && missingInputs.length > 0 && source && source.sources) {
       // try compiling again with the new set of inputs
-      this.internalCompile(source.sources, missingInputs)
+      this.internalCompile(source.sources, missingInputs, timeStamp)
     } else {
       data = this.updateInterface(data)
       if (source) {
@@ -210,12 +214,11 @@ export class Compiler {
           let input = ""
           try {
             if (source && source.sources) {
-              const { optimize, runs, evmVersion, language, useFileConfiguration, configFileContent } = this.state
-
+              const { optimize, runs, evmVersion, language, remappings, useFileConfiguration, configFileContent, viaIR } = this.state
               if (useFileConfiguration) {
-                input = compilerInputForConfigFile(source.sources, JSON.parse(configFileContent))
+                input = compilerInputForConfigFile(source.sources, configFileContent)
               } else {
-                input = compilerInput(source.sources, { optimize, runs, evmVersion, language })
+                input = compilerInput(source.sources, { optimize, runs, evmVersion, language, remappings, viaIR })
               }
 
               result = JSON.parse(remoteCompiler.compile(input, { import: missingInputsCallback }))
@@ -291,7 +294,8 @@ export class Compiler {
 
     this.state.worker.addEventListener('message', (msg: Record<'data', MessageFromWorker>) => {
       const data: MessageFromWorker = msg.data
-      if (this.state.compilerRetriggerMode == CompilerRetriggerMode.retrigger && data.timestamp !== this.state.compilationStartTime) {
+      if (this.state.compilerRetriggerMode == CompilerRetriggerMode.retrigger && data.timestamp < this.state.compilationStartTime) {
+        // drop message from previous compilation
         return
       }
       switch (data.cmd) {
@@ -312,7 +316,7 @@ export class Compiler {
             sources = jobs[data.job].sources
             delete jobs[data.job]
           }
-          this.onCompilationFinished(result, data.missingInputs, sources, data.input, this.state.currentVersion)
+          this.onCompilationFinished(result, data.missingInputs, sources, data.input, this.state.currentVersion, data.timestamp)
         }
         break
       }
@@ -325,29 +329,30 @@ export class Compiler {
       this.onCompilationFinished({ error: { formattedMessage } })
     })
 
-    this.state.compileJSON = (source: SourceWithTarget) => {
+    this.state.compileJSON = (source: SourceWithTarget, timeStamp: number) => {
       if (source && source.sources) {
-        const { optimize, runs, evmVersion, language, useFileConfiguration, configFileContent } = this.state
+        const { optimize, runs, evmVersion, language, remappings, useFileConfiguration, configFileContent, viaIR } = this.state
         jobs.push({ sources: source })
         let input = ""
 
         try {
           if (useFileConfiguration) {
-            input = compilerInputForConfigFile(source.sources, JSON.parse(configFileContent))
+            const compilerInput = configFileContent
+            if (compilerInput.settings.remappings?.length) compilerInput.settings.remappings.push(...remappings)
+            else compilerInput.settings.remappings = remappings
+            input = compilerInputForConfigFile(source.sources, compilerInput)
           } else {
-            input = compilerInput(source.sources, { optimize, runs, evmVersion, language })
+            input = compilerInput(source.sources, { optimize, runs, evmVersion, language, remappings, viaIR })
           }
         } catch (exception) {
           this.onCompilationFinished({ error: { formattedMessage: exception.message } }, [], source, "", this.state.currentVersion)
           return
         }
-
-
         this.state.worker.postMessage({
           cmd: 'compile',
           job: jobs.length - 1,
           input: input,
-          timestamp: this.state.compilationStartTime
+          timestamp: timeStamp
         })
       }
     }

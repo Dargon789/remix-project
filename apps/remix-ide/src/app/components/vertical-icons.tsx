@@ -1,18 +1,18 @@
 // eslint-disable-next-line no-use-before-define
 import React from 'react'
 import packageJson from '../../../../../package.json'
-import {Plugin} from '@remixproject/engine'
-import {EventEmitter} from 'events'
-import {IconRecord, RemixUiVerticalIconsPanel} from '@remix-ui/vertical-icons-panel'
-import {Profile} from '@remixproject/plugin-utils'
-import {PluginViewWrapper} from '@remix-ui/helper'
+import { Plugin } from '@remixproject/engine'
+import { EventEmitter } from 'events'
+import { IconRecord, RemixUiVerticalIconsPanel } from '@remix-ui/vertical-icons-panel'
+import { Profile } from '@remixproject/plugin-utils'
+import { PluginViewWrapper } from '@remix-ui/helper'
 
 const profile = {
   name: 'menuicons',
   displayName: 'Vertical Icons',
   description: 'Remix IDE vertical icons',
   version: packageJson.version,
-  methods: ['select', 'unlinkContent', 'linkContent'],
+  methods: ['select', 'unlinkContent', 'linkContent', 'activateAndSelect'],
   events: ['toggleContent', 'showContent']
 }
 
@@ -29,7 +29,7 @@ export class VerticalIcons extends Plugin {
   }
 
   renderComponent() {
-    const fixedOrder = ['filePanel', 'search', 'solidity', 'udapp', 'debugger', 'solidityStaticAnalysis', 'solidityUnitTesting', 'pluginManager']
+    const fixedOrder = ['remixaiassistant', 'filePanel', 'search', 'solidity', 'udapp', 'debugger', 'solidityStaticAnalysis', 'solidityUnitTesting', 'pluginManager']
 
     const divived = Object.values(this.icons)
       .map((value) => {
@@ -71,7 +71,26 @@ export class VerticalIcons extends Plugin {
       Object.keys(this.icons).map((o) => {
         this.icons[o].active = false
       })
-      this.icons[name].active = true
+
+      if (this.icons[name]) {
+        this.icons[name].active = true
+      }
+      this.renderComponent()
+    })
+
+    this.on('rightSidePanel', 'pinnedPlugin', (profile) => {
+      Object.keys(this.icons).map((icon) => {
+        if (this.icons[icon].profile.name === profile.name) {
+          this.icons[icon].pinned = true
+        } else {
+          this.icons[icon].pinned = false
+        }
+      })
+      this.renderComponent()
+    })
+
+    this.on('rightSidePanel', 'unPinnedPlugin', (profile) => {
+      if (this.icons[profile.name]) this.icons[profile.name].pinned = false
       this.renderComponent()
     })
   }
@@ -82,6 +101,7 @@ export class VerticalIcons extends Plugin {
     this.icons[profile.name] = {
       profile: profile,
       active: false,
+      pinned: false,
       canbeDeactivated: await this.call('manager', 'canDeactivate', this.profile, profile),
       timestamp: Date.now()
     }
@@ -106,6 +126,15 @@ export class VerticalIcons extends Plugin {
     // TODO: Only keep `this.emit` (issue#2210)
     this.emit('showContent', name)
     this.events.emit('showContent', name)
+  }
+
+  async activateAndSelect(name: string) {
+    const isActive = await this.call('manager', 'isActive', name)
+
+    if (!isActive) {
+      await this.call('manager', 'activatePlugin', name)
+    }
+    this.select(name)
   }
 
   /**

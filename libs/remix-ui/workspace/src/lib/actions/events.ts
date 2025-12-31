@@ -1,10 +1,11 @@
 import { fileDecoration } from '@remix-ui/file-decorators'
 import { extractParentFromKey } from '@remix-ui/helper'
+import isElectron from 'is-electron'
 import React from 'react'
-import { action, WorkspaceTemplate } from '../types'
+import { action, FileTree, WorkspaceTemplate } from '../types'
 import { ROOT_PATH } from '../utils/constants'
-import { displayNotification, displayPopUp, fileAddedSuccess, fileRemovedSuccess, fileRenamedSuccess, folderAddedSuccess, loadLocalhostError, loadLocalhostRequest, loadLocalhostSuccess, removeContextMenuItem, removeFocus, rootFolderChangedSuccess, setContextMenuItem, setMode, setReadOnlyMode, setFileDecorationSuccess } from './payload'
-import { addInputField, createWorkspace, deleteWorkspace, fetchWorkspaceDirectory, renameWorkspace, switchToWorkspace, uploadFile } from './workspace'
+import { displayNotification, displayPopUp, focusElement, fileAddedSuccess, fileRemovedSuccess, fileRenamedSuccess, folderAddedSuccess, loadLocalhostError, loadLocalhostRequest, loadLocalhostSuccess, removeContextMenuItem, removeFocus, rootFolderChangedSuccess, setContextMenuItem, setMode, setReadOnlyMode, setFileDecorationSuccess } from './payload'
+import { addInputField, createWorkspace, populateWorkspace, deleteWorkspace, fetchWorkspaceDirectory, renameWorkspace, switchToWorkspace, uploadFile, generateWorkspace, uploadFolder } from './workspace'
 
 const LOCALHOST = ' - connect to localhost - '
 let plugin, dispatch: React.Dispatch<any>
@@ -12,8 +13,24 @@ let plugin, dispatch: React.Dispatch<any>
 export const listenOnPluginEvents = (filePanelPlugin) => {
   plugin = filePanelPlugin
 
-  plugin.on('filePanel', 'createWorkspaceReducerEvent', (name: string, workspaceTemplateName: WorkspaceTemplate, isEmpty = false, cb: (err: Error, result?: string | number | boolean | Record<string, any>) => void) => {
-    createWorkspace(name, workspaceTemplateName, null, isEmpty, cb)
+  plugin.on('templateSelection', 'createWorkspaceReducerEvent', (name: string, workspaceTemplateName: WorkspaceTemplate, opts: any, isEmpty = false, cb: (err: Error, result?: string | number | boolean | Record<string, any>) => void, isGitRepo: boolean) => {
+    createWorkspace(name, workspaceTemplateName, opts, isEmpty, cb, isGitRepo)
+  })
+
+  plugin.on('templateSelection', 'generateWorkspaceReducerEvent', async () => {
+    generateWorkspace()
+  })
+
+  plugin.on('templateSelection', 'addTemplateToWorkspaceReducerEvent', (workspaceTemplateName: WorkspaceTemplate, opts: any, isEmpty = false, cb: (err: Error, result?: string | number | boolean | Record<string, any>) => void) => {
+    populateWorkspace(workspaceTemplateName, opts, isEmpty, cb)
+  })
+
+  plugin.on('templateexplorermodal', 'addTemplateToWorkspaceReducerEvent', (workspaceTemplateName: WorkspaceTemplate, opts: any, isEmpty = false, cb: (err: Error, result?: string | number | boolean | Record<string, any>) => void) => {
+    populateWorkspace(workspaceTemplateName, opts, isEmpty, cb)
+  })
+
+  plugin.on('filePanel', 'createWorkspaceReducerEvent', (name: string, workspaceTemplateName: WorkspaceTemplate, isEmpty = false, cb: (err: Error, result?: string | number | boolean | Record<string, any>) => void, isGitRepo: boolean) => {
+    createWorkspace(name, workspaceTemplateName, null, isEmpty, cb, isGitRepo)
   })
 
   plugin.on('filePanel', 'renameWorkspaceReducerEvent', (oldName: string, workspaceName: string, cb: (err: Error, result?: string | number | boolean | Record<string, any>) => void) => {
@@ -40,6 +57,14 @@ export const listenOnPluginEvents = (filePanelPlugin) => {
     uploadFile(target, dir, cb)
   })
 
+  plugin.on('filePanel', 'uploadFolderReducerEvent', (dir: string, target, cb: (err: Error, result?: string | number | boolean | Record<string, any>) => void) => {
+    uploadFolder(target, dir, cb)
+  })
+
+  plugin.on('filePanel', 'switchToWorkspace', async (workspace) => {
+    await switchToWorkspace(workspace.name)
+  })
+
   plugin.on('fileDecorator', 'fileDecoratorsChanged', async (items: fileDecoration[]) => {
     setFileDecorators(items)
   })
@@ -64,6 +89,7 @@ export const listenOnPluginEvents = (filePanelPlugin) => {
       currentCheck = currentCheck + '/' + value
       await folderAdded(currentCheck)
     }
+    dispatch(focusElement([{ key: file, type: 'file' }]))
   })
 }
 
@@ -96,6 +122,10 @@ export const listenOnProviderEvents = (provider) => (reducerDispatch: React.Disp
     await switchToWorkspace(workspaceProvider.workspace)
   })
 
+  provider.event.on('refresh', () => {
+    fetchWorkspaceDirectory('/')
+  })
+
   provider.event.on('connected', () => {
     plugin.fileManager.setMode('localhost')
     dispatch(setMode('localhost'))
@@ -108,7 +138,7 @@ export const listenOnProviderEvents = (provider) => (reducerDispatch: React.Disp
     dispatch(loadLocalhostRequest())
   })
 
-  provider.event.on('fileExternallyChanged', (path: string, content: string) => {
+  provider.event.on('fileExternallyChanged', (path: string, content: string, showAlert: boolean = true) => {
     const config = plugin.registry.get('config').api
     const editor = plugin.registry.get('editor').api
 
@@ -117,14 +147,17 @@ export const listenOnProviderEvents = (provider) => (reducerDispatch: React.Disp
 
     if (config.get('currentFile') === path) {
       // if it's the current file and the content is different:
-      dispatch(displayNotification(
-        path + ' changed',
-        'This file has been changed outside of Remix IDE.',
-        'Replace by the new content', 'Keep the content displayed in Remix',
-        () => {
-          editor.setText(path, content)
-        }
-      ))
+      if (showAlert){
+        dispatch(displayNotification(
+          path + ' changed',
+          'This file has been changed outside of Remix IDE.',
+          'Replace by the new content', 'Keep the content displayed in Remix',
+          () => {
+            editor.setText(path, content)
+          }
+        ))} else {
+        editor.setText(path, content)
+      }
     } else {
       // this isn't the current file, we can silently update the model
       editor.setText(path, content)
@@ -163,6 +196,13 @@ const removePluginActions = (plugin, cb: (err: Error, result?: string | number |
 }
 
 const fileAdded = async (filePath: string) => {
+  if (isElectron()) {
+    const path = extractParentFromKey(filePath) || ROOT_PATH
+    const isExpanded = await plugin.call('filePanel', 'isExpanded', path)
+
+    if (!isExpanded) return
+  }
+
   await dispatch(fileAddedSuccess(filePath))
   if (filePath.includes('_test.sol')) {
     plugin.emit('newTestFileCreated', filePath)
@@ -172,9 +212,13 @@ const fileAdded = async (filePath: string) => {
 const folderAdded = async (folderPath: string) => {
   const provider = plugin.fileManager.currentFileProvider()
   const path = extractParentFromKey(folderPath) || ROOT_PATH
+  if (isElectron()) {
+    const isExpanded = await plugin.call('filePanel', 'isExpanded', path)
+    if (!isExpanded) return
+  }
 
-  const promise = new Promise((resolve) => {
-    provider.resolveDirectory(path, (error, fileTree) => {
+  const promise: Promise<FileTree> = new Promise((resolve) => {
+    provider.resolveDirectory(path, (error, fileTree: FileTree) => {
       if (error) console.error(error)
       resolve(fileTree)
     })
@@ -196,8 +240,9 @@ const fileRemoved = async (removePath: string) => {
 const fileRenamed = async (oldPath: string) => {
   const provider = plugin.fileManager.currentFileProvider()
   const path = extractParentFromKey(oldPath) || ROOT_PATH
-  const promise = new Promise((resolve) => {
-    provider.resolveDirectory(path, (error, fileTree) => {
+
+  const promise: Promise<FileTree> = new Promise((resolve) => {
+    provider.resolveDirectory(path, (error, fileTree: FileTree) => {
       if (error) console.error(error)
 
       resolve(fileTree)

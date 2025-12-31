@@ -1,8 +1,8 @@
 /* global ethereum */
 import React from 'react' // eslint-disable-line
-import {Plugin} from '@remixproject/engine'
-import {JsonDataRequest, RejectRequest, SuccessRequest} from '../providers/abstract-provider'
-import {IProvider} from './abstract-provider'
+import { Plugin } from '@remixproject/engine'
+import { JsonDataRequest, RejectRequest, SuccessRequest } from '../providers/abstract-provider'
+import { IProvider } from './abstract-provider'
 
 export abstract class InjectedProvider extends Plugin implements IProvider {
   options: {[id: string]: any} = {}
@@ -42,10 +42,14 @@ export abstract class InjectedProvider extends Plugin implements IProvider {
     }
   }
 
-  askPermission(throwIfNoInjectedProvider) {
+  async askPermission(throwIfNoInjectedProvider) {
     const web3Provider = this.getInjectedProvider()
     if (typeof web3Provider !== 'undefined' && typeof web3Provider.request === 'function') {
-      web3Provider.request({method: 'eth_requestAccounts'})
+      try {
+        await web3Provider.request({ method: 'eth_requestAccounts' })
+      } catch (error) {
+        throw new Error(this.notFound())
+      }
     } else if (throwIfNoInjectedProvider) {
       throw new Error(this.notFound())
     }
@@ -61,7 +65,12 @@ export abstract class InjectedProvider extends Plugin implements IProvider {
       this.call('notification', 'toast', this.notFound())
       throw new Error(this.notFound())
     } else {
-      this.askPermission(true)
+      try {
+        await this.askPermission(true)
+      } catch (error) {
+        this.call('notification', 'toast', 'Please make sure your Injected Provider is connected to Remix.')
+        throw new Error(this.notFound())
+      }
     }
     return {}
   }
@@ -80,36 +89,46 @@ export abstract class InjectedProvider extends Plugin implements IProvider {
       this.call('notification', 'toast', 'No injected provider (e.g Metamask) has been found.')
       return resolve({
         jsonrpc: '2.0',
-        error: 'no injected provider found',
+        error: { message: 'no injected provider found', code: -32603 },
         id: data.id
       })
     }
     try {
       let resultData
-      if (web3Provider.send) resultData = await web3Provider.send(data.method, data.params)
-      else if (web3Provider.request)
-        resultData = await web3Provider.request({
-          method: data.method,
-          params: data.params
-        })
+      if (web3Provider.request) resultData = await web3Provider.request({ method: data.method, params: data.params })
+      else if (web3Provider.send) resultData = await web3Provider.send(data.method, data.params)
       else {
-        resolve({jsonrpc: '2.0', error: 'provider not valid', id: data.id})
+        resolve({ jsonrpc: '2.0', error: { message: 'provider not valid', code: -32603 }, id: data.id })
         return
       }
       if (resultData) {
         if (resultData.jsonrpc && resultData.jsonrpc === '2.0') {
           resultData = resultData.result
         }
-        resolve({jsonrpc: '2.0', result: resultData, id: data.id})
+        resolve({ jsonrpc: '2.0', result: resultData, id: data.id })
       } else {
-        resolve({jsonrpc: '2.0', error: 'no return data provided', id: data.id})
+        resolve({ jsonrpc: '2.0', result: null, id: data.id })
       }
     } catch (error) {
-      resolve({
-        jsonrpc: '2.0',
-        error: error.data && error.data.message ? error.data.message : error.message,
-        id: data.id
-      })
+      if (error.data && error.data.originalError && error.data.originalError.data) {
+        resolve({
+          jsonrpc: '2.0',
+          error: error.data.originalError,
+          id: data.id
+        })
+      } else if (error.data && error.data.message) {
+        resolve({
+          jsonrpc: '2.0',
+          error: error.data && error.data,
+          id: data.id
+        })
+      } else {
+        resolve({
+          jsonrpc: '2.0',
+          error,
+          id: data.id
+        })
+      }
     }
   }
 }

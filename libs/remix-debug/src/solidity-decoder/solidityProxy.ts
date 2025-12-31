@@ -31,7 +31,7 @@ export class SolidityProxy {
   /**
     * retrieve the compiled contract name at the @arg vmTraceIndex (cached)
     *
-    * @param {Int} vmTraceIndex  - index in the vm trave where to resolve the executed contract name
+    * @param {Int} vmTraceIndex  - index in the vm trace where to resolve the executed contract name
     * @return {Object} a contract object
     */
   async contractObjectAt (vmTraceIndex: number) {
@@ -64,7 +64,7 @@ export class SolidityProxy {
     */
   async extractStatesDefinitions (address: string) {
     const compilationResult = await this.compilationResult(address)
-    if (!this.cache.contractDeclarations[address]) {      
+    if (!this.cache.contractDeclarations[address]) {
       this.cache.contractDeclarations[address] = extractContractDefinitions(compilationResult.data.sources)
     }
     if (!this.cache.statesDefinitions[address]) {
@@ -91,7 +91,7 @@ export class SolidityProxy {
   /**
     * extract the state variables of the given compiled @arg vmtraceIndex (cached)
     *
-    * @param {Int} vmTraceIndex  - index in the vm trave where to resolve the state variables
+    * @param {Int} vmTraceIndex  - index in the vm trace where to resolve the state variables
     * @param {String} address  - contract address
     * @return {Object} - returns state variables of @args vmTraceIndex
     */
@@ -122,7 +122,7 @@ export class SolidityProxy {
   }
 
   /**
-   * get the filename refering to the index from the compilation result
+   * get the filename referring to the index from the compilation result
    *
    * @param {Int} index  - index of the filename
    * @param {Object} compilationResult  - current compilation result

@@ -1,7 +1,7 @@
 import category from './categories'
 import {
   isLowLevelCall, isTransfer, isExternalDirectCall, isEffect, isLocalCallGraphRelevantNode, isSelfdestructCall,
-  isDeleteUnaryOperation, isPayableFunction, isConstructor, getFullQuallyfiedFuncDefinitionIdent, hasFunctionBody,
+  isDeleteUnaryOperation, isPayableFunction, isConstructor, getFullQualifiedFuncDefinitionIdent, hasFunctionBody,
   isConstantFunction, isWriteOnStateVariable, isStorageVariableDeclaration, isCallToNonConstLocalFunction,
   getFullQualifiedFunctionCallIdent
 } from './staticAnalysisCommon'
@@ -50,7 +50,7 @@ export default class constantFunctions implements AnalyzerModule {
           func['potentiallyshouldBeConst'] = false
         } else {
           func['potentiallyshouldBeConst'] = this.checkIfShouldBeConstant(
-            getFullQuallyfiedFuncDefinitionIdent(
+            getFullQualifiedFuncDefinitionIdent(
               contract.node,
               func.node,
               func.parameters
@@ -65,20 +65,20 @@ export default class constantFunctions implements AnalyzerModule {
       })
       contract.functions.filter((func: FunctionHLAst) => hasFunctionBody(func.node)).forEach((func: FunctionHLAst) => {
         if (isConstantFunction(func.node) !== func['potentiallyshouldBeConst']) {
-          const funcName: string = getFullQuallyfiedFuncDefinitionIdent(contract.node, func.node, func.parameters)
+          const funcName: string = getFullQualifiedFuncDefinitionIdent(contract.node, func.node, func.parameters)
           let comments: string = (hasModifiers) ? 'Note: Modifiers are currently not considered by this static analysis.' : ''
           comments += (multipleContractsWithSameName) ? 'Note: Import aliases are currently not supported by this static analysis.' : ''
           if (func['potentiallyshouldBeConst']) {
             warnings.push({
               warning: `${funcName} : Potentially should be constant/view/pure but is not. ${comments}`,
               location: func.node.src,
-              more: `https://solidity.readthedocs.io/en/${version}/contracts.html#view-functions`
+              more: `https://docs.soliditylang.org/en/${version}/contracts.html#view-functions`
             })
           } else {
             warnings.push({
               warning: `${funcName} : Is constant but potentially should not be. ${comments}`,
               location: func.node.src,
-              more: `https://solidity.readthedocs.io/en/${version}/contracts.html#view-functions`
+              more: `https://docs.soliditylang.org/en/${version}/contracts.html#view-functions`
             })
           }
         }

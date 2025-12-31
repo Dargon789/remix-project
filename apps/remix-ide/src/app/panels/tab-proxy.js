@@ -10,7 +10,7 @@ const profile = {
   kind: 'other'
 }
 
-export class TabProxy extends Plugin {
+export default class TabProxy extends Plugin {
   constructor (fileManager, editor) {
     super(profile)
     this.event = new EventEmitter()
@@ -22,6 +22,7 @@ export class TabProxy extends Plugin {
     this.loadedTabs = []
     this.dispatch = null
     this.themeQuality = 'dark'
+    this.maximize = false
   }
 
   async onActivation () {
@@ -146,7 +147,24 @@ export class TabProxy extends Plugin {
       }
     })
 
-    this.on('manager', 'pluginActivated', ({ name, location, displayName, icon, description }) => {
+    this.on('fileManager', 'openDiff', (commit) => {
+      const hash = commit.hashModified? commit.hashModified.substring(0,6): 'Working Tree'
+      const name =  `${commit.path} (${hash})`
+      this.addTab(name, name, async () => {
+        await this.fileManager.diff(commit)
+        this.event.emit('openDiff', commit)
+        this.emit('openDiff', commit)
+      },
+      async () => {
+        this.removeTab(name)
+        await this.fileManager.closeDiff(commit)
+        this.event.emit('closeDiff', commit)
+        this.emit('closeDiff', commit)
+      })
+      this.tabsApi.activateTab(name)
+    })
+
+    this.on('manager', 'pluginActivated', ({ name, location, displayName, icon, description, show = true }) => {
       if (location === 'mainPanel') {
         this.addTab(
           name,
@@ -161,9 +179,10 @@ export class TabProxy extends Plugin {
             this.call('manager', 'deactivatePlugin', name)
           },
           icon,
-          description
+          description,
+          show
         )
-        this.switchTab(name)
+        show && this.switchTab(name)
       }
     })
 
@@ -174,7 +193,7 @@ export class TabProxy extends Plugin {
     this.on('fileDecorator', 'fileDecoratorsChanged', async (items) => {
       this.tabsApi.setFileDecorations(items)
     })
-    
+
     try {
       this.themeQuality = (await this.call('theme', 'currentTheme') ).quality
     } catch (e) {
@@ -185,6 +204,10 @@ export class TabProxy extends Plugin {
 
   focus (name) {
     this.emit('switchApp', name)
+    const tabIndex = this.loadedTabs.findIndex(tab => tab.name === name)
+    if (tabIndex !== -1) {
+      this.loadedTabs[tabIndex].show = true
+    }
     this.tabsApi.activateTab(name)
   }
 
@@ -224,8 +247,27 @@ export class TabProxy extends Plugin {
     this.removeTab(oldName)
   }
 
-  addTab (name, title, switchTo, close, icon, description = '') {
+  /**
+   *
+   * @param {string} name
+   * @param {string} title
+   * @param {Function} switchTo
+   * @param {Function} close
+   * @param {string} icon
+   * @param {string} description
+   * @returns
+   */
+  addTab (name, title, switchTo, close, icon, description = '', show = true) {
     if (this._handlers[name]) return this.renderComponent()
+
+    if ((name.endsWith('.vy') && icon === undefined) || title.includes('Vyper')) {
+      icon = 'assets/img/vyperLogo2.webp'
+    }
+    if (title === 'Solidity Compile Details') {
+      icon = 'assets/img/solidity.webp'
+    }
+
+
 
     var slash = name.split('/')
     const tabPath = slash.reverse()
@@ -246,7 +288,8 @@ export class TabProxy extends Plugin {
             title,
             icon,
             tooltip: name,
-            iconClass: getPathIcon(name)
+            iconClass: getPathIcon(name),
+            show
           })
           formatPath.shift()
           if (formatPath.length > 0) {
@@ -263,7 +306,8 @@ export class TabProxy extends Plugin {
                 title: duplicateTabTitle,
                 icon,
                 tooltip: duplicateTabTooltip || duplicateTabTitle,
-                iconClass: getPathIcon(duplicateTabName)
+                iconClass: getPathIcon(duplicateTabName),
+                show
               }
             }
           }
@@ -277,7 +321,8 @@ export class TabProxy extends Plugin {
         title,
         icon,
         tooltip: description || title,
-        iconClass: getPathIcon(name)
+        iconClass: getPathIcon(name),
+        show
       })
     }
 
@@ -288,17 +333,30 @@ export class TabProxy extends Plugin {
   removeTab (name, currentFileTab) {
     delete this._handlers[name]
     let previous = currentFileTab
+    if(!this.loadedTabs.find(tab => tab.name === name)) return // prevent removing tab that doesn't exist
     this.loadedTabs = this.loadedTabs.filter((tab, index) => {
       if (!previous && tab.name === name) {
-        if(index - 1  >= 0 && this.loadedTabs[index - 1])
-          previous = this.loadedTabs[index - 1]
-        else if (index + 1 && this.loadedTabs[index + 1]) 
-          previous = this.loadedTabs[index + 1]
+        previous = this.getPreviousVisibleTab(index)
+        if (!previous) previous = this.getNextVisibleTab(index)
       }
       return tab.name !== name
     })
     this.renderComponent()
     if (previous) this.switchTab(previous.name)
+  }
+
+  getPreviousVisibleTab (index) {
+    for (let i = index - 1; i >= 0; i--) {
+      if (this.loadedTabs[i].show) return this.loadedTabs[i]
+    }
+    return null
+  }
+
+  getNextVisibleTab (index) {
+    for (let i = index + 1; i < this.loadedTabs.length; i++) {
+      if (this.loadedTabs[i].show) return this.loadedTabs[i]
+    }
+    return null
   }
 
   addHandler (type, fn) {
@@ -320,6 +378,7 @@ export class TabProxy extends Plugin {
       onZoomOut={state.onZoomOut}
       onReady={state.onReady}
       themeQuality={state.themeQuality}
+      maximize={this.maximize}
     />
   }
 
@@ -343,7 +402,9 @@ export class TabProxy extends Plugin {
     const onZoomIn = () => this.editor.editorFontSize(1)
     const onZoomOut = () => this.editor.editorFontSize(-1)
 
-    const onReady = (api) => { this.tabsApi = api }
+    const onReady = (api) => {
+      this.tabsApi = api
+    }
 
     this.dispatch({
       plugin: this,

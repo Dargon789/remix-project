@@ -1,0 +1,62 @@
+{
+    "productName": "Remix-Desktop",
+    "appId": "org.ethereum.remix-ide",
+    "asar": true,
+    "generateUpdatesFilesForAllChannels": false,
+    "icon": "assets",
+    "afterSign": null,
+    "afterAllArtifactBuild": null,
+    "files": [
+        "build/**/*",
+        "node_modules/node-pty-prebuilt-multiarch/**/*"
+    ],
+    "publish": [
+        {
+            "provider": "github",
+            "owner": "remix-project-org",
+            "repo": "remix-desktop",
+            "releaseType": "draft",
+            "publishAutoUpdate": true
+        }
+    ],
+    "mac": {
+        "target": "dir",
+        "category": "public.app-category.productivity",
+        "icon": "assets/icon.png",
+        "darkModeSupport": true,
+        "hardenedRuntime": false,
+        "gatekeeperAssess": false,
+        "identity": null
+    },
+    "nsis": {
+        "createDesktopShortcut": "always",
+        "allowToChangeInstallationDirectory": true,
+        "oneClick": false,
+        "shortcutName": "Remix Desktop Insiders",
+        "differentialPackage": false
+    },
+    "win": {
+        "target": "dir",
+        "icon": "assets/icon.png",
+        "forceCodeSigning": false
+    },
+    "deb": {},
+    "linux": {
+        "target": [
+            "dir"        
+        ],
+        "category": "WebBrowser",
+        "icon": "assets"
+    },
+    "directories": {
+        "output": "release"
+    },
+    "protocols": [
+        {
+            "name": "Remix",
+            "schemes": [
+                "remix"
+            ]
+        }
+    ]
+}

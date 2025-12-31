@@ -61,7 +61,19 @@ const forks = {
     },
     {
       number: 15537394,
-      name: 'merge'
+      name: 'paris'
+    },
+    {
+      number: 17034870,
+      name: 'shanghai'
+    },
+    {
+      number: 19426587,
+      name: 'cancun'
+    },
+    {
+      number: 19426587,
+      name: 'prague'
     }
   ],
   3: [

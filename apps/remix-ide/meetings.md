@@ -21,8 +21,8 @@ we move the documentation to the remix-ide repository
 
 ## medium post policy
 
-Any post that relates to Ethereum could be put in the remix plublication.
-Although that is not mandatory and left up to the writter.
+Any post that relates to Ethereum could be put in the remix publication.
+Although that is not mandatory and left up to the writer.
 
 ## guided tour
 
@@ -32,12 +32,12 @@ It will work as a native plugin, started by default.
 Each other native plugin can request a guided tour with:
 `this.call('guidedtour', 'start', 'debugger')`
 Other type of plugin may be able to the native plugin guided tour but we won't push this if the integration is not working out of the box. 
-We rather update the remix-plugin doc saying that `guided tour framework name` is the prefferred one.
+We rather update the remix-plugin doc saying that `guided tour framework name` is the preferred one.
 
-## web site
+## website
 
-we commit to have a public web site for general info about us.
-It won't be a branded web site.
+we commit to have a public website for general info about us.
+It won't be a branded website.
 We are asking a designer for improving the Liana's logo.
 We don't need to have a framework (hugo, hexo) if that's too much overhead.
 @liana is testing out the easiest solution.
@@ -49,7 +49,7 @@ it will be set of file:
  - solidity contract
  - test contract
 
-we only support md for now and move to supporting other format if needded.
+we only support md for now and move to supporting other format if needed.
 It requires the "test" native plugin to extend its API.
 @rob/@francois are managing that.
 
@@ -89,7 +89,7 @@ RemixProject/IDE
 ## browser test
 
 a PR (https://github.com/ethereum/remix-ide/pull/1961) is waiting for merging @yann
-It iwll be followed by other PRs, aiming to improve process of writting browser tests.
+It will be followed by other PRs, aiming to improve process of writing browser tests.
 
 ## desktop version
 
@@ -98,7 +98,7 @@ first steps :
 - put all the public link to the local package
 - basic electron wrapper
 
-## out reach beyond community
+## outreach beyond community
 
 We agree it is something interesting to explore, 
 It is not 100% dev tool nor remix so we should organize call with other people from EF at least

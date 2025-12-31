@@ -38,7 +38,7 @@ module.exports = {
       .openFile('ipfs/QmXYUS1ueS22EqNVRaKuZa31EgHLjKZ8uTM8vWhQLxa3pw')
   },
 
-  /* Disableing the test untill refactoring and the new swarm usage
+  
   'Publish on Swarm': '' + function (browser: NightwatchBrowser) {
     browser
       .click('#publishOnSwarm')
@@ -54,7 +54,7 @@ module.exports = {
       })
       .click('[data-id="publishToStorage-modal-footer-ok-react"]')
   },
-  */
+  
 
   'Should publish contract metadata to ipfs on deploy': function (browser: NightwatchBrowser) {
     browser

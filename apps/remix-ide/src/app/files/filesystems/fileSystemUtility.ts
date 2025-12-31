@@ -1,7 +1,20 @@
-import { hashMessage } from "ethers/lib/utils"
+import { hashMessage } from "ethers"
 import JSZip from "jszip"
 import { fileSystem } from "../fileSystem"
-const _paq = window._paq = window._paq || []
+import { trackMatomoEvent } from '@remix-api'
+
+import type { MatomoEvent } from '@remix-api'
+
+// Helper function to track events using MatomoManager instance
+function track(event: MatomoEvent) {
+  try {
+    if (typeof window !== 'undefined' && window._matomoManagerInstance) {
+      window._matomoManagerInstance.trackEvent(event)
+    }
+  } catch (error) {
+    // Silent fail for tracking
+  }
+}
 export class fileSystemUtility {
   migrate = async (fsFrom: fileSystem, fsTo: fileSystem) => {
     try {
@@ -26,14 +39,14 @@ export class fileSystemUtility {
         console.log('file migration successful')
         return true
       } else {
-        _paq.push(['trackEvent', 'Migrate', 'error', 'hash mismatch'])
+        track({ category: 'Migrate', action: 'error', name: 'hash mismatch', isClick: false })
         console.log('file migration failed falling back to ' + fsFrom.name)
         fsTo.loaded = false
         return false
       }
     } catch (err) {
       console.log(err)
-      _paq.push(['trackEvent', 'Migrate', 'error', err && err.message])
+      track({ category: 'Migrate', action: 'error', name: err && err.message, isClick: false })
       console.log('file migration failed falling back to ' + fsFrom.name)
       fsTo.loaded = false
       return false
@@ -53,9 +66,9 @@ export class fileSystemUtility {
       const date = today.getFullYear() + '-' + (today.getMonth() + 1) + '-' + today.getDate()
       const time = today.getHours() + 'h' + today.getMinutes() + 'min'
       this.saveAs(blob, `remix-backup-at-${time}-${date}.zip`)
-      _paq.push(['trackEvent','Backup','download','preload'])
+      track({ category: 'Backup', action: 'download', name: 'preload', isClick: true })
     } catch (err) {
-      _paq.push(['trackEvent','Backup','error',err && err.message])
+      track({ category: 'Backup', action: 'error', name: err && err.message, isClick: false })
       console.log(err)
     }
   }
@@ -71,7 +84,6 @@ export class fileSystemUtility {
       }
     }
   }
-
 
   /**
        * copy the folder recursively
@@ -150,7 +162,6 @@ export class fileSystemUtility {
   }
 }
 
-
 /* eslint-disable no-template-curly-in-string */
 export const migrationTestData = {
   '.workspaces': {
@@ -175,9 +186,9 @@ export const migrationTestData = {
               '.workspaces/workspace_test/test_contracts/1_Storage.sol': {
                 content: 'testing'
               },
-              '.workspaces/workspace_test/test_contracts/artifacts': {
+              '.workspaces/workspace_test/artifacts': {
                 children: {
-                  '.workspaces/workspace_test/test_contracts/artifacts/Storage_metadata.json': {
+                  '.workspaces/workspace_test/artifacts/Storage_metadata.json': {
                     content: '{ "test": "data" }'
                   }
                 }

@@ -1,10 +1,10 @@
 import { Plugin } from '@remixproject/engine'
-import { compile } from '@remix-project/remix-solidity'
+import { compile, Language } from '@remix-project/remix-solidity'
 import { util } from '@remix-project/remix-lib'
 import { toChecksumAddress } from '@ethereumjs/util'
 import { fetchContractFromEtherscan } from './helpers/fetch-etherscan'
 import { fetchContractFromSourcify } from './helpers/fetch-sourcify'
-import { UUPSDeployedByteCode, UUPSCompilerVersion, UUPSOptimize, UUPSRuns, UUPSEvmVersion, UUPSLanguage } from './constants/uups'
+import { UUPSDeployedByteCode, UUPSCompilerVersion, UUPSOptimize, UUPSRuns, UUPSEvmVersion, UUPSLanguage, UUPSDeployedByteCodeV5, UUPSCompilerVersionV5, UUPSEvmVersionv5, UUPSOptimizev5 } from './constants/uups'
 
 const profile = {
   name: 'fetchAndCompile',
@@ -18,7 +18,7 @@ export class FetchAndCompile extends Plugin {
   constructor () {
     super(profile)
     this.unresolvedAddresses = []
-    this.sourceVerifierNetWork = ['Main', 'Rinkeby', 'Ropsten', 'Goerli']
+    this.sourceVerifierNetWork = ['Main', 'Sepolia']
   }
 
   /**
@@ -30,14 +30,14 @@ export class FetchAndCompile extends Plugin {
   }
 
   /**
-   * Fetch compiliation metadata from source-Verify from a given @arg contractAddress - https://github.com/ethereum/source-verify
+   * Fetch compilation metadata from source-Verify from a given @arg contractAddress - https://github.com/ethereum/source-verify
    * Put the artifacts in the file explorer
    * Compile the code using Solidity compiler
    * Returns compilation data
    *
-   * @param {string} contractAddress - Address of the contrac to resolve
+   * @param {string} contractAddress - Address of the contract to resolve
    * @param {string} deployedBytecode - deployedBytecode of the contract
-   * @param {string} targetPath - Folder where to save the compilation arfefacts
+   * @param {string} targetPath - Folder where to save the compilation artifacts
    * @return {CompilerAbstract} - compilation data targeting the given @arg contractAddress
    */
   async resolve (contractAddress, codeAtAddress, targetPath) {
@@ -58,8 +58,6 @@ export class FetchAndCompile extends Plugin {
 
     if (codeAtAddress === '0x' + UUPSDeployedByteCode) { // proxy
       const settings = {
-        version: UUPSCompilerVersion,
-        language: UUPSLanguage,
         evmVersion: UUPSEvmVersion,
         optimize: UUPSOptimize,
         runs: UUPSRuns
@@ -71,8 +69,38 @@ export class FetchAndCompile extends Plugin {
       const compData = await compile(
         compilationTargets,
         settings,
+        UUPSLanguage,
+        UUPSCompilerVersion,
         async (url, cb) => {
-          // we first try to resolve the content from the compilation target using a more appropiate path
+          // we first try to resolve the content from the compilation target using a more appropriate path
+          const path = `${targetPath}/${url}`
+          if (compilationTargets[path] && compilationTargets[path].content) {
+            return cb(null, compilationTargets[path].content)
+          } else {
+            await this.call('contentImport', 'resolveAndSave', url).then((result) => cb(null, result)).catch((error) => cb(error.message))
+          }
+        })
+      await this.call('compilerArtefacts', 'addResolvedContract', contractAddress, compData)
+      return compData
+    }
+
+    if (codeAtAddress === '0x' + UUPSDeployedByteCodeV5) { // proxy
+      const settings = {
+        evmVersion: UUPSEvmVersionv5,
+        optimize: UUPSOptimizev5,
+        runs: UUPSRuns
+      }
+      const proxyUrl = 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.0.0/contracts/proxy/ERC1967/ERC1967Proxy.sol'
+      const compilationTargets = {
+        'proxy.sol': { content: `import "${proxyUrl}";` }
+      }
+      const compData = await compile(
+        compilationTargets,
+        settings,
+        UUPSLanguage,
+        UUPSCompilerVersionV5,
+        async (url, cb) => {
+          // we first try to resolve the content from the compilation target using a more appropriate path
           const path = `${targetPath}/${url}`
           if (compilationTargets[path] && compilationTargets[path].content) {
             return cb(null, compilationTargets[path].content)
@@ -127,7 +155,7 @@ export class FetchAndCompile extends Plugin {
         this.call('notification', 'toast', e.message)
         setTimeout(_ => this.emit('notFound', contractAddress), 0) // plugin framework returns a time out error although it actually didn't find the source...
         this.unresolvedAddresses.push(contractAddress)
-        return localCompilation()    
+        return localCompilation()
       }
     }
 
@@ -147,20 +175,37 @@ export class FetchAndCompile extends Plugin {
         }
       }
     }
-    const { settings, compilationTargets } = data
-   
+    const { config, compilationTargets, version } = data
+    /*
+    * If the remappings are defined in the config, we need to update them to point to the targetPath
+    * it's beeing disabled for the moment.
+    */
+    /*if (config && config.settings && config.settings.remappings) {
+      console.log(config.settings.remappings)
+      config.settings.remappings = config.settings.remappings.map((remapping) => {
+        let [virtual, path] = remapping.split('=')
+        if (virtual.includes(':')) {
+          let [scope, path] = virtual.split(':')
+          virtual = `${targetPath}/${scope}:${path}`
+        }
+        return `${virtual}=${targetPath}/${path}`
+      })
+    }*/
+
     try {
-      setTimeout(_ => this.emit('compiling', settings), 0)
+      setTimeout(_ => this.emit('compiling', config.settings), 0)
       const compData = await compile(
         compilationTargets,
-        settings,
+        config.settings,
+        config.language as Language,
+        version as string,
         async (url, cb) => {
-          // we first try to resolve the content from the compilation target using a more appropiate path
+          // we first try to resolve the content from the compilation target using a more appropriate path
           const path = `${targetPath}/${url}`
           if (compilationTargets[path] && compilationTargets[path].content) {
             return cb(null, compilationTargets[path].content)
           } else {
-            await this.call('contentImport', 'resolveAndSave', url).then((result) => cb(null, result)).catch((error) => cb(error.message))
+            cb('dependency not found ' + url)
           }
         })
       await this.call('compilerArtefacts', 'addResolvedContract', contractAddress, compData)

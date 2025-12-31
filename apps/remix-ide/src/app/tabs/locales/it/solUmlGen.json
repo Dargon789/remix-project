@@ -1,0 +1,10 @@
+{
+  "solUmlGen.pngDownload": "Scarica come PNG",
+  "solUmlGen.pdfDownload": "Scarica come PDF",
+  "solUmlGen.pngDownloadTooltip": "Scarica diagramma UML come un file PNG",
+  "solUmlGen.pdfDownloadTooltip": "Scarica diagramma UML come un file PDF",
+  "solUmlGen.text1": "Per visualizzare il tuo contratto come un diagramma UML",
+  "solUmlGen.text2": "Clicca con il destro del mouse sul file del tuo contratto",
+  "solUmlGen.clickOn": "Clicca su",
+  "solUmlGen.generateUML": "Genera UML"
+}

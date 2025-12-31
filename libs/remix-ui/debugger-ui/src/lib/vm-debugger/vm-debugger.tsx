@@ -8,7 +8,7 @@ import ReturnValuesPanel from './dropdown-panel' // eslint-disable-line
 import FullStoragesChangesPanel from './full-storages-changes' // eslint-disable-line
 import GlobalVariables from './global-variables' // eslint-disable-line
 
-export const VmDebugger = ({vmDebugger: {registerEvent}, currentBlock, currentReceipt, currentTransaction, debugging}) => {
+export const VmDebugger = ({ vmDebugger: { registerEvent }, currentBlock, currentReceipt, currentTransaction, debugging }) => {
   const [calldataPanel, setCalldataPanel] = useState(null)
   const [memoryPanel, setMemoryPanel] = useState(null)
   const [callStackPanel, setCallStackPanel] = useState(null)
@@ -40,7 +40,7 @@ export const VmDebugger = ({vmDebugger: {registerEvent}, currentBlock, currentRe
     registerEvent &&
       registerEvent('traceManagerStorageUpdate', (calldata, header) => {
         setStoragePanel(() => {
-          return {calldata, header}
+          return { calldata, header }
         })
       })
     registerEvent &&
@@ -62,7 +62,7 @@ export const VmDebugger = ({vmDebugger: {registerEvent}, currentBlock, currentRe
   return (
     <div id="vmdebugger" className="d-flex">
       <div
-        className="d-flex flex-column px-2 pr-2"
+        className="d-flex flex-column px-2 pe-2"
         style={{
           flex: 1,
           overflow: 'hidden',
@@ -77,7 +77,7 @@ export const VmDebugger = ({vmDebugger: {registerEvent}, currentBlock, currentRe
         <GlobalVariables className="pb-1" block={currentBlock} receipt={currentReceipt} tx={currentTransaction} />
       </div>
       <div
-        className="d-flex flex-column px-2 pl-2"
+        className="d-flex flex-column px-2 ps-2"
         style={{
           flex: 1,
           overflow: 'hidden',

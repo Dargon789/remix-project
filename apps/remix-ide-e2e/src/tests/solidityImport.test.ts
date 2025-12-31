@@ -28,11 +28,8 @@ module.exports = {
     browser.addFile('Untitled3.sol', sources[2]['Untitled3.sol'])
       .clickLaunchIcon('solidity')
       .click('[data-id="compilerContainerCompileBtn"]')
-      .isVisible({
-        selector: "//span[contains(.,'not found /Untitled11')]",
-        locateStrategy: 'xpath',
-        timeout: 120000,
-      })
+      .waitForElementContainsText('*[data-id="compiledErrors"]', 'not found', 10000)
+      .waitForElementContainsText('*[data-id="compiledErrors"]', 'Untitled11.sol', 10000)
 
   },
 
@@ -90,47 +87,64 @@ module.exports = {
 
   'Test NPM Import (with unpkg.com) #group3': function (browser: NightwatchBrowser) {
     browser
-      .setSolidityCompilerVersion('soljson-v0.8.7+commit.e28d00a7.js')
-      .waitForElementPresent({
-        selector: `//*[@data-id='compilerloaded' and @data-version='soljson-v0.8.7+commit.e28d00a7.js']`,
-        locateStrategy: 'xpath',
-        timeout: 120000
-      })
       .clickLaunchIcon('filePanel')
       .click('li[data-id="treeViewLitreeViewItemREADME.txt"')
       .addFile('Untitled9.sol', sources[8]['Untitled9.sol'])
-      // avoid invalid source issues
-      .isVisible({
-        selector: '*[data-id="treeViewLitreeViewItem.deps/npm/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol"]',
-        timeout: 120000,
-        suppressNotFoundErrors: true
-      })
+      .clickLaunchIcon('solidity')
+      .setSolidityCompilerVersion('soljson-v0.8.20+commit.a1b79de6.js')
+      .click('[data-id="compilerContainerCompileBtn"]')
+      .clickLaunchIcon('filePanel')
+      .expandAllFolders()
+      // Manually expand .deps folder structure
+      .waitForElementVisible('*[data-id="treeViewDivDraggableItem.deps"]', 60000)
+      .waitForElementVisible('*[data-id="treeViewDivDraggableItem.deps/npm"]', 60000)
+      .waitForElementVisible('*[data-id="treeViewDivDraggableItem.deps/npm/@openzeppelin"]', 60000)
+      // Check if versioned OpenZeppelin folder exists
+      .waitForElementPresent('*[data-id^="treeViewDivDraggableItem.deps/npm/@openzeppelin/contracts@"]', 60000)
+      .verifyContracts(['test13', 'ERC20'], { wait: 30000 })
+  },
+
+  'Test NPM Import (with unpkg.com) and the package.json contains a module remapping #group13': function (browser: NightwatchBrowser) {
+    browser
+      .clickLaunchIcon('filePanel')
+      .click('li[data-id="treeViewLitreeViewItemREADME.txt"')
+      .addFile('package.json', sources[9]['package.json'])
+      .addFile('Untitled10.sol', sources[9]['Untitled10.sol'])
+      .clickLaunchIcon('solidity')
+      .click('[data-id="compilerContainerCompileBtn"]')
+      .expandAllFolders()
+      // Check if versioned OpenZeppelin folder exists (remapped via package.json)
+      .waitForElementPresent('*[data-id^="treeViewDivDraggableItem.deps/npm/@openzeppelin/contracts@"]', 60000)
+      .verifyContracts(['test15', 'ERC20'], { wait: 30000 })
+  },
+
+  'Test NPM Import (prefixed by `npm:` and remappings.txt), it should import from two different solidity version #group3': function (browser: NightwatchBrowser) {
+    browser
+      .clickLaunchIcon('filePanel')
+      .click('li[data-id="treeViewLitreeViewItemREADME.txt"')
+      .addFile('remappings.txt', sources[10]['remappings.txt'])
+      .addFile('Untitled11.sol', sources[10]['Untitled11.sol'])
       .clickLaunchIcon('solidity')
       .click('[data-id="compilerContainerCompileBtn"]')
       .clickLaunchIcon('filePanel')
-      .isVisible({
-        selector: '*[data-id="treeViewLitreeViewItem.deps/npm/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol"]',
-        timeout: 120000,
-      })
-      .verifyContracts(['test13', 'ERC20'], { wait: 30000 })
+      .verifyContracts(['Address', 'Strings'], { wait: 30000 })
   },
 
   'Test NPM Import (the version is specified in package.json) #group4': function (browser: NightwatchBrowser) {
     browser
       // clone https://github.com/yann300/remix-reward
       .clickLaunchIcon('filePanel')
-      .waitForElementVisible('[data-id="workspaceMenuDropdown"]')
-      .click('[data-id="workspaceMenuDropdown"]')
-      .waitForElementVisible('[data-id="workspaceclone"]')
-      .click('[data-id="workspaceclone"]')
-      .waitForElementVisible('[data-id="fileSystemModalDialogModalBody-react"]')
-      .click('[data-id="fileSystemModalDialogModalBody-react"]')
+      .waitForElementVisible('[data-id="github-dropdown-toggle"]')
+      .click('[data-id="github-dropdown-toggle"]')
+      .waitForElementVisible('[data-id="github-dropdown-item-clone"]')
+      .click('[data-id="github-dropdown-item-clone"]')
+      .waitForElementVisible('[data-id="topbarModalModalDialogModalBody-react"]')
+      .click('[data-id="topbarModalModalDialogModalBody-react"]')
       .waitForElementVisible('[data-id="modalDialogCustomPromptTextClone"]')
-      .setValue('[data-id="modalDialogCustomPromptTextClone"]', 'https://github.com/yann300/remix-reward')
-      .click('[data-id="fileSystem-modal-footer-ok-react"]')
+      .setValue('[data-id="modalDialogCustomPromptTextClone"]', 'https://github.com/remix-project-org/remix-reward')
+      .click('[data-id="topbarModal-modal-footer-ok-react"]')
       .waitForElementPresent('.fa-spinner')
-      .pause(5000)
-      .waitForElementNotPresent('.fa-spinner')
+      .waitForElementNotPresent('.fa-spinner', 120000)
       .waitForElementVisible('*[data-id="treeViewLitreeViewItem.git"]')
       .waitForElementContainsText('[data-id="workspacesSelect"]', 'remix-reward')
       .clickLaunchIcon('solidity')
@@ -159,7 +173,7 @@ const sources = [
     'Untitled5.sol': { content: 'import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v2.3.0/contracts/token/ERC20/ERC20.sol"; contract test8 {}' }
   },
   {
-    'Untitled6.sol': { content: 'import "https://github.com/OpenZeppelin/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol"; contract test10 {}' }
+    'Untitled6.sol': { content: 'import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol"; contract test10 {}' }
   },
   {
     'Untitled7.sol': { content: 'import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/master/contracts/token/ERC20/ERC20.sol"; contract test11 {}' }
@@ -169,5 +183,23 @@ const sources = [
   },
   {
     'Untitled9.sol': { content: 'pragma solidity ^0.8.0; import "@openzeppelin/contracts/token/ERC20/ERC20.sol"; contract test13 {}' }
+  },
+  {
+    'Untitled10.sol': { content: 'pragma solidity ^0.8.0; import "@module_remapping/token/ERC20/ERC20.sol"; contract test15 {}' },
+    'package.json': { content: `{
+    "dependencies": {
+      "@module_remapping": "npm:@openzeppelin/contracts@4.9.0"
+  }
+}` }
+  },
+  {
+    'Untitled11.sol': { content: `import "@openzeppelin/contracts@5.0.2/utils/Strings.sol";
+import "@openzeppelin/contracts@4.7.3/utils/Address.sol";` },
+    'remappings.txt': { content: `@openzeppelin/contracts@4.7.3/=npm:@openzeppelin/contracts@4.7.3/
+@openzeppelin/contracts@4.8.3/=npm:@openzeppelin/contracts@4.8.3/
+@openzeppelin/contracts@4.9.6/=npm:@openzeppelin/contracts@4.9.6/
+@openzeppelin/contracts@5.0.2/=npm:@openzeppelin/contracts@5.0.2/
+@openzeppelin/contracts@5.1.0/=npm:@openzeppelin/contracts@5.1.0/
+` }
   }
 ]

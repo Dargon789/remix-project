@@ -12,8 +12,6 @@ const versionData = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development'
 }
 
-fs.writeFileSync('./apps/remix-ide/src/assets/version.json', JSON.stringify(versionData))
-
 // Nx plugins for webpack.
 module.exports = composePlugins(withNx(), withReact(), (config) => {
   // Update the webpack config as needed here.
@@ -59,7 +57,7 @@ module.exports = composePlugins(withNx(), withReact(), (config) => {
     })
   )
 
-  // souce-map loader
+  //  source-map loader
   config.module.rules.push({
     test: /\.js$/,
     use: ['source-map-loader'],

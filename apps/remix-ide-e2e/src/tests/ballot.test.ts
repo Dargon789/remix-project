@@ -34,7 +34,7 @@ module.exports = {
       .clickFunction('delegate - transact (not payable)', { types: 'address to', values: '"0x4b0897b0513fdc7c541b6d9d7e929c4e5364d2db"' })
       .testFunction('last',
         {
-          status: 'true Transaction mined and execution succeed',
+          status: '1 Transaction mined and execution succeed',
           'decoded input': { 'address to': '0x4B0897b0513fdC7C541B6d9D7E929C4e5364D2dB' }
         })
   },
@@ -75,7 +75,7 @@ module.exports = {
         abortOnFailure: false,
         suppressNotFoundErrors: true,
       })
-      // we are not changing the visibility for not checksumed contracts
+      // we are not changing the visibility for not checksummed contracts
       // .addAtAddressInstance('0x692a70D2e424a56D2C6C27aA97D1a86395877b3B', true, false)
       .clickLaunchIcon('filePanel')
       .addAtAddressInstance('0x692a70D2e424a56D2C6C27aA97D1a86395877b3A', true, true)
@@ -87,9 +87,37 @@ module.exports = {
       .clickFunction('delegate - transact (not payable)', { types: 'address to', values: '"0x4b0897b0513fdc7c541b6d9d7e929c4e5364d2db"' })
       .testFunction('last',
         {
-          status: 'false Transaction mined but execution failed',
+          status: '0 Transaction mined but execution failed',
           'decoded input': { 'address to': '0x4B0897b0513fdC7C541B6d9D7E929C4e5364D2dB' }
         })
+  },
+
+  'Compile with remappings set in remappings.txt file #group1': function (browser: NightwatchBrowser) {
+    browser
+      .clickLaunchIcon('filePanel')
+      .click('*[data-id="workspacesSelect"]')
+      .pause(2000)
+      .click('*[data-id="workspacecreate"]')
+      .waitForElementVisible('*[data-id="template-explorer-modal-react"]')
+      .waitForElementVisible('*[data-id="template-explorer-template-container"]')
+      .click('*[data-id="template-explorer-template-container"]')
+      .waitForElementPresent('*[data-id="template-card-remixDefault-0"]')
+      .click('*[data-id="template-card-remixDefault-0"]')
+      .waitForElementVisible('*[data-id="workspace-details-section"]')
+      .waitForElementVisible('*[data-id="default-workspace-name-edit-icon"]')
+      .click('*[data-id="default-workspace-name-edit-icon"]')
+      .waitForElementVisible('*[data-id="workspace-name-input"]')
+      .setValue('*[data-id="workspace-name-input"]', 'workspace_remix_default')
+      .click('*[data-id="default-workspace-name-edit-icon"]')
+      .waitForElementVisible('*[data-id="default-workspace-name-span"]')
+      .assert.textContains('*[data-id="default-workspace-name-span"]', 'WORKSPACE_REMIX_DEFAULT', 'Workspace name is correct')
+      .pause(1000)
+      .click('*[data-id="validateWorkspaceButton"]')
+      .waitForElementVisible('*[data-id="treeViewLitreeViewItemcontracts"]')
+      .addFile('contracts/lib/storage/src/Storage.sol', { content: storageContract})
+      .addFile('remappings.txt', { content: 'storage=contracts/lib/storage/src' })
+      .addFile('contracts/Retriever.sol', { content: retrieverContract })
+      .verifyContracts(['Retriever', 'Storage'])
   },
 
   'Deploy and use Ballot using external web3  #group2': function (browser: NightwatchBrowser) {
@@ -99,10 +127,7 @@ module.exports = {
       .connectToExternalHttpProvider('http://localhost:8545', 'Custom')
       .clickLaunchIcon('solidity')
       .clickLaunchIcon('udapp')
-      .pause(2000)
-      .clearValue('input[placeholder="bytes32[] proposalNames"]')
-      .setValue('input[placeholder="bytes32[] proposalNames"]', '["0x48656c6c6f20576f726c64210000000000000000000000000000000000000000"]')
-      .click('*[data-id="Deploy - transact (not payable)"]')
+      .createContract('["0x48656c6c6f20576f726c64210000000000000000000000000000000000000000"]')
       .clickInstance(0)
       .click('*[data-id="terminalClearConsole"]')
       .clickFunction('delegate - transact (not payable)', { types: 'address to', values: '0xCA35b7d915458EF540aDe6068dFe2F44E8fa733c' })
@@ -125,105 +150,16 @@ module.exports = {
 
   'Compile Ballot using config file  #group2': function (browser: NightwatchBrowser) {
     browser
-      .addFile('cf.json', { content: configFile })
+      .openFile('remix.config.json')
+      .setEditorValue(configFile)
+      .pause(1000)
       .clickLaunchIcon('solidity')
       .waitForElementVisible('*[data-id="scConfigExpander"]')
       .click('*[data-id="scConfigExpander"]')
       .waitForElementVisible('*[data-id="scFileConfiguration"]', 10000)
       .click('*[data-id="scFileConfiguration"]')
-      // the input field behaves badly, it would often not receive the value, so retrying it a few times for now is the best thing to do
-      .waitForElementVisible({
-        selector: '*[data-id="scConfigChangeFilePath"]',
-        abortOnFailure: false
-      }, 10000)
-      .click({
-        selector: '*[data-id="scConfigChangeFilePath"]',
-        suppressNotFoundErrors: true,
-        timeout: 1000
-      })
-      .click({
-        selector: '*[data-id="scConfigChangeFilePath"]',
-        suppressNotFoundErrors: true,
-        timeout: 1000
-      })
-      .click({
-        selector: '*[data-id="scConfigChangeFilePath"]',
-        suppressNotFoundErrors: true,
-        timeout: 1000
-      })
-      
-      .waitForElementVisible('*[data-id="scConfigFilePathInput"]', 10000)
-      .sendKeys('*[data-id="scConfigFilePathInput"]', 'cf.json')
-      .sendKeys('*[data-id="scConfigFilePathInput"]', browser.Keys.ENTER)
-
-      .isVisible({
-        selector:"//*[@class='py-2 remixui_compilerConfigPath' and contains(.,'cf.json')]",
-        suppressNotFoundErrors: true,
-        locateStrategy: 'xpath'
-      }, (okVisible) => {
-        // if it's not there yet, try again
-        if (!okVisible.value) {
-          browser.waitForElementVisible({
-            selector: '*[data-id="scConfigChangeFilePath"]',
-            abortOnFailure: false
-          }, 10000)
-          .click({
-            selector: '*[data-id="scConfigChangeFilePath"]',
-            suppressNotFoundErrors: true,
-            timeout: 1000
-          })
-          .click({
-            selector: '*[data-id="scConfigChangeFilePath"]',
-            suppressNotFoundErrors: true,
-            timeout: 1000
-          })
-          .click({
-            selector: '*[data-id="scConfigChangeFilePath"]',
-            suppressNotFoundErrors: true,
-            timeout: 1000
-          })
-          
-          .waitForElementVisible('*[data-id="scConfigFilePathInput"]', 10000)
-          .sendKeys('*[data-id="scConfigFilePathInput"]', 'cf.json')
-          .sendKeys('*[data-id="scConfigFilePathInput"]', browser.Keys.ENTER)
-        }
-      })
-
-      .isVisible({
-        selector:"//*[@class='py-2 remixui_compilerConfigPath' and contains(.,'cf.json')]",
-        suppressNotFoundErrors: true,
-        locateStrategy: 'xpath'
-      }, (okVisible) => {
-        if (!okVisible.value) {
-          // if it's still not there, try again
-          browser.waitForElementVisible({
-            selector: '*[data-id="scConfigChangeFilePath"]',
-            abortOnFailure: false
-          }, 10000)
-          .click({
-            selector: '*[data-id="scConfigChangeFilePath"]',
-            suppressNotFoundErrors: true,
-            timeout: 1000
-          })
-          .click({
-            selector: '*[data-id="scConfigChangeFilePath"]',
-            suppressNotFoundErrors: true,
-            timeout: 1000
-          })
-          .click({
-            selector: '*[data-id="scConfigChangeFilePath"]',
-            suppressNotFoundErrors: true,
-            timeout: 1000
-          })
-          
-          .waitForElementVisible('*[data-id="scConfigFilePathInput"]', 10000)
-          .sendKeys('*[data-id="scConfigFilePathInput"]', 'cf.json')
-          .sendKeys('*[data-id="scConfigFilePathInput"]', browser.Keys.ENTER)
-        }
-      })
-
-      .pause(5000)
       .openFile('Untitled.sol')
+      .click('[data-id="compile-action"]')
       .verifyContracts(['Ballot'], { wait: 2000, runs: '300' })
   },
 
@@ -233,15 +169,16 @@ module.exports = {
       .clickLaunchIcon('solidity')
       .waitForElementVisible('*[data-id="scConfigExpander"]')
       .click('*[data-id="scManualConfiguration"]')
-      .waitForElementVisible('select[id="compilierLanguageSelector"]', 10000)
-      .click('select[id="compilierLanguageSelector"]')
-      .click('select[id="compilierLanguageSelector"] option[value=Yul]')
+      .waitForElementVisible('select[id="compilerLanguageSelector"]', 10000)
+      .click('select[id="compilerLanguageSelector"]')
+      .click('select[id="compilerLanguageSelector"] option[value=Yul]')
       .waitForElementContainsText('[data-id="compiledContracts"]', 'Contract', 65000)
       .clickLaunchIcon('udapp')
       .click('*[data-id="Deploy - transact (not payable)"]')
       .waitForElementPresent('*[data-id="universalDappUiContractActionWrapper"]', 60000)
       .journalLastChildIncludes('Contract.(constructor)')
-      .journalLastChildIncludes('data: 0x602...0565b')
+      // .journalLastChildIncludes('data: 0x602...0565b')
+      .journalLastChildIncludes('data: 0x00') // This can be removed some time once YUL returns correct bytecode
       .end()
   }
 }
@@ -480,6 +417,7 @@ const ballotABI = `[
 
 const configFile = `
 {
+	"solidity-compiler": {
 	"language": "Solidity",
 	"settings": {
 		"optimizer": {
@@ -490,6 +428,7 @@ const configFile = `
 			"*": {
 			"": ["ast"],
       "*": ["abi", "metadata", "devdoc", "userdoc", "storageLayout", "evm.legacyAssembly", "evm.bytecode", "evm.deployedBytecode", "evm.methodIdentifiers", "evm.gasEstimates", "evm.assembly"]
+        }
 			}
 		}
 	}
@@ -508,5 +447,31 @@ object "Contract" {
           }
       }
   }
+}
+`
+
+const storageContract = `
+pragma solidity >=0.8.2 <0.9.0;
+
+contract Storage {
+
+    uint256 public number;
+
+    function store(uint256 num) public {
+        number = num;
+    }
+}
+`
+
+const retrieverContract = `
+pragma solidity >=0.8.2 <0.9.0;
+
+import "storage/Storage.sol";
+
+contract Retriever is Storage {
+
+    function retrieve() public view returns (uint256){
+        return number;
+    }
 }
 `

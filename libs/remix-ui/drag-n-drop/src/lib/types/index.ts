@@ -4,7 +4,7 @@ export interface FileType {
   path: string,
   name: string,
   isDirectory: boolean,
-  type: 'folder' | 'file' | 'gist',
+  type: 'folder' | 'file',
   child?: File[]
 }
 
@@ -17,6 +17,7 @@ export interface MoveContextType {
   moveFile: (dest: string, src: string) => void
   moveFolder: (dest: string, src: string) => void
   currentlyMoved: (file: { path: string, isDirectory: boolean }) => void
+  dragStatus: (isDragged: boolean) => void
 }
 
 export interface DraggableType {
@@ -31,4 +32,5 @@ export interface DragType {
   children: ReactNode
   onFileMoved: (dest: string, src: string) => void
   onFolderMoved: (dest: string, src: string) => void
+  dragStatus: (isDragged: boolean) => void
 }

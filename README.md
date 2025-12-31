@@ -6,14 +6,14 @@
 <div align="center">
 
 
-[![CircleCI](https://img.shields.io/circleci/build/github/ethereum/remix-project?logo=circleci)](https://circleci.com/gh/ethereum/remix-project)
+[![CircleCI](https://img.shields.io/circleci/build/github/remix-project-org/remix-project?logo=circleci)](https://circleci.com/gh/remix-project-org/remix-project)
 [![Documentation Status](https://readthedocs.org/projects/remix-ide/badge/?version=latest)](https://remix-ide.readthedocs.io/en/latest/index.html)
-[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat&logo=github)](https://github.com/ethereum/remix-project/blob/master/CONTRIBUTING.md)
-[![GitHub contributors](https://img.shields.io/github/contributors/ethereum/remix-project?style=flat&logo=github)](https://github.com/ethereum/remix-project/blob/master/CONTRIBUTING.md)
-[![Awesome Remix](https://img.shields.io/badge/Awesome--Remix-resources-green?logo=awesomelists)](https://github.com/ethereum/awesome-remix)
-![GitHub](https://img.shields.io/github/license/ethereum/remix-project)
-[![Gitter Chat](https://img.shields.io/badge/Gitter%20-chat-brightgreen?style=plastic&logo=gitter)](https://gitter.im/ethereum/remix)
-[![Twitter Follow](https://img.shields.io/twitter/follow/ethereumremix?style=flat&logo=twitter&color=green)](https://twitter.com/ethereumremix)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat&logo=github)](https://github.com/remix-project-org/remix-project/blob/master/CONTRIBUTING.md)
+[![GitHub contributors](https://img.shields.io/github/contributors/remix-project-org/remix-project?style=flat&logo=github)](https://github.com/remix-project-org/remix-project/graphs/contributors)
+[![Awesome Remix](https://img.shields.io/badge/Awesome--Remix-resources-green?logo=awesomelists)](https://github.com/remix-project-org/awesome-remix)
+[![GitHub](https://img.shields.io/github/license/remix-project-org/remix-project)](https://github.com/remix-project-org/remix-project/blob/master/LICENSE)
+[![Discord](https://img.shields.io/badge/join-discord-brightgreen.svg?style=flat&logo=discord)](https://discord.gg/qhpCQGWkmf)
+[![X Follow](https://img.shields.io/twitter/follow/ethereumremix?style=flat&logo=x&color=green)](https://x.com/ethereumremix)
 
 </div>
 
@@ -28,18 +28,17 @@
 
 :point_right: Supported browsers: Firefox v100.0.1 & Chrome v101.0.4951.64. No support for Remix's use on tablets or smartphones or telephones.
 
-**Remix Desktop IDE**, see releases: [https://github.com/ethereum/remix-desktop/releases](https://github.com/ethereum/remix-desktop/releases)
+**Remix Desktop IDE**, see releases: [https://github.com/remix-project-org/remix-desktop/releases](https://github.com/remix-project-org/remix-desktop/releases)
 
-![Remix screenshot](https://github.com/ethereum/remix-project/raw/master/apps/remix-ide/remix-screenshot-400h.png)
+![Remix screenshot](https://github.com/remix-project-org/remix-project/raw/master/apps/remix-ide/remix-screenshot-400h.png)
 
-**VSCode extension**, see: [Ethereum-Remix](https://marketplace.visualstudio.com/items?itemName=RemixProject.ethereum-remix)
 
 ## Remix libraries 
 Remix libraries are essential for Remix IDE's native plugins. Read more about libraries [here](libs/README.md)
 
 ## Offline Usage
 
-The `gh-pages` branch of [remix-live](https://github.com/ethereum/remix-live) always has the latest stable build of Remix. It contains a ZIP file with the entire build. Download it to use offline.
+The `gh-pages` branch of [remix-live](https://github.com/remix-project-org/remix-live) always has the latest stable build of Remix. It contains a ZIP file with the entire build. Download it to use offline.
 
 Note: It contains the latest supported version of Solidity available at the time of the packaging. Other compiler versions can be used online only.
 
@@ -61,7 +60,7 @@ yarn global add nx
 * Clone the GitHub repository (`wget` need to be installed first):
 
 ```bash
-git clone https://github.com/ethereum/remix-project.git
+git clone https://github.com/remix-project-org/remix-project.git
 ```
 * Build and Run `remix-project`:
 
@@ -69,7 +68,7 @@ git clone https://github.com/ethereum/remix-project.git
 2. Install dependencies: `yarn install` or simply run `yarn`
 3. Build Remix libraries: `yarn run build:libs`
 4. Build Remix project: `yarn build`
-5. Build and run project server: `yarn serve`. Optionally, run `yarn serve:hot` to enable hot module reload for frontend updates.
+5. Build and run project server: `yarn serve`. Optionally, run `yarn serve:hot` to enable hot module to reload for frontend updates.
 
 Open `http://127.0.0.1:8080` in your browser to load Remix IDE locally.
 
@@ -86,6 +85,15 @@ Build can be found in `remix-project/dist/apps/remix-ide` directory.
 yarn run serve:production
 ```
 Production build will be served by default to `http://localhost:8080/` or `http://127.0.0.1:8080/`
+
+## Nx Cloud caching
+
+This repo uses Nx Cloud to speed up builds and keep CI deterministic via remote caching.
+
+- Configuration: `nx.json` uses the Nx Cloud runner and reads the token from the `NX_CLOUD_ACCESS_TOKEN` environment variable.
+- CI: CircleCI jobs automatically use `--cloud` when the token is present; for forked PRs (no secrets), they fall back to local-only caching. Build logs are stored under `logs/nx-build.log`.
+- Verifying locally: run the same target twice; the second run should print “Nx read the output from the cache”. Example: `nx run remix-ide:build` and run it again.
+- Insights: View cache analytics and run details at https://nx.app (links appear in Nx output when the token is configured).
 
 ## Docker:
 
@@ -121,7 +129,7 @@ Then go to http://localhost:8080 and you can use your Remix instance.
 
 To fetch the docker-compose file without cloning this repo run:
 ```
-curl https://raw.githubusercontent.com/ethereum/remix-project/master/docker-compose.yaml > docker-compose.yaml
+curl https://raw.githubusercontent.com/remix-project-org/remix-project/master/docker-compose.yaml > docker-compose.yaml
 ```
 
 ### Troubleshooting
@@ -146,25 +154,15 @@ For example, to run unit tests of `remix-analyzer`, use `nx test remix-analyzer`
 
 ## Browser Testing
 
-To run the Selenium tests via Nightwatch:
+To run the tests via Nightwatch:
 
- - Install Selenium for the first time: `yarn run selenium-install`
- - Run a selenium server: `yarn run selenium`
+ - Install webdrivers for the first time: `yarn install_webdriver`
  - Build & Serve Remix: `yarn serve`
- - Run all the end-to-end tests:
 
-    for Firefox: `yarn run nightwatch_local_firefox`, or 
-
-    for Google Chrome: `yarn run nightwatch_local_chrome`
- - Run a specific test case instead, use a command like this: 
- 
-		- yarn run nightwatch_local_ballot
-		
-	The package.json file contains a list of all the tests you can run.
         
 **NOTE:**
 
-- **The `ballot` tests suite** requires running `ganache-cli` locally.
+- **The `ballot` tests suite** requires running `ganache` locally.
 
 - **The `remixd` tests suite** requires running `remixd` locally.
 
@@ -172,8 +170,6 @@ To run the Selenium tests via Nightwatch:
 ```
     gist_token = <token> // token should have permission to create a gist
 ```
-
-### Using 'select_test' for locally running specific tests
 
 There is a script to allow selecting the browser and a specific test to run:
 
@@ -191,7 +187,7 @@ You need to have
 
 ### Splitting tests with groups
 
-Groups can be used to group tests in a test file together. The advantage is you can avoid running long test files when you want to focus on a specific set of tests within a test file.x
+Groups can be used to group tests in a test file together. The advantage is you can avoid running long test files when you want to focus on a specific set of tests within a test file.
 
 These groups only apply to the test file, not across all test files. So for example group1 in the ballot is not related to a group1 in another test file.
 
@@ -221,10 +217,10 @@ module.exports = {
     init(browser, done) // , 'http://localhost:8080', false)
   },
 ```
-- change package JSON to locally run all group tests:
+- change package JSON to locally run all group tests (point to appropriate config file depending on environment):
 
 ```
-    "nightwatch_local_debugger": "yarn run build:e2e && nightwatch --config dist/apps/remix-ide-e2e/nightwatch.js dist/apps/remix-ide-e2e/src/tests/debugger_*.spec.js --env=chrome",
+    "nightwatch_local_debugger": "yarn run build:e2e && nightwatch --config dist/apps/remix-ide-e2e/nightwatch-chrome.js dist/apps/remix-ide-e2e/src/tests/debugger_*.spec.js --env=chrome",
 ```
 
 - run the build script to build the test files if you want to run the locally
@@ -246,12 +242,6 @@ This script will give you an options menu, just select the test you want
 ```
 yarn run select_test
 ```
-#### method 2
-
-```
-yarn run group_test --test=debugger --group=10 --env=chromeDesktop
-```
-- specify chromeDesktop to see the browser action, use 'chrome' to run it headless
 
 ### Run the same (flaky) test across all instances in CircleCI
 
@@ -279,10 +269,12 @@ parameters:
     default: true
 ```
 
-
 ## Important Links
 
+- Official website: https://remix.live
 - Official documentation: https://remix-ide.readthedocs.io/en/latest/
-- Curated list of Remix resources, tutorials etc.: https://github.com/ethereum/awesome-remix
+- Curated list of Remix resources: https://github.com/remix-project-org/awesome-remix
 - Medium: https://medium.com/remix-ide
-- Twitter: https://twitter.com/ethereumremix
+- Linkedin: https://www.linkedin.com/company/ethereum-remix
+- X: https://x.com/ethereumremix
+- Join Discord: https://discord.gg/qhpCQGWkmf

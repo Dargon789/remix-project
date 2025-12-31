@@ -1,73 +1,44 @@
 'use strict'
-import Web3 from 'web3'
+import { toNumber, ethers } from 'ethers'
 
-export function loadWeb3 (url) {
-  if (!url) url = 'http://localhost:8545'
-  const web3 = new Web3()
-  web3.setProvider(new Web3.providers.HttpProvider(url))
-  extend(web3)
-  return web3
+export function loadWeb3 (url = 'http://localhost:8545') {
+  const provider = new ethers.JsonRpcProvider(url)
+  extendProvider(provider)
+  return provider
 }
 
-export function extendWeb3 (web3) {
-  extend(web3)
-}
-
-export function setProvider (web3, url) {
-  web3.setProvider(new web3.providers.HttpProvider(url))
-}
-
-export function web3DebugNode (network) {
+export function web3DebugNode (networkid: string) {
   const web3DebugNodes = {
-    Main: 'https://rpc.archivenode.io/e50zmkroshle2e2e50zm0044i7ao04ym',
-    Rinkeby: 'https://remix-rinkeby.ethdevops.io',
-    Ropsten: 'https://remix-ropsten.ethdevops.io',
-    Goerli: 'https://remix-goerli.ethdevops.io',
-    Sepolia: 'https://remix-sepolia.ethdevops.io'
+    1: 'https://go.getblock.us/1552e4e35bcf4efe8a78897cba5557f9',
+    11155111: 'https://go.getblock.io/7fbe62b139884d2c9c1616ca0de8b5b2',
+    42161: 'https://go.getblock.io/d8fb0ccf25a646edaaf777d8abb10a62',
+    10: 'https://go.getblock.io/7ab36af4c9c346bbabab70e9c54d9c6c'
   }
-  if (web3DebugNodes[network]) {
-    return loadWeb3(web3DebugNodes[network])
+  if (web3DebugNodes[networkid]) {
+    return loadWeb3(web3DebugNodes[networkid])
   }
   return null
 }
 
-export function extend (web3) {
-  if (!web3.extend) {
-    return
-  }
-  // DEBUG
-  const methods = []
-  if (!(web3.debug && web3.debug.preimage)) {
-    methods.push(new web3.extend.Method({
-      name: 'preimage',
-      call: 'debug_preimage',
-      inputFormatter: [null],
-      params: 1
-    }))
+export function extendProvider (provider) { // Provider should be ethers.js provider
+
+  if (!provider.debug) provider.debug = {}
+
+  provider.debug.preimage = (key, cb) => {
+    provider.send('debug_preimage', [key])
+      .then(result => cb(null, result))
+      .catch(error => cb(error))
   }
 
-  if (!(web3.debug && web3.debug.traceTransaction)) {
-    methods.push(new web3.extend.Method({
-      name: 'traceTransaction',
-      call: 'debug_traceTransaction',
-      inputFormatter: [null, null],
-      params: 2
-    }))
+  provider.debug.traceTransaction = (txHash, options, cb) => {
+    provider.send('debug_traceTransaction', [txHash, options])
+      .then(result => cb(null, result))
+      .catch(error => cb(error))
   }
 
-  if (!(web3.debug && web3.debug.storageRangeAt)) {
-    methods.push(new web3.extend.Method({
-      name: 'storageRangeAt',
-      call: 'debug_storageRangeAt',
-      inputFormatter: [null, null, null, null, null],
-      params: 5
-    }))
-  }
-  if (methods.length > 0) {
-    web3.extend({
-      property: 'debug',
-      methods: methods,
-      properties: []
-    })
+  provider.debug.storageRangeAt = (txBlockHash, txIndex, address, start, maxSize, cb) => {
+    provider.send('debug_storageRangeAt', [txBlockHash, toNumber(txIndex), address, start, maxSize])
+      .then(result => cb(null, result))
+      .catch(error => cb(error))
   }
 }

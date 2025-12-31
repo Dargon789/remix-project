@@ -1,14 +1,14 @@
 'use strict'
-import {Plugin} from '@remixproject/engine'
-import {sourceMappingDecoder} from '@remix-project/remix-debug'
-import {CompilerAbstract} from '@remix-project/remix-solidity'
-import {CompilationResult} from '@remix-project/remix-solidity'
+import { Plugin } from '@remixproject/engine'
+import { sourceMappingDecoder } from '@remix-project/remix-debug'
+import { CompilerAbstract } from '@remix-project/remix-solidity'
+import { CompilationResult } from '@remix-project/remix-solidity'
 import CodeParserGasService from './services/code-parser-gas-service'
 import CodeParserCompiler from './services/code-parser-compiler'
 import CodeParserAntlrService from './services/code-parser-antlr-service'
-import CodeParserImports, {CodeParserImportsData} from './services/code-parser-imports'
+import CodeParserImports, { CodeParserImportsData } from './services/code-parser-imports'
 import React from 'react'
-import {Profile} from '@remixproject/plugin-utils'
+import { Profile } from '@remixproject/plugin-utils'
 import {
   ContractDefinitionAstNode,
   EventDefinitionAstNode,
@@ -21,9 +21,9 @@ import {
   StructDefinitionAstNode,
   VariableDeclarationAstNode
 } from '@remix-project/remix-analyzer'
-import {lastCompilationResult, RemixApi} from '@remixproject/plugin-api'
-import {antlr} from './types'
-import {ParseResult} from './types/antlr-types'
+import { lastCompilationResult, RemixApi } from '@remixproject/plugin-api'
+import { antlr } from './types'
+import { ParseResult } from './types/antlr-types'
 
 const profile: Profile = {
   name: 'codeParser',
@@ -167,16 +167,34 @@ export class CodeParser extends Plugin {
       await this.handleChangeEvents()
     })
 
+    this.on('solidity', 'compilerQueryParamsUpdated', async () => {
+      await this.call('editor', 'discardLineTexts')
+      await this.call('editor', 'clearErrorMarkers', [this.currentFile])
+      await this.handleChangeEvents()
+    })
+
+    this.on('solidity', 'compilerAppParamsUpdated', async () => {
+      await this.call('editor', 'discardLineTexts')
+      await this.call('editor', 'clearErrorMarkers', [this.currentFile])
+      await this.handleChangeEvents()
+    })
+
+    this.on('solidity', 'configFileChanged', async () => {
+      await this.call('editor', 'discardLineTexts')
+      await this.call('editor', 'clearErrorMarkers', [this.currentFile])
+      await this.handleChangeEvents()
+    })
+
     this.on('filePanel', 'setWorkspace', async () => {
       await this.call('fileDecorator', 'clearFileDecorators')
-      await this.importService.setFileTree()
+      await this.importService.updateDirectoryCacheTimeStamp()
     })
 
     this.on('fileManager', 'fileAdded', async () => {
-      await this.importService.setFileTree()
+      await this.importService.updateDirectoryCacheTimeStamp()
     })
     this.on('fileManager', 'fileRemoved', async () => {
-      await this.importService.setFileTree()
+      await this.importService.updateDirectoryCacheTimeStamp()
     })
 
     this.on('fileManager', 'currentFileChanged', async () => {
@@ -193,11 +211,19 @@ export class CodeParser extends Plugin {
     })
 
     this.on('config', 'configChanged', async (config) => {
-      await this.reload()
+      if (config.key === 'settings/auto-completion' ||
+        config.key === 'settings/display-errors' ||
+        config.key === 'settings/show-gas') {
+        await this.reload()
+      }
     })
 
     this.on('settings', 'configChanged', async (config) => {
-      await this.reload()
+      if (config.key === 'settings/auto-completion' ||
+        config.key === 'settings/display-errors' ||
+        config.key === 'settings/show-gas') {
+        await this.reload()
+      }
     })
 
     await this.compilerService.init()
@@ -368,7 +394,7 @@ export class CodeParser extends Plugin {
             } else if (visibility === 'private' || visibility === 'internal') {
               executionCost = estimationObj === null ? '-' : estimationObj.internal[fn]
             }
-            return {executionCost}
+            return { executionCost }
           } else {
             return {
               creationCost: estimationObj === null ? '-' : estimationObj.creation.totalCost,
@@ -477,40 +503,67 @@ export class CodeParser extends Plugin {
    */
   async definitionAtPosition(position: number) {
     const nodes = await this.nodesAtPosition(position)
-    let nodeDefinition: any
+    const nodeDefinition = {
+      'ast': null,
+      'parser': null
+    }
     let node: genericASTNode
-    if (nodes && nodes.length && !this.errorState) {
+    if (nodes && nodes.length) {
       node = nodes[nodes.length - 1]
-      nodeDefinition = node
+      let astNodeDefinition = node
       if (!isNodeDefinition(node)) {
-        nodeDefinition = (await this.declarationOf(node)) || node
+        astNodeDefinition = (await this.declarationOf(node)) || node
       }
       if (node.nodeType === 'ImportDirective') {
         for (const key in this.nodeIndex.flatReferences) {
           if (this.nodeIndex.flatReferences[key].id === node.sourceUnit) {
-            nodeDefinition = this.nodeIndex.flatReferences[key]
+            astNodeDefinition = this.nodeIndex.flatReferences[key]
           }
         }
       }
-      return nodeDefinition
-    } else {
-      const astNodes = await this.antlrService.listAstNodes()
-      if (astNodes && astNodes.length) {
-        for (const node of astNodes) {
-          if (node.range[0] <= position && node.range[1] >= position) {
-            if (nodeDefinition && nodeDefinition.range[0] < node.range[0]) {
-              nodeDefinition = node
-            }
-            if (!nodeDefinition) nodeDefinition = node
+
+      nodeDefinition.ast = astNodeDefinition
+    }
+    const astNodes = await this.antlrService.listAstNodes()
+    let parserNodeDefinition = null
+    if (astNodes && astNodes.length) {
+      for (const node of astNodes) {
+        if (node.range[0] <= position && node.range[1] >= position) {
+          if (parserNodeDefinition && parserNodeDefinition.range[0] < node.range[0]) {
+            parserNodeDefinition = node
           }
+          if (!parserNodeDefinition) parserNodeDefinition = node
         }
-        if (nodeDefinition && nodeDefinition.type && nodeDefinition.type === 'Identifier') {
-          const nodeForIdentifier = await this.findIdentifier(nodeDefinition)
-          if (nodeForIdentifier) nodeDefinition = nodeForIdentifier
+      }
+      if (parserNodeDefinition && parserNodeDefinition.type && parserNodeDefinition.type === 'Identifier') {
+        const nodeForIdentifier = await this.findIdentifier(parserNodeDefinition)
+        if (nodeForIdentifier) parserNodeDefinition = nodeForIdentifier
+      }
+      nodeDefinition.parser = parserNodeDefinition
+    }
+
+    /* if the AST node name & type is the same as the parser node name & type,
+    / then we can assume that the AST node is the definition,
+    / because the parser will always return most nodes it can find even with an error in the code
+    */
+
+    if (nodeDefinition.ast && nodeDefinition.parser) {
+      if (nodeDefinition.ast.name === nodeDefinition.parser.name && nodeDefinition.ast.nodeType === nodeDefinition.parser.type) {
+        return nodeDefinition.ast
+      } else {
+        // if there is a difference and the compiler has compiled correctly assume the ast node is the definition
+        if (this.compilerService.errorState === false) {
+          return nodeDefinition.ast
         }
-        return nodeDefinition
       }
     }
+
+    if (nodeDefinition.ast && !nodeDefinition.parser) {
+      return nodeDefinition.ast
+    }
+
+    return nodeDefinition.parser
+
   }
 
   async getContractNodes(contractName: string) {
@@ -674,7 +727,7 @@ export class CodeParser extends Plugin {
   async getNodeDocumentation(node: genericASTNode) {
     if ('documentation' in node && node.documentation && (node.documentation as any).text) {
       let text = ''
-      ;(node.documentation as any).text.split('\n').forEach((line) => {
+        ; (node.documentation as any).text.split('\n').forEach((line) => {
         text += `${line.trim()}\n`
       })
       return text

@@ -1,9 +1,8 @@
 import React from 'react' // eslint-disable-line
-import {format} from 'util'
-import {Plugin} from '@remixproject/engine'
-import {compile} from '@remix-project/remix-solidity'
-import {TransactionConfig} from 'web3-core'
-const _paq = (window._paq = window._paq || []) //eslint-disable-line
+import { format } from 'util'
+import { Plugin } from '@remixproject/engine'
+import { compile, CompilerSettings } from '@remix-project/remix-solidity'
+import { trackMatomoEvent } from '@remix-api'
 
 const profile = {
   name: 'solidity-script',
@@ -18,10 +17,10 @@ export class SolidityScript extends Plugin {
   }
 
   async execute(path: string, functionName: string = 'run') {
-    _paq.push(['trackEvent', 'SolidityScript', 'execute', 'script'])
+    trackMatomoEvent(this, { category: 'SolidityScript', action: 'execute', name: 'script', isClick: true })
     this.call('terminal', 'log', `Running free function '${functionName}' from ${path}...`)
     let content = await this.call('fileManager', 'readFile', path)
-    const params = await this.call('solidity', 'getCompilerParameters')
+    const params = await this.call('solidity', 'getCompilerQueryParameters')
 
     content = `
       // SPDX-License-Identifier: GPL-3.0
@@ -37,14 +36,26 @@ export class SolidityScript extends Plugin {
               ${functionName}();
           }
       }`
-    const targets = {'script.sol': {content}}
+    const targets = { 'script.sol': { content } }
 
     // compile
-    const compilation = await compile(targets, params, async (url, cb) => {
-      await this.call('contentImport', 'resolveAndSave', url)
-        .then((result) => cb(null, result))
-        .catch((error) => cb(error.message))
-    })
+    const settings: CompilerSettings = {
+      evmVersion: params.evmVersion,
+      optimizer: {
+        enabled: params.optimize,
+        runs: params.runs
+      }
+    }
+    const compilation = await compile(
+      targets,
+      settings,
+      params.language,
+      params.version,
+      async (url, cb) => {
+        await this.call('contentImport', 'resolveAndSave', url)
+          .then((result) => cb(null, result))
+          .catch((error) => cb(error.message))
+      })
 
     if (compilation.data.error) {
       this.call('terminal', 'log', compilation.data.error.formattedMessage)
@@ -55,6 +66,7 @@ export class SolidityScript extends Plugin {
       })
     }
 
+    await this.call('compilerArtefacts', 'saveCompilerAbstract', 'script.sol', compilation)
     // get the contract
     const contract = compilation.getContract('SolidityScript')
     if (!contract) {
@@ -62,26 +74,43 @@ export class SolidityScript extends Plugin {
       return
     }
     const bytecode = '0x' + contract.object.evm.bytecode.object
-    const web3 = await this.call('blockchain', 'web3VM')
+    const web3 = await this.call('blockchain', 'web3')
     const accounts = await this.call('blockchain', 'getAccounts')
     if (!accounts || accounts.length === 0) {
       throw new Error('no account available')
     }
 
     // deploy the contract
-    let tx: TransactionConfig = {
+    let tx: any = {
       from: accounts[0],
       data: bytecode
     }
-    const receipt = await web3.eth.sendTransaction(tx)
+    let receipt
+    const signer = await web3.getSigner(tx.from || 0)
+    try {
+      const { hash } = await signer.sendTransaction(tx)
+      receipt = await web3.getTransactionReceipt(hash)
+    } catch (e) {
+      this.call('terminal', 'logHtml', e.message)
+      return
+    }
+
     tx = {
       from: accounts[0],
       to: receipt.contractAddress,
       data: '0x69d4394b' // function remixRun() public
     }
-    const receiptCall = await web3.eth.sendTransaction(tx)
+    let receiptCall
 
-    const hhlogs = await web3.eth.getHHLogsForTx(receiptCall.transactionHash)
+    try {
+      const { hash } = await signer.sendTransaction(tx)
+      receiptCall = await web3.getTransactionReceipt(hash)
+    } catch (e) {
+      this.call('terminal', 'logHtml', e.message)
+      return
+    }
+
+    const hhlogs = await web3.remix.getHHLogsForTx(receiptCall.hash)
 
     if (hhlogs && hhlogs.length) {
       const finalLogs = (
@@ -104,7 +133,7 @@ export class SolidityScript extends Plugin {
           })}
         </div>
       )
-      _paq.push(['trackEvent', 'udapp', 'hardhat', 'console.log'])
+      trackMatomoEvent(this, { category: 'udapp', action: 'hardhat', name: 'console.log', isClick: false })
       this.call('terminal', 'logHtml', finalLogs)
     }
   }

@@ -1,5 +1,6 @@
 'use strict'
-import {  util } from '@remix-project/remix-lib'
+import { util } from '@remix-project/remix-lib'
+// import { bytesToHex } from '@ethereumjs/util'
 const { toHexPaddedString } = util
 import * as traceHelper from './traceHelper'
 
@@ -23,7 +24,7 @@ export class TraceAnalyser {
     const callStack = [tx.to]
     this.traceCache.pushCall(trace[0], 0, callStack[0], callStack.slice(0))
     if (traceHelper.isContractCreation(tx.to)) {
-      this.traceCache.pushContractCreation(tx.to, tx.input)
+      this.traceCache.pushContractCreation(tx.to, tx.data)
     }
     this.buildCalldata(0, this.trace[0], tx, true)
     for (let k = 0; k < this.trace.length; k++) {
@@ -67,7 +68,7 @@ export class TraceAnalyser {
   buildCalldata (index, step, tx, newContext) {
     let calldata = ''
     if (index === 0) {
-      calldata = tx.input
+      calldata = tx.input || tx.data
       this.traceCache.pushCallDataChanges(index, calldata)
     } else if (!newContext) {
       const lastCall = this.traceCache.callsData[this.traceCache.callDataChanges[this.traceCache.callDataChanges.length - 2]]
@@ -85,7 +86,7 @@ export class TraceAnalyser {
         offset = 2 * parseInt(toHexPaddedString(stack[stack.length - 4]), 16)
         size = 2 * parseInt(toHexPaddedString(stack[stack.length - 5]), 16)
       }
-      calldata = '0x' + memory.join('').substr(offset, size)
+      calldata = util.bytesToHex(memory).replace('0x', '').substring(offset, offset + size)
       this.traceCache.pushCallDataChanges(index + 1, calldata)
     }
   }
@@ -112,7 +113,6 @@ export class TraceAnalyser {
       this.traceCache.pushStoreChanges(index + 1, context.storageContext[context.storageContext.length - 1])
     } else if (traceHelper.isRevertInstruction(step)) {
       context.storageContext.pop()
-      this.traceCache.resetStoreChanges()
     }
     return context
   }

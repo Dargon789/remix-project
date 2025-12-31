@@ -1,25 +1,31 @@
-import React, {useEffect, useState} from 'react' // eslint-disable-line
-import {CompileErrors, ContractsFile, SolidityCompilerProps} from './types'
-import {CompilerContainer} from './compiler-container' // eslint-disable-line
-import {ContractSelection} from './contract-selection' // eslint-disable-line
-import {Toaster} from '@remix-ui/toaster' // eslint-disable-line
-import {ModalDialog} from '@remix-ui/modal-dialog' // eslint-disable-line
-import {Renderer} from '@remix-ui/renderer' // eslint-disable-line
-
+import React, { useContext, useEffect, useState } from 'react' // eslint-disable-line
+import { CompileErrors, ContractsFile, SolidityCompilerProps } from './types'
+import { CompilerContainer } from './compiler-container' // eslint-disable-line
+import { ContractSelection } from './contract-selection' // eslint-disable-line
+import { Toaster } from '@remix-ui/toaster' // eslint-disable-line
+import { ModalDialog } from '@remix-ui/modal-dialog' // eslint-disable-line
+import { Renderer } from '@remix-ui/renderer' // eslint-disable-line
+import { baseURLBin, baseURLWasm, pathToURL } from '@remix-project/remix-solidity'
+import * as packageJson from '../../../../../package.json'
 import './css/style.css'
+import { iSolJsonBinData, iSolJsonBinDataBuild } from '@remix-project/remix-lib'
+import { appPlatformTypes, platformContext } from '@remix-ui/app'
+
+const oldConfigPath = 'compiler_config.json'
+const remixConfigPath = 'remix.config.json'
 
 export const SolidityCompiler = (props: SolidityCompilerProps) => {
   const {
     api,
-    api: {currentFile, compileTabLogic, configurationSettings}
+    api: { currentFile, compileTabLogic, configurationSettings }
   } = props
+
   const [state, setState] = useState({
     isHardhatProject: false,
     isTruffleProject: false,
     isFoundryProject: false,
     workspaceName: '',
     currentFile,
-    configFilePath: 'compiler_config.json',
     loading: false,
     compileTabLogic: null,
     compiler: null,
@@ -29,21 +35,25 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
       title: '',
       message: null,
       okLabel: '',
-      okFn: () => {},
+      okFn: () => { },
       donotHideOnOkClick: false,
       cancelLabel: '',
-      cancelFn: () => {},
+      cancelFn: () => { },
       handleHide: null
-    }
+    },
+    solJsonBinData: null,
+    defaultVersion: packageJson.defaultVersion, // this default version is defined: in makeMockCompiler (for browser test)
   })
+
   const [currentVersion, setCurrentVersion] = useState('')
   const [hideWarnings, setHideWarnings] = useState<boolean>(false)
-  const [compileErrors, setCompileErrors] = useState<Record<string, CompileErrors>>({[currentFile]: api.compileErrors})
-  const [badgeStatus, setBadgeStatus] = useState<Record<string, {key: string; title?: string; type?: string}>>({})
+  const [compileErrors, setCompileErrors] = useState<Record<string, CompileErrors>>({ [currentFile]: api.compileErrors })
+  const [badgeStatus, setBadgeStatus] = useState<Record<string, { key: string; title?: string; type?: string }>>({})
   const [contractsFile, setContractsFile] = useState<ContractsFile>({})
+  const platform = useContext(platformContext)
 
   useEffect(() => {
-    ;(async () => {
+    ; (async () => {
       const hide = ((await api.getAppParameter('hideWarnings')) as boolean) || false
       setHideWarnings(hide)
     })()
@@ -53,7 +63,7 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
     if (badgeStatus[currentFile]) {
       api.emit('statusChanged', badgeStatus[currentFile])
     } else {
-      api.emit('statusChanged', {key: 'none'})
+      api.emit('statusChanged', { key: 'none' })
     }
   }, [badgeStatus[currentFile], currentFile])
 
@@ -66,14 +76,15 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
 
   api.onCurrentFileChanged = (currentFile: string) => {
     setState((prevState) => {
-      return {...prevState, currentFile}
+      return { ...prevState, currentFile }
     })
   }
 
   api.onSetWorkspace = async (isLocalhost: boolean, workspaceName: string) => {
-    const isHardhat = isLocalhost && (await compileTabLogic.isHardhatProject())
-    const isTruffle = isLocalhost && (await compileTabLogic.isTruffleProject())
-    const isFoundry = isLocalhost && (await compileTabLogic.isFoundryProject())
+    const isDesktop = platform === appPlatformTypes.desktop
+    const isHardhat = (isLocalhost || isDesktop) && (await compileTabLogic.isHardhatProject())
+    const isTruffle = (isLocalhost || isDesktop) && (await compileTabLogic.isTruffleProject())
+    const isFoundry = (isLocalhost || isDesktop) && (await compileTabLogic.isFoundryProject())
     setState((prevState) => {
       return {
         ...prevState,
@@ -84,29 +95,41 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
         isFoundryProject: isFoundry
       }
     })
-  }
+    const oldConfigExists = await api.fileExists(oldConfigPath)
+    const configExists = await api.fileExists(remixConfigPath)
 
-  api.onFileRemoved = (path: string) => {
-    if (path === state.configFilePath)
-      setState((prevState) => {
-        return {...prevState, configFilePath: ''}
-      })
+    if (oldConfigExists) {
+      const oldConfigContent = await api.readFile(oldConfigPath)
+      const oldConfig = JSON.parse(oldConfigContent)
+
+      if (configExists) {
+        const configContent = await api.readFile(remixConfigPath)
+        const config = JSON.parse(configContent)
+
+        config['solidity-compiler'] = oldConfig
+        await api.writeFile(remixConfigPath, JSON.stringify(config, null, 2))
+      } else {
+        await api.writeFile(remixConfigPath, JSON.stringify({ 'solidity-compiler': oldConfig }, null, 2))
+      }
+      // @ts-ignore
+      await api.call('fileManager', 'remove', oldConfigPath)
+    }
   }
 
   api.onNoFileSelected = () => {
     setState((prevState) => {
-      return {...prevState, currentFile: ''}
+      return { ...prevState, currentFile: '' }
     })
     setCompileErrors({} as Record<string, CompileErrors>)
   }
 
   api.onCompilationFinished = (compilationDetails: {
-    contractMap: {file: string} | Record<string, any>
+    contractMap: { file: string } | Record<string, any>
     contractsDetails: Record<string, any>
     target?: string
     input?: Record<string, any>
   }) => {
-    const {contractMap, contractsDetails, target, input} = compilationDetails
+    const { contractMap, contractsDetails, target, input } = compilationDetails
     const contractList = contractMap
       ? Object.keys(contractMap).map((key) => {
         return {
@@ -118,37 +141,76 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
 
     setContractsFile({
       ...contractsFile,
-      [target]: {contractList, contractsDetails, input}
+      [target]: { contractList, contractsDetails, input }
     })
-    setCompileErrors({...compileErrors, [currentFile]: api.compileErrors})
+    setCompileErrors({ ...compileErrors, [currentFile]: api.compileErrors })
   }
 
   api.onFileClosed = (name) => {
     if (name === currentFile) {
-      setCompileErrors({...compileErrors, [currentFile]: {} as CompileErrors})
-      setBadgeStatus({...badgeStatus, [currentFile]: {key: 'none'}})
+      setCompileErrors({ ...compileErrors, [currentFile]: {} as CompileErrors })
+      setBadgeStatus({ ...badgeStatus, [currentFile]: { key: 'none' } })
     }
   }
 
-  api.statusChanged = (data: {key: string; title?: string; type?: string}) => {
-    setBadgeStatus({...badgeStatus, [currentFile]: data})
+  api.statusChanged = (data: { key: string; title?: string; type?: string }) => {
+    setBadgeStatus({ ...badgeStatus, [currentFile]: data })
   }
 
-  const setConfigFilePath = (path: string) => {
+  api.setSolJsonBinData = (data: iSolJsonBinData) => {
+    setSolJsonBinData(data)
+  }
+
+  const setSolJsonBinData = (data: iSolJsonBinData) => {
+    const builtin: iSolJsonBinDataBuild =
+    {
+      path: 'builtin',
+      longVersion: 'latest local version - ' + state.defaultVersion,
+      binURL: '',
+      wasmURL: '',
+      isDownloaded: true,
+      version: 'builtin',
+      build: '',
+      prerelease: ''
+    }
+    const binVersions = [...data.binList]
+    const selectorList = binVersions
+
+    const wasmVersions = data.wasmList
+
+    // Runtime configuration for E2E tests (injected via post-build script)
+    // Falls back to default URLs for production builds
+    const runtimeConfig = typeof window !== 'undefined' ? (window as any)['__REMIX_COMPILER_URLS__'] : undefined
+
+    selectorList.forEach((compiler, index) => {
+      const wasmIndex = wasmVersions.findIndex((wasmCompiler) => {
+        return wasmCompiler.longVersion === compiler.longVersion
+      })
+      if (wasmIndex !== -1) {
+        const URLWasm: string = runtimeConfig?.wasmURL || wasmVersions[wasmIndex].wasmURL || data.baseURLWasm
+        selectorList[index] = wasmVersions[wasmIndex]
+        pathToURL[compiler.path] = URLWasm
+      } else {
+        const URLBin: string = runtimeConfig?.binURL || compiler.binURL || data.baseURLBin
+        pathToURL[compiler.path] = URLBin
+      }
+    })
+    data.selectorList = selectorList
+    data.selectorList.reverse()
+    data.selectorList.unshift(builtin)
     setState((prevState) => {
-      return {...prevState, configFilePath: path}
+      return { ...prevState, solJsonBinData: data }
     })
   }
 
   const toast = (message: string) => {
     setState((prevState) => {
-      return {...prevState, toasterMsg: message}
+      return { ...prevState, toasterMsg: message }
     })
   }
 
   const updateCurrentVersion = (value) => {
     setCurrentVersion(value)
-    api.setCompilerParameters({version: value})
   }
 
   const modal = async (
@@ -180,7 +242,7 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
 
   const handleHideModal = () => {
     setState((prevState) => {
-      return {...prevState, modal: {...state.modal, hide: true, message: null}}
+      return { ...prevState, modal: { ...state.modal, hide: true, message: null } }
     })
   }
 
@@ -202,11 +264,19 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
     </div>
   )
 
+  useEffect(() => {
+    if (!state.solJsonBinData && api.solJsonBinData){
+      setSolJsonBinData(api.solJsonBinData)
+    }
+  },[])
+
   return (
     <>
       <div id="compileTabView">
         <CompilerContainer
           api={api}
+          //@ts-ignore
+          pluginProps={props}
           isHardhatProject={state.isHardhatProject}
           workspaceName={state.workspaceName}
           isTruffleProject={state.isTruffleProject}
@@ -217,11 +287,15 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
           compiledFileName={currentFile}
           updateCurrentVersion={updateCurrentVersion}
           configurationSettings={configurationSettings}
-          configFilePath={state.configFilePath}
-          setConfigFilePath={setConfigFilePath}
+          solJsonBinData={state.solJsonBinData}
+          setCompileErrors={setCompileErrors}
+          setBadgeStatus={setBadgeStatus}
         />
-
-        {contractsFile[currentFile] && contractsFile[currentFile].contractsDetails && (
+        {/* "compileErrors[currentFile]['contracts']" field will not be there in case of compilation errors */}
+        {contractsFile && contractsFile[currentFile] && contractsFile[currentFile].contractsDetails
+          && compileErrors
+          && compileErrors[currentFile]
+          && compileErrors[currentFile]['contracts'] && (
           <ContractSelection
             api={api}
             compiledFileName={currentFile}
@@ -231,7 +305,7 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
             modal={modal}
           />
         )}
-        {compileErrors[currentFile] && (
+        {compileErrors && compileErrors[currentFile] && (
           <div className="remixui_errorBlobs p-4" data-id="compiledErrors">
             <>
               <span data-id={`compilationFinishedWith_${currentVersion}`}></span>
@@ -239,6 +313,7 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
                 <Renderer
                   message={compileErrors[currentFile].error.formattedMessage || compileErrors[currentFile].error}
                   plugin={api}
+                  context='solidity'
                   opt={{
                     type: compileErrors[currentFile].error.severity || 'error',
                     errorType: compileErrors[currentFile].error.type
@@ -249,14 +324,14 @@ export const SolidityCompiler = (props: SolidityCompilerProps) => {
                 compileErrors[currentFile].error.mode === 'panic' &&
                 modal('Error', panicMessage(compileErrors[currentFile].error.formattedMessage), 'Close', null, false)}
               {compileErrors[currentFile].errors &&
-                compileErrors[currentFile].errors.length &&
+                compileErrors[currentFile].errors.length > 0 &&
                 compileErrors[currentFile].errors.map((err, index) => {
                   if (hideWarnings) {
                     if (err.severity !== 'warning') {
-                      return <Renderer key={index} message={err.formattedMessage} plugin={api} opt={{type: err.severity, errorType: err.type}} />
+                      return <Renderer context='solidity' key={index} message={err.formattedMessage} plugin={api} opt={{ type: err.severity, errorType: err.type }} />
                     }
                   } else {
-                    return <Renderer key={index} message={err.formattedMessage} plugin={api} opt={{type: err.severity, errorType: err.type}} />
+                    return <Renderer context='solidity' key={index} message={err.formattedMessage} plugin={api} opt={{ type: err.severity, errorType: err.type }} />
                   }
                 })}
             </>

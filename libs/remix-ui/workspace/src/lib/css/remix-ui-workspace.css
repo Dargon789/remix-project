@@ -28,19 +28,19 @@
     cursor            : pointer;
   }
   .remixui_connectToLocalhost i:hover   {
-    color             : var(--secondary)
+    color             : var(--bs-secondary)
   }
   .remixui_uploadFile         {
     padding           : 10px;
   }
   .remixui_uploadFile label:hover   {
-    color             : var(--secondary)
+    color             : var(--bs-secondary)
   }
   .remixui_uploadFile label   {
     cursor            : pointer;
   }
   .remixui_treeview {
-    overflow-y        : auto;
+    overflow-x        : hidden;
   }
   .remixui_dialog {
     display: flex;
@@ -77,15 +77,31 @@
     background: var(--custom-select);
   }
 
+  .branches-dropdown {
+    overflow-x: hidden !important;
+  }
+
+  .branches-dropdown ul {
+    overflow-x: hidden !important;
+  }
+
   .custom-dropdown-items a {
     border-radius: .25rem;
     text-transform: none;
     text-decoration: none;
     font-weight: normal;
     font-size: 0.875rem;
-    padding: 0.25rem 0.25rem;
+    padding: 0.25rem 0.5rem;
     width: auto;
     color: var(--text);
+    text-align: left;
+    display: flex;
+    align-items: center;
+  }
+
+  .custom-dropdown-items a i {
+    width: 1.25rem;
+    text-align: center;
   }
 
   .remixuimenuicon_shadow {
@@ -108,7 +124,7 @@
   }
 
   #workspacesMenuDropdown > div > ul > a:hover {
-    background-color: var(--secondary);
+    background-color: var(--bs-secondary);
     border-radius: 2px;
     color: var(--text)
   }

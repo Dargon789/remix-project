@@ -2,6 +2,7 @@ import React, {useRef, useState, useEffect} from 'react' // eslint-disable-line
 import {ModalDialogProps} from './types' // eslint-disable-line
 
 import './remix-ui-modal-dialog.css'
+import { AppModalCancelTypes } from '@remix-ui/app'
 
 declare global {
   // eslint-disable-next-line no-unused-vars
@@ -11,6 +12,7 @@ declare global {
 }
 
 export const ModalDialog = (props: ModalDialogProps) => {
+
   const [state, setState] = useState({
     toggleBtn: true
   })
@@ -24,31 +26,34 @@ export const ModalDialog = (props: ModalDialogProps) => {
   }
 
   useEffect(() => {
+    if (!props.id) return
     calledHideFunctionOnce.current = props.hide
-    modal.current.focus()
-  }, [props.hide])
-
-  useEffect(() => {
-    function handleBlur(e) {
-      if (!e.currentTarget.contains(e.relatedTarget)) {
-        e.stopPropagation()
-        if (document.activeElement !== this) {
-          !window.testmode && handleHide()
-        }
+    if (!props.hide) {
+      modal.current.focus()
+      modal.current.removeEventListener('blur', handleBlur)
+      if (modal.current && !props.preventBlur) {
+        modal.current.addEventListener('blur', handleBlur)
       }
-    }
-    if (modal.current) {
-      modal.current.addEventListener('blur', handleBlur)
     }
     return () => {
       modal.current && modal.current.removeEventListener('blur', handleBlur)
     }
-  }, [modal.current])
+  }, [props.hide])
+
+  function handleBlur(e) {
+    if (e.currentTarget && !e.currentTarget.contains(e.relatedTarget)) {
+      e.stopPropagation()
+      if (document.activeElement !== this) {
+        !window.testmode && handleHide()
+        !window.testmode && props.cancelFn && props.cancelFn(AppModalCancelTypes.blur)
+      }
+    }
+  }
 
   const modalKeyEvent = (keyCode) => {
     if (keyCode === 27) {
       // Esc
-      if (props.cancelFn) props.cancelFn()
+      if (props.cancelFn) props.cancelFn(AppModalCancelTypes.escape)
       handleHide()
     } else if (keyCode === 13) {
       // Enter
@@ -56,12 +61,12 @@ export const ModalDialog = (props: ModalDialogProps) => {
     } else if (keyCode === 37) {
       // todo && footerIsActive) { // Arrow Left
       setState((prevState) => {
-        return {...prevState, toggleBtn: true}
+        return { ...prevState, toggleBtn: true }
       })
     } else if (keyCode === 39) {
       // todo && footerIsActive) { // Arrow Right
       setState((prevState) => {
-        return {...prevState, toggleBtn: false}
+        return { ...prevState, toggleBtn: false }
       })
     }
   }
@@ -70,7 +75,7 @@ export const ModalDialog = (props: ModalDialogProps) => {
     if (state.toggleBtn) {
       if (props.okFn) props.okFn()
     } else {
-      if (props.cancelFn) props.cancelFn()
+      if (props.cancelFn) props.cancelFn(AppModalCancelTypes.enter)
     }
     handleHide()
   }
@@ -78,18 +83,18 @@ export const ModalDialog = (props: ModalDialogProps) => {
   return (
     <div
       data-id={`${props.id}ModalDialogContainer-react`}
-      data-backdrop="static"
-      data-keyboard="false"
+      data-bs-backdrop="static"
+      data-bs-keyboard="false"
       className="modal"
-      style={{display: props.hide ? 'none' : 'block'}}
+      style={{ display: props.hide ? 'none' : 'block' }}
       role="dialog"
     >
-      <div className="modal-dialog" role="document">
+      <div className={'modal-dialog ' + (props.modalParentClass ? props.modalParentClass : '')} role="document">
         <div
           ref={modal}
           tabIndex={-1}
           className={'modal-content remixModalContent ' + (props.modalClass ? props.modalClass : '')}
-          onKeyDown={({keyCode}) => {
+          onKeyDown={({ keyCode }) => {
             modalKeyEvent(keyCode)
           }}
         >
@@ -98,8 +103,7 @@ export const ModalDialog = (props: ModalDialogProps) => {
               {props.title && props.title}
             </h6>
             {!props.showCancelIcon && (
-              <span className="modal-close" onClick={() => handleHide()}>
-                <i className="fas fa-times" aria-hidden="true"></i>
+              <span data-id={`${props.id}-modal-close`} className="btn-close" aria-label="Close" onClick={() => handleHide()}>
               </span>
             )}
           </div>
@@ -111,7 +115,7 @@ export const ModalDialog = (props: ModalDialogProps) => {
             {props.okLabel && (
               <button
                 data-id={`${props.id}-modal-footer-ok-react`}
-                className={'modal-ok btn btn-sm ' + (props.okBtnClass ? props.okBtnClass : state.toggleBtn ? 'border-primary' : 'border-secondary')}
+                className={'modal-ok btn btn-sm ' + (props.okBtnClass ? props.okBtnClass : state.toggleBtn ? 'btn-primary' : 'btn-secondary')}
                 disabled={props.validation && !props.validation.valid}
                 onClick={() => {
                   if (props.validation && !props.validation.valid) return
@@ -126,10 +130,10 @@ export const ModalDialog = (props: ModalDialogProps) => {
             {props.cancelLabel && (
               <button
                 data-id={`${props.id}-modal-footer-cancel-react`}
-                className={'modal-cancel btn btn-sm ' + (props.cancelBtnClass ? props.cancelBtnClass : state.toggleBtn ? 'border-secondary' : 'border-primary')}
-                data-dismiss="modal"
+                className={'modal-cancel btn btn-sm ' + (props.cancelBtnClass ? props.cancelBtnClass : state.toggleBtn ? 'btn-secondary' : 'btn-primary')}
+                data-bs-dismiss="modal"
                 onClick={() => {
-                  if (props.cancelFn) props.cancelFn()
+                  if (props.cancelFn) props.cancelFn(AppModalCancelTypes.click)
                   handleHide()
                 }}
               >

@@ -39,8 +39,12 @@ module.exports = {
   'Test Manual Deploy Lib': function (browser: NightwatchBrowser) {
     browser.click('*[data-id="deployAndRunClearInstances"]')
       .pause(5000)
-      .clickLaunchIcon('settings')
-      .click('*[data-id="settingsTabGenerateContractMetadataLabel"]')
+      .waitForElementVisible('*[data-id="topbar-settingsIcon"]')
+      .click('*[data-id="topbar-settingsIcon"]')
+      .waitForElementVisible('*[data-id="settings-sidebar-general"]')
+      .click('*[data-id="settings-sidebar-general"]')
+      .waitForElementPresent('[data-id="generate-contract-metadataSwitch"]')
+      .click('[data-id="generate-contract-metadataSwitch"]')
       .clickLaunchIcon('solidity')
       .click('#compileTabView button[data-id="compilerContainerCompileBtn"]') // that should generate the JSON artefact
       .clickLaunchIcon('udapp')

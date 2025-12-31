@@ -1,163 +1,198 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, {useEffect, useRef, useContext} from 'react'
-import {FormattedMessage, useIntl} from 'react-intl'
-import PluginButton from './pluginButton'
-import {ThemeContext} from '../themeContext'
-import Carousel from 'react-multi-carousel'
-import 'react-multi-carousel/lib/styles.css'
-import CustomNavButtons from './customNavButtons'
-const itemsToShow = 5
-declare global {
-  interface Window {
-    _paq: any
-  }
-}
-const _paq = (window._paq = window._paq || []) //eslint-disable-line
+import React, { useContext, useEffect, useState } from 'react'
+import { ThemeContext } from '../themeContext'
+import { ToggleSwitch } from '@remix-ui/toggle'
+import { RenderIf, RenderIfNot } from '@remix-ui/helper'
+import { FormattedMessage } from 'react-intl'
+import { HOME_TAB_PLUGIN_LIST } from './constant'
+import axios from 'axios'
+import { LoadingCard } from './LoaderPlaceholder'
+import { HomeTabEvent, MatomoEvent } from '@remix-api'
+import { TrackingContext } from '@remix-ide/tracking'
+
 interface HomeTabFeaturedPluginsProps {
   plugin: any
 }
 
-function HomeTabFeaturedPlugins({plugin}: HomeTabFeaturedPluginsProps) {
-  const themeFilter = useContext(ThemeContext)
-  const carouselRef = useRef<any>({})
-  const carouselRefDiv = useRef(null)
-  const intl = useIntl()
+interface PluginInfo {
+  pluginId: string
+  pluginTitle: string
+  action: {
+    type: string
+    label: string
+    url?: string
+    pluginName?: string
+    pluginMethod?: string
+    pluginArgs?: (string | number | boolean | object | null)[]
+  }
+  iconClass: string
+  maintainedBy: string
+  description: string
+}
+
+function HomeTabFeaturedPlugins({ plugin }: HomeTabFeaturedPluginsProps) {
+  const [activePlugins, setActivePlugins] = useState<string[]>([])
+  const [loadingPlugins, setLoadingPlugins] = useState<string[]>([])
+  const [pluginList, setPluginList] = useState<{ caption: string, plugins: PluginInfo[] }>({ caption: '', plugins: []})
+  const [isLoading, setIsLoading] = useState(true)
+  const theme = useContext(ThemeContext)
+  const { trackMatomoEvent: baseTrackEvent } = useContext(TrackingContext)
+  const isDark = theme.name === 'dark'
+
+  // Component-specific tracker with default HomeTabEvent type
+  const trackMatomoEvent = <T extends MatomoEvent = HomeTabEvent>(event: T) => {
+    baseTrackEvent?.<T>(event)
+  }
 
   useEffect(() => {
-    document.addEventListener('wheel', handleScroll)
+    async function getPluginList() {
+      try {
+        setIsLoading(true)
+        const response = await axios.get(HOME_TAB_PLUGIN_LIST)
+
+        response.data && setPluginList(response.data)
+
+        // Initialize active plugins state based on current plugin status
+        if (response.data && response.data.plugins) {
+          const currentlyActive = []
+          for (const pluginInfo of response.data.plugins) {
+            if (await plugin.appManager.isActive(pluginInfo.pluginId)) {
+              currentlyActive.push(pluginInfo.pluginId)
+            }
+          }
+          setActivePlugins(currentlyActive)
+        }
+
+        setIsLoading(false)
+      } catch (error) {
+        console.error('Error fetching plugin list:', error)
+      }
+    }
+    getPluginList()
+
+    const onActivate = (pluginProfile: any) => {
+      try {
+        const pluginName = pluginProfile?.name || pluginProfile?.profile?.name
+        if (pluginName) {
+          setActivePlugins(activePlugins => [...activePlugins, pluginName])
+        }
+      } catch (error) {
+        console.error('Error handling plugin activation:', error)
+      }
+    }
+
+    const onDeactivate = (pluginProfile: any) => {
+      try {
+        const pluginName = pluginProfile?.name || pluginProfile?.profile?.name
+        if (pluginName) {
+          setActivePlugins(activePlugins => activePlugins.filter((id) => id !== pluginName))
+        }
+      } catch (error) {
+        console.error('Error handling plugin deactivation:', error)
+      }
+    }
+
+    plugin.appManager.event.on('activate', onActivate)
+    plugin.appManager.event.on('deactivate', onDeactivate)
+
     return () => {
-      document.removeEventListener('wheel', handleScroll)
+      plugin.appManager.event.off('activate', onActivate)
+      plugin.appManager.event.off('deactivate', onDeactivate)
     }
   }, [])
 
-  function isDescendant(parent, child) {
-    let node = child.parentNode
-    while (node != null) {
-      if (node === parent) {
-        return true
-      }
-      node = node.parentNode
+  const activateFeaturedPlugin = async (pluginId: string) => {
+    setLoadingPlugins([...loadingPlugins, pluginId])
+    if (await plugin.appManager.isActive(pluginId)) {
+      trackMatomoEvent({
+        category: 'hometab',
+        action: 'featuredPluginsToggle',
+        name: `deactivate-${pluginId}`,
+        isClick: true
+      })
+      await plugin.appManager.deactivatePlugin(pluginId)
+      setActivePlugins(activePlugins.filter((id) => id !== pluginId))
+    } else {
+      trackMatomoEvent({
+        category: 'hometab',
+        action: 'featuredPluginsToggle',
+        name: `activate-${pluginId}`,
+        isClick: true
+      })
+      await plugin.appManager.activatePlugin([pluginId])
+      await plugin.verticalIcons.select(pluginId)
+      setActivePlugins([...activePlugins, pluginId])
     }
-    return false
+    setLoadingPlugins(loadingPlugins.filter((id) => id !== pluginId))
   }
 
-  const handleScroll = (e) => {
-    if (isDescendant(carouselRefDiv.current, e.target)) {
-      e.stopPropagation()
-      let nextSlide = 0
-      if (e.wheelDelta < 0) {
-        nextSlide = carouselRef.current.state.currentSlide + 1
-        if (Math.abs(carouselRef.current.state.transform) >= carouselRef.current.containerRef.current.scrollWidth - carouselRef.current.state.containerWidth) return
-        carouselRef.current.goToSlide(nextSlide)
-      } else {
-        nextSlide = carouselRef.current.state.currentSlide - 1
-        if (nextSlide < 0) nextSlide = 0
-        carouselRef.current.goToSlide(nextSlide)
-      }
+  const handleFeaturedPluginActionClick = async (pluginInfo: PluginInfo) => {
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'featuredPluginsActionClick',
+      name: pluginInfo.pluginTitle,
+      isClick: true
+    })
+    if (pluginInfo.action.type === 'link') {
+      window.open(pluginInfo.action.url, '_blank')
+    } else if (pluginInfo.action.type === 'methodCall') {
+      if (pluginInfo.action.pluginMethod === 'activatePlugin') {
+        await plugin.appManager.activatePlugin([pluginInfo.action.pluginName])
+        await plugin.call('menuicons', 'select', pluginInfo.action.pluginName)
+      } else plugin.call(pluginInfo.action.pluginName, pluginInfo.action.pluginMethod, pluginInfo.action.pluginArgs)
     }
   }
 
-  const startSolidity = async () => {
-    await plugin.appManager.activatePlugin(['solidity', 'udapp', 'solidityStaticAnalysis', 'solidityUnitTesting'])
-    plugin.verticalIcons.select('solidity')
-    _paq.push(['trackEvent', 'hometabActivate', 'userActivate', 'solidity'])
-  }
-  const startCodeAnalyzer = async () => {
-    await plugin.appManager.activatePlugin(['solidity', 'solidityStaticAnalysis'])
-    plugin.verticalIcons.select('solidityStaticAnalysis')
-    _paq.push(['trackEvent', 'hometabActivate', 'userActivate', 'solidityStaticAnalysis'])
-  }
-  const startSourceVerify = async () => {
-    await plugin.appManager.activatePlugin(['solidity', 'sourcify'])
-    plugin.verticalIcons.select('sourcify')
-    _paq.push(['trackEvent', 'hometabActivate', 'userActivate', 'sourcify'])
-  }
-  const startCookbook = async () => {
-    await plugin.appManager.activatePlugin(['cookbook.dev'])
-    plugin.verticalIcons.select('cookbook.dev')
-    _paq.push(['trackEvent', 'hometabActivate', 'userActivate', 'cookbook.dev'])
-  }
-  const startSolidityUnitTesting = async () => {
-    await plugin.appManager.activatePlugin(['solidity', 'solidityUnitTesting'])
-    plugin.verticalIcons.select('solidityUnitTesting')
-    _paq.push(['trackEvent', 'hometabActivate', 'userActivate', 'solidityUnitTesting'])
+  function PluginCard(pluginInfo: PluginInfo) {
+    return (
+      <div className="card border h-100">
+        <div className="d-flex align-items-center px-2 justify-content-between border-bottom">
+          <div className='d-flex align-items-center px-2'>
+            <RenderIf condition={loadingPlugins.includes(pluginInfo.pluginId)}>
+              <i className="fad fa-spinner fa-spin me-2"></i>
+            </RenderIf>
+            <RenderIfNot condition={loadingPlugins.includes(pluginInfo.pluginId)}>
+              { pluginInfo.iconClass ? <i className={`${pluginInfo.iconClass} me-2`}></i> : <i className="fa-solid fa-file-book me-2"></i> }
+            </RenderIfNot>
+            <span className="fw-bold" style={{ color: isDark ? 'white' : 'black' }}>{pluginInfo.pluginTitle}</span>
+          </div>
+          <ToggleSwitch id={`toggleSwitch-${pluginInfo.pluginId}`} isOn={activePlugins.includes(pluginInfo.pluginId)} onClick={() => activateFeaturedPlugin(pluginInfo.pluginId)} />
+        </div>
+        <div className="d-flex flex-column justify-content-between h-100">
+          <div className="p-3">
+            <div className={`text-${(pluginInfo.maintainedBy || '').toLowerCase() === 'remix' ? 'success' : 'dark'} mb-1`}><i className="fa-solid fa-shield-halved me-2"></i><FormattedMessage id="home.maintainedBy"/> {pluginInfo.maintainedBy || 'Community'}</div>
+            <div className="small mb-2" style={{ color: isDark ? 'white' : 'black' }}>{pluginInfo.description}</div>
+          </div>
+          <div className="px-3 pb-3">
+            <button className="btn btn-light btn-sm w-100 text-decoration-none border" onClick={async () => await handleFeaturedPluginActionClick(pluginInfo)}>
+              <i className="fa-solid fa-book me-1"></i>{pluginInfo.action.label}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="pl-2 w-100" id="hTFeaturedPlugins">
-      <label className="" style={{fontSize: '1.2rem'}}>
-        <FormattedMessage id="home.featuredPlugins" />
-      </label>
-      <div ref={carouselRefDiv} className="w-100 d-flex flex-column">
-        <ThemeContext.Provider value={themeFilter}>
-          <Carousel
-            ref={carouselRef}
-            focusOnSelect={true}
-            customButtonGroup={<CustomNavButtons next={undefined} previous={undefined} goToSlide={undefined} parent={carouselRef} />}
-            arrows={false}
-            swipeable={false}
-            draggable={true}
-            showDots={false}
-            responsive={{
-              superLargeDesktop: {
-                breakpoint: {max: 4000, min: 3000},
-                items: itemsToShow
-              },
-              desktop: {
-                breakpoint: {max: 3000, min: 1024},
-                items: itemsToShow
-              }
-            }}
-            renderButtonGroupOutside={true}
-            ssr={true} // means to render carousel on server-side.
-            keyBoardControl={true}
-            containerClass="carousel-container"
-            deviceType={'desktop'}
-            itemClass="w-100"
-          >
-            <PluginButton
-              imgPath="assets/img/staticAnalysis.webp"
-              envID="staticAnalysisLogo"
-              envText="Solidity Analyzers"
-              description={intl.formatMessage({
-                id: 'home.codeAnalyizerPluginDesc'
-              })}
-              remixMaintained={true}
-              callback={() => startCodeAnalyzer()}
-            />
-            <PluginButton
-              imgPath="assets/img/cookbook.webp"
-              envID="cookbookLogo"
-              envText="Cookbook"
-              description={intl.formatMessage({id: 'home.cookbookDesc'})}
-              remixMaintained={false}
-              callback={() => startCookbook()}
-            />
-            <PluginButton
-              imgPath="assets/img/solidityLogo.webp"
-              envID="solidityLogo"
-              envText="Solidity"
-              description={intl.formatMessage({id: 'home.solidityPluginDesc'})}
-              remixMaintained={true}
-              callback={() => startSolidity()}
-            />
-            <PluginButton
-              imgPath="assets/img/sourcifyNewLogo.webp"
-              envID="sourcifyLogo"
-              envText="Sourcify"
-              description={intl.formatMessage({id: 'home.sourcifyPluginDesc'})}
-              callback={() => startSourceVerify()}
-            />
-            <PluginButton
-              imgPath="assets/img/unitTesting.webp"
-              envID="sUTLogo"
-              envText="Solidity unit testing"
-              description={intl.formatMessage({id: 'home.unitTestPluginDesc'})}
-              remixMaintained={true}
-              callback={() => startSolidityUnitTesting()}
-            />
-          </Carousel>
-        </ThemeContext.Provider>
+    <div className="w-100 align-items-end remixui_featuredplugins_container" id="hTFeaturedPlugins">
+      <div className="d-flex justify-content-between align-items-center mb-2">
+        <h6 style={{ color: isDark ? 'white' : 'black' }}>{pluginList.caption}</h6>
+        <button className="btn btn-secondary btn-md" onClick={() => plugin.call('menuicons', 'select', 'pluginManager')} ><FormattedMessage id="home.exploreAllPlugins"/></button>
+      </div>
+      <div className="row">
+        {
+          isLoading ? (
+            Array.from({ length: 4 }).map((_, index) => (
+              <div key={`loading-${index}`} className="col-lg-12 col-xl-6 col-md-6 col-sm-12 mb-4">
+                <LoadingCard />
+              </div>
+            ))
+          ) : (
+            pluginList.plugins.map((pluginInfo: PluginInfo) => (
+              <div className="col-lg-12 col-xl-6 col-md-6 col-sm-12 mb-4 " key={pluginInfo.pluginId}>{ PluginCard(pluginInfo) }</div>
+            ))
+          )
+        }
       </div>
     </div>
   )

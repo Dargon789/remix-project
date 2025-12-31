@@ -12,7 +12,7 @@ module.exports = {
       .waitForElementVisible('div[data-id="verticalIconsHomeIcon"]')
       .waitForElementVisible('div[plugin="filePanel"]')
       .waitForElementVisible('div[plugin="pluginManager"]')
-      .waitForElementVisible('div[plugin="settings"]')
+      .waitForElementVisible('*[data-id="topbar-settingsIcon"]')
   },
 
   'Loads Side Panel': function (browser: NightwatchBrowser) {
@@ -29,11 +29,11 @@ module.exports = {
     browser.waitForElementVisible('div[data-id="mainPanelPluginsContainer"]')
       .waitForElementVisible('div[data-id="landingPageHomeContainer"]')
       .waitForElementVisible('div[data-id="remixUIHTAll"]')
-      .waitForElementVisible('div[data-id="terminalContainer"]')
   },
 
   'Loads terminal': function (browser: NightwatchBrowser) {
     browser
+      // Terminal is shown by init.ts for e2e tests
       .waitForElementVisible('div[data-id="terminalCli"]', 10000)
       .journalLastChildIncludes('Welcome to Remix')
   },
@@ -48,17 +48,16 @@ module.exports = {
       .assert.containsText('h6[data-id="sidePanelSwapitTitle"]', 'FILE EXPLORER')
   },
 
-  'Toggles Terminal': function (browser: NightwatchBrowser) {
-    browser.waitForElementVisible('div[data-id="terminalContainer"]')
+  'Hides Terminal': function (browser: NightwatchBrowser) {
+    browser
+      // Terminal should already be visible from previous test
+      .waitForElementVisible('div[data-id="terminalContainer"]')
       .assert.elementPresent('div[data-id="terminalCli"]')
       .assert.elementPresent('div[data-id="terminalContainer"]')
       .waitForElementVisible('div[data-id="terminalContainer"]')
       .waitForElementVisible('div[data-id="terminalCli"]')
-      .click('i[data-id="terminalToggleIcon"]')
-      .checkElementStyle('div[data-id="terminalToggleMenu"]', 'height', '35px')
-      .assert.not.elementPresent('div[data-id="terminalCli"]')
-      .click('i[data-id="terminalToggleIcon"]')
-      .waitForElementVisible('div[data-id="terminalCli"]')
+      .click('i[data-id="hideBottomPanel"]')
+      .waitForElementNotVisible('div[data-id="terminalCli"]')
   },
 
   'Switch Tabs using tabs icon': function (browser: NightwatchBrowser) {

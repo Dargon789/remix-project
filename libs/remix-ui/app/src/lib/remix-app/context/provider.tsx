@@ -1,13 +1,19 @@
-import React, {useReducer} from 'react'
-import {modalActionTypes} from '../actions/modals'
-import {AlertModal, AppModal} from '../interface'
-import {modalReducer} from '../reducer/modals'
-import {ModalInitialState} from '../state/modals'
-import {ModalTypes} from '../types'
-import {AppContext, dispatchModalContext, modalContext} from './context'
+import React, { useReducer } from 'react'
+import { useIntl, IntlShape } from 'react-intl'
+import { modalActionTypes } from '../actions/modals'
+import { AlertModal, AppModal } from '../interface'
+import { modalReducer } from '../reducer/modals'
+import { ModalInitialState } from '../state/modals'
+import { ModalTypes } from '../types'
+import { AppContext, dispatchModalContext, modalContext, platformContext, onLineContext } from './context'
+declare global {
+  interface Window {
+    _intl: IntlShape
+  }
+}
 
-export const ModalProvider = ({children = [], reducer = modalReducer, initialState = ModalInitialState} = {}) => {
-  const [{modals, toasters, focusModal, focusToaster}, dispatch] = useReducer(reducer, initialState)
+export const ModalProvider = ({ children = [], reducer = modalReducer, initialState = ModalInitialState } = {}) => {
+  const [{ modals, toasters, focusModal, focusToaster, focusTemplateExplorer }, dispatch] = useReducer(reducer, initialState)
 
   const onNextFn = async () => {
     dispatch({
@@ -16,7 +22,7 @@ export const ModalProvider = ({children = [], reducer = modalReducer, initialSta
   }
 
   const modal = (modalData: AppModal) => {
-    const {id, title, message, validationFn, okLabel, okFn, cancelLabel, cancelFn, modalType, defaultValue, hideFn, data} = modalData
+    const { id, title, message, validationFn, okLabel, okFn, cancelLabel, cancelFn, modalType, modalParentClass, defaultValue, hideFn, data, showCancelIcon, preventBlur, placeholderText } = modalData
     return new Promise((resolve, reject) => {
       dispatch({
         type: modalActionTypes.setModal,
@@ -30,11 +36,15 @@ export const ModalProvider = ({children = [], reducer = modalReducer, initialSta
           cancelLabel,
           cancelFn,
           modalType: modalType || ModalTypes.default,
+          modalParentClass,
           defaultValue: defaultValue,
           hideFn,
           resolve,
           next: onNextFn,
-          data
+          data,
+          showCancelIcon,
+          preventBlur,
+          placeholderText
         }
       })
     })
@@ -43,9 +53,9 @@ export const ModalProvider = ({children = [], reducer = modalReducer, initialSta
   const alert = (modalData: AlertModal) => {
     return modal({
       id: modalData.id,
-      title: modalData.title || 'Alert',
+      title: modalData.title || window._intl.formatMessage({ id: 'remixApp.alert' }),
       message: modalData.message || modalData.title,
-      okLabel: 'OK',
+      okLabel: window._intl.formatMessage({ id: 'remixApp.ok' }),
       okFn: (value?: any) => {},
       cancelLabel: '',
       cancelFn: () => {}
@@ -59,10 +69,11 @@ export const ModalProvider = ({children = [], reducer = modalReducer, initialSta
     })
   }
 
-  const toast = (message: string | JSX.Element) => {
+  const toast = (message: string | JSX.Element, timeout?: number, timestamp?: number) => {
+    timestamp = timestamp || Date.now()
     dispatch({
       type: modalActionTypes.setToast,
-      payload: {message, timestamp: Date.now()}
+      payload: { message, timestamp, timeout }
     })
   }
 
@@ -74,16 +85,21 @@ export const ModalProvider = ({children = [], reducer = modalReducer, initialSta
   }
 
   return (
-    <dispatchModalContext.Provider value={{modal, toast, alert, handleHideModal, handleToaster}}>
-      <modalContext.Provider value={{modals, toasters, focusModal, focusToaster}}>{children}</modalContext.Provider>
+    <dispatchModalContext.Provider value={{ modal, toast, alert, handleHideModal, handleToaster }}>
+      <modalContext.Provider value={{ modals, toasters, focusModal, focusToaster, focusTemplateExplorer }}>
+        {children}
+      </modalContext.Provider>
     </dispatchModalContext.Provider>
   )
 }
 
-export const AppProvider = ({children = [], value = {}} = {}) => {
+export const AppProvider = ({ children = [], value = {} } = null) => {
+  window._intl = useIntl()
   return (
     <AppContext.Provider value={value}>
-      <ModalProvider>{children}</ModalProvider>
+      <ModalProvider>
+        {children}
+      </ModalProvider>
     </AppContext.Provider>
   )
 }
@@ -94,4 +110,12 @@ export const useDialogs = () => {
 
 export const useDialogDispatchers = () => {
   return React.useContext(dispatchModalContext)
+}
+
+export const defaultFocusTemplateExplorer = () => {
+  return (
+    <>
+      <p className="fs-3 text-center">Template Explorer</p>
+    </>
+  )
 }

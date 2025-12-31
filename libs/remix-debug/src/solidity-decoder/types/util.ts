@@ -1,5 +1,5 @@
 'use strict'
-import { bufferToHex, unpadHexString } from '@ethereumjs/util'
+import { unpadHex } from '@ethereumjs/util'
 import BN from 'bn.js'
 
 export function decodeIntFromHex (value, byteLength, signed) {
@@ -11,7 +11,7 @@ export function decodeIntFromHex (value, byteLength, signed) {
 }
 
 export function readFromStorage (slot, storageResolver): Promise<string> {
-  const hexSlot = '0x' + normalizeHex(bufferToHex(slot))
+  const hexSlot = '0x' + normalizeHex(slot.toString(16))
   return new Promise((resolve, reject) => {
     storageResolver.storageSlot(hexSlot, (error, slot) => {
       if (error) {
@@ -38,7 +38,7 @@ export function extractHexByteSlice (slotValue, byteLength, offsetFromLSB) {
 }
 
 /**
- * @returns a hex encoded storage content at the given @arg location. it does not have Ox prefix but always has the full length.
+ * @returns a hex encoded storage content at the given @arg location. it does not have 0x prefix but always has the full length.
  *
  * @param {Object} location  - object containing the slot and offset of the data to extract.
  * @param {Object} storageResolver  - storage resolver
@@ -58,7 +58,7 @@ export function toBN (value) {
   if (value instanceof BN) {
     return value
   } else if (value.match && value.match(/^(0x)?([a-f0-9]*)$/)) {
-    value = unpadHexString(value)
+    value = unpadHex(value)
     value = value.replace('0x', '')
     value = new BN(value === '' ? '0' : value, 16)
   } else if (!isNaN(value)) {

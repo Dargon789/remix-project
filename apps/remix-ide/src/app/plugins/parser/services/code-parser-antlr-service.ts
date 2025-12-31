@@ -4,6 +4,7 @@ import { AstNode } from "@remix-project/remix-solidity"
 import { CodeParser } from "../code-parser"
 import { antlr } from '../types'
 import { pathToFileURL } from 'url'
+import { Registry } from '@remix-project/remix-lib'
 
 const SolidityParser = (window as any).SolidityParser = (window as any).SolidityParser || []
 
@@ -45,8 +46,8 @@ export default class CodeParserAntlrService {
     this.worker = new Worker(new URL('./antlr-worker', import.meta.url))
     this.worker.postMessage({
       cmd: 'load',
-      url: document.location.protocol + '//' + document.location.host + '/assets/js/parser/antlr.js',
-    });
+      url: Registry.getInstance().get('platform').api.isDesktop() ? 'assets/js/parser/antlr.js' : document.location.protocol + '//' + document.location.host + '/assets/js/parser/antlr.js',
+    })
     const self = this
 
     this.worker.addEventListener('message', function (ev) {
@@ -79,7 +80,7 @@ export default class CodeParserAntlrService {
           this.cache[file].parsingEnabled = false
         } else {
           this.cache[file].parsingEnabled = true
-        }              
+        }
       }
     }
   }
@@ -95,7 +96,6 @@ export default class CodeParserAntlrService {
   disableWorker() {
     clearInterval(this.workerTimer)
   }
-
 
   async parseWithWorker(text: string, file: string) {
     this.parserStartTime = Date.now()
@@ -117,8 +117,8 @@ export default class CodeParserAntlrService {
   /**
      * Tries to parse the current file or the given text and returns the AST
      * If the parsing fails it returns the last successful AST for this file
-     * @param text 
-     * @returns 
+     * @param text
+     * @returns
      */
   async setCurrentFileAST(text: string | null = null) {
     try {
@@ -149,7 +149,7 @@ export default class CodeParserAntlrService {
   /**
     * Lists the AST nodes from the current file parser
     * These nodes need to be changed to match the node types returned by the compiler
-    * @returns 
+    * @returns
     */
   async listAstNodes() {
     this.plugin.currentFile = await this.plugin.call('fileManager', 'file')
@@ -201,11 +201,10 @@ export default class CodeParserAntlrService {
     return nodes
   }
 
-
   /**
-     * 
-     * @param ast 
-     * @returns 
+     *
+     * @param ast
+     * @returns
      */
   async getLastNodeInLine(ast: string) {
     let lastNode: any
@@ -247,7 +246,7 @@ export default class CodeParserAntlrService {
       try {
         const startTime = Date.now()
         const blocks = (SolidityParser as any).parseBlock(fileContent, { loc: true, range: true, tolerant: true })
-        if(this.cache[this.plugin.currentFile] && this.cache[this.plugin.currentFile].blockDurations){
+        if (this.cache[this.plugin.currentFile] && this.cache[this.plugin.currentFile].blockDurations){
           this.cache[this.plugin.currentFile].blockDurations = [...this.cache[this.plugin.currentFile].blockDurations.slice(-this.parserThresholdSampleAmount), Date.now() - startTime]
           this.setFileParsingState(this.plugin.currentFile)
         }
@@ -284,5 +283,4 @@ export default class CodeParserAntlrService {
     const block = walkAst(blocks)
     return block
   }
-
 }

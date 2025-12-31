@@ -1,30 +1,43 @@
+import { appPlatformTypes } from '@remix-ui/app'
 import React from 'react'
-import {Dropdown} from 'react-bootstrap'
-import {HamburgerMenuItem, HamburgerSubMenuItem} from './workspace-hamburger-item'
+import { Dropdown } from 'react-bootstrap'
+import { HamburgerMenuItem, HamburgerSubMenuItem } from './workspace-hamburger-item'
+import { WorkspaceMetadata } from '../types'
 
 export interface HamburgerMenuProps {
+  selectedWorkspace: WorkspaceMetadata
   createWorkspace: () => void
+  createBlankWorkspace: () => Promise<void>
   renameCurrentWorkspace: () => void
   downloadCurrentWorkspace: () => void
   deleteCurrentWorkspace: () => void
   deleteAllWorkspaces: () => void
+  pushChangesToGist: () => void
   cloneGitRepository: () => void
   downloadWorkspaces: () => void
   restoreBackup: () => void
   hideIconsMenu: (showMenu: boolean) => void
-  addGithubAction: () => void
-  addTsSolTestGithubAction: () => void
-  addSlitherGithubAction: () => void
-  addHelperScripts: (script: string) => void
+  handleRemixdWorkspace: () => void
   showIconsMenu: boolean
   hideWorkspaceOptions: boolean
   hideLocalhostOptions: boolean
+  hideFileOperations: boolean
 }
 
 export function HamburgerMenu(props: HamburgerMenuProps) {
-  const {showIconsMenu, hideWorkspaceOptions, hideLocalhostOptions} = props
+  const { showIconsMenu, hideWorkspaceOptions, hideLocalhostOptions, hideFileOperations, selectedWorkspace } = props
   return (
     <>
+      <HamburgerMenuItem
+        kind="createBlank"
+        fa="far fa-plus"
+        hideOption={hideWorkspaceOptions}
+        actionOnClick={() => {
+          props.createBlankWorkspace()
+          props.hideIconsMenu(!showIconsMenu)
+        }}
+        platforms={[appPlatformTypes.web]}
+      ></HamburgerMenuItem>
       <HamburgerMenuItem
         kind="create"
         fa="far fa-plus"
@@ -33,15 +46,27 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
           props.createWorkspace()
           props.hideIconsMenu(!showIconsMenu)
         }}
+        platforms={[appPlatformTypes.web]}
+      ></HamburgerMenuItem>
+      <HamburgerMenuItem
+        kind="create.desktop"
+        fa="far fa-plus"
+        hideOption={hideWorkspaceOptions}
+        actionOnClick={() => {
+          props.createWorkspace()
+          props.hideIconsMenu(!showIconsMenu)
+        }}
+        platforms={[appPlatformTypes.desktop]}
       ></HamburgerMenuItem>
       <HamburgerMenuItem
         kind="clone"
-        fa="fab fa-github"
+        fa="fa-brands fa-github-alt"
         hideOption={hideWorkspaceOptions}
         actionOnClick={() => {
           props.cloneGitRepository()
           props.hideIconsMenu(!showIconsMenu)
         }}
+        platforms={[appPlatformTypes.web, appPlatformTypes.desktop]}
       ></HamburgerMenuItem>
       <HamburgerMenuItem
         kind="rename"
@@ -51,6 +76,7 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
           props.renameCurrentWorkspace()
           props.hideIconsMenu(!showIconsMenu)
         }}
+        platforms={[appPlatformTypes.web]}
       ></HamburgerMenuItem>
       <HamburgerMenuItem
         kind="download"
@@ -60,6 +86,7 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
           props.downloadCurrentWorkspace()
           props.hideIconsMenu(!showIconsMenu)
         }}
+        platforms={[appPlatformTypes.web]}
       ></HamburgerMenuItem>
       <HamburgerMenuItem
         kind="delete"
@@ -69,8 +96,31 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
           props.deleteCurrentWorkspace()
           props.hideIconsMenu(!showIconsMenu)
         }}
+        platforms={[appPlatformTypes.web]}
       ></HamburgerMenuItem>
-      <Dropdown.Divider className="border mb-0 mt-0 remixui_menuhr" style={{pointerEvents: 'none'}} />
+      <Dropdown.Divider className="border mb-0 mt-0 remixui_menuhr" style={{ pointerEvents: 'none' }} />
+      <HamburgerMenuItem
+        kind="localFileSystem"
+        fa="far fa-desktop"
+        hideOption={hideWorkspaceOptions}
+        actionOnClick={() => {
+          props.handleRemixdWorkspace()
+          props.hideIconsMenu(!showIconsMenu)
+        }}
+        platforms={[appPlatformTypes.web]}
+      ></HamburgerMenuItem>
+      <Dropdown.Divider className="border mb-0 mt-0 remixui_menuhr" style={{ pointerEvents: 'none' }} />
+      <HamburgerMenuItem
+        kind={selectedWorkspace.isGist ? "updateGist" : "publishToGist"}
+        fa="fab fa-github"
+        hideOption={hideWorkspaceOptions || hideLocalhostOptions}
+        actionOnClick={() => {
+          props.pushChangesToGist()
+          props.hideIconsMenu(!showIconsMenu)
+        }}
+        platforms={[appPlatformTypes.web]}
+      ></HamburgerMenuItem>
+      <Dropdown.Divider className="border mb-0 mt-0 remixui_menuhr" style={{ pointerEvents: 'none' }} />
       <HamburgerMenuItem
         kind="deleteAll"
         fa="far fa-trash-alt"
@@ -79,6 +129,7 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
           props.deleteAllWorkspaces()
           props.hideIconsMenu(!showIconsMenu)
         }}
+        platforms={[appPlatformTypes.web]}
       ></HamburgerMenuItem>
       <HamburgerMenuItem
         kind="backup"
@@ -88,6 +139,7 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
           props.downloadWorkspaces()
           props.hideIconsMenu(!showIconsMenu)
         }}
+        platforms={[appPlatformTypes.web]}
       ></HamburgerMenuItem>
       <HamburgerMenuItem
         kind="restore"
@@ -97,53 +149,7 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
           props.restoreBackup()
           props.hideIconsMenu(!showIconsMenu)
         }}
-      ></HamburgerMenuItem>
-      <Dropdown.Divider className="border mt-0 mb-0 remixui_menuhr" style={{pointerEvents: 'none'}} />
-      <HamburgerMenuItem
-        kind="solghaction"
-        fa="fak fa-solidity-mono"
-        hideOption={hideWorkspaceOptions}
-        actionOnClick={() => {
-          props.addGithubAction()
-          props.hideIconsMenu(!showIconsMenu)
-        }}
-      ></HamburgerMenuItem>
-      <HamburgerMenuItem
-        kind="tssoltestghaction"
-        fa="fab fa-js"
-        hideOption={hideWorkspaceOptions}
-        actionOnClick={() => {
-          props.addTsSolTestGithubAction()
-          props.hideIconsMenu(!showIconsMenu)
-        }}
-      ></HamburgerMenuItem>
-      <HamburgerMenuItem
-        kind="slitherghaction"
-        fa="far fa-shield"
-        hideOption={hideWorkspaceOptions}
-        actionOnClick={() => {
-          props.addSlitherGithubAction()
-          props.hideIconsMenu(!showIconsMenu)
-        }}
-      ></HamburgerMenuItem>
-      <Dropdown.Divider className="border mb-0 mt-0 remixui_menuhr" style={{pointerEvents: 'none'}} />
-      <HamburgerMenuItem
-        kind="addscriptetherscan"
-        fa="fak fa-ts-logo"
-        hideOption={hideWorkspaceOptions}
-        actionOnClick={() => {
-          props.addHelperScripts('etherscan')
-          props.hideIconsMenu(!showIconsMenu)
-        }}
-      ></HamburgerMenuItem>
-      <HamburgerMenuItem
-        kind="addscriptdeployer"
-        fa="fak fa-ts-logo"
-        hideOption={hideWorkspaceOptions}
-        actionOnClick={() => {
-          props.addHelperScripts('deployer')
-          props.hideIconsMenu(!showIconsMenu)
-        }}
+        platforms={[appPlatformTypes.web]}
       ></HamburgerMenuItem>
     </>
   )
@@ -156,7 +162,7 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
           subMenus={[
             {
               kind:'etherscan-script',
-              fa: 'fak fa-ts-logo',
+              fa: 'fa-kit fa-ts-logo',
               hideOption: hideWorkspaceOptions,
               actionOnClick: () => {
                 alert('etherscan')
@@ -166,7 +172,7 @@ export function HamburgerMenu(props: HamburgerMenuProps) {
             },
             {
               kind:'contract-deployer-factory-script',
-              fa: 'fak fa-ts-logo',
+              fa: 'fa-kit fa-ts-logo',
               hideOption: hideWorkspaceOptions,
               actionOnClick: () => {
                 alert('deloyer')

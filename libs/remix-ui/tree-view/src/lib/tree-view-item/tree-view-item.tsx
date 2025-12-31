@@ -1,10 +1,10 @@
 import React, {useState, useEffect} from 'react' // eslint-disable-line
-import {TreeViewItemProps} from '../../types'
+import { TreeViewItemProps } from '../../types'
 
 import './tree-view-item.css'
 
 export const TreeViewItem = (props: TreeViewItemProps) => {
-  const {id, children, label, labelClass, expand, iconX = 'fas fa-caret-right', iconY = '', icon, controlBehaviour = false, innerRef, showIcon = true, ...otherProps} = props
+  const { id, children, label, labelClass, expand, iconX = 'fas fa-caret-right', iconY = 'fas fa-caret-down', icon, controlBehaviour = false, innerRef, showIcon = true, ...otherProps } = props
   const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
@@ -12,7 +12,13 @@ export const TreeViewItem = (props: TreeViewItemProps) => {
   }, [expand])
 
   return (
-    <li ref={innerRef} key={`treeViewLi${id}`} data-id={`treeViewLi${id}`} className="li_tv" {...otherProps}>
+    <li
+      ref={innerRef}
+      key={`treeViewLi${id}`}
+      data-id={`treeViewLi${id}`}
+      className="li_tv remixui_mouseover"
+      {...otherProps}
+    >
       <div
         key={`treeViewDiv${id}`}
         data-id={`treeViewDiv${id}`}
@@ -20,13 +26,17 @@ export const TreeViewItem = (props: TreeViewItemProps) => {
         onClick={() => !controlBehaviour && setIsExpanded(!isExpanded)}
       >
         {children && showIcon ? (
-          <div className={isExpanded ? `px-0 ${iconY}` : `px-1 ${iconX} caret caret_tv`} style={{visibility: children ? 'visible' : 'hidden'}}></div>
+          <div className={isExpanded ? `ps-2 ${iconY}` : `ps-2 ${iconX} caret caret_tv`}
+            style={{ visibility: children ? 'visible' : 'hidden' }}
+          ></div>
         ) : icon ? (
-          <div className={`pr-3 pl-1 ${icon} caret caret_tv`}></div>
+          <div className={`pe-2 ps-2 ${icon} caret caret_tv`}></div>
         ) : null}
-        <span className="w-100 pl-1">{label}</span>
+        <span className="w-100 ms-1 ps-2" data-id={`treeViewLabelDiv${id}`}>{label}</span>
       </div>
-      {isExpanded ? children : null}
+      {isExpanded ? <div className="ps-3">
+        {children}
+      </div> : null}
     </li>
   )
 }

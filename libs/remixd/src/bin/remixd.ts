@@ -77,7 +77,7 @@ function errorHandler (error: any, service: string) {
   const options = program.opts();
   await warnLatestVersion()
 
-  if(options.install && !options.readOnly) {
+  if (options.install && !options.readOnly) {
     if (options.install.toLowerCase() === 'slither') require('./../scripts/installSlither')
     process.exit(0)
   }
@@ -95,7 +95,7 @@ function errorHandler (error: any, service: string) {
     console.log('\x1b[33m%s\x1b[0m', '[WARN] You may now only use IDE at ' + options.remixIde + ' to connect to that instance')
   }
 
-  if (!options.sharedFolder) options.sharedFolder = process.cwd() // if no specified, use the current folder
+  if (!options.sharedFolder) options.sharedFolder = process.cwd() // if not specified, use the current folder
 
   if (options.sharedFolder && existsSync(absolutePath('./', options.sharedFolder))) {
     console.log('\x1b[33m%s\x1b[0m', '[WARN] Any application that runs on your computer can potentially read from and write to all files in the directory.')
@@ -128,7 +128,7 @@ function errorHandler (error: any, service: string) {
       }
       // Run hardhat service if a hardhat project is shared as folder
       const hardhatConfigFilePath = absolutePath('./', options.sharedFolder)
-      const isHardhatProject = existsSync(hardhatConfigFilePath  + '/hardhat.config.js') || existsSync(hardhatConfigFilePath  + '/hardhat.config.ts')
+      const isHardhatProject = existsSync(hardhatConfigFilePath + '/hardhat.config.js') || existsSync(hardhatConfigFilePath + '/hardhat.config.ts')
       if (isHardhatProject) {
         startService('hardhat', (ws: WS, sharedFolderClient: servicesList.Sharedfolder, error: Error) => {
           if (error) {
@@ -139,9 +139,9 @@ function errorHandler (error: any, service: string) {
           sharedFolderClient.sharedFolder(options.sharedFolder)
         })
       }
-      // Run foundry service if a founndry project is shared as folder
+      // Run foundry service if a foundry project is shared as folder
       const foundryConfigFilePath = absolutePath('./', options.sharedFolder)
-      const isFoundryProject = existsSync(foundryConfigFilePath  + '/foundry.toml')
+      const isFoundryProject = existsSync(foundryConfigFilePath + '/foundry.toml')
       if (isFoundryProject) {
         startService('foundry', (ws: WS, sharedFolderClient: servicesList.Sharedfolder, error: Error) => {
           if (error) {

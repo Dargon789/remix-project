@@ -97,7 +97,7 @@ export class InternalCallTree {
           })
         } catch (e) {
           console.log(e)
-        }        
+        }
       }
     })
   }
@@ -165,7 +165,6 @@ export class InternalCallTree {
     const scope = this.findScope(vmtraceIndex)
     if (!scope) return []
     let scopeId = this.scopeStarts[scope.firstStep]
-    const scopeDetail = this.scopes[scopeId]
     const functions = []
     if (!scopeId) return functions
     let i = 0
@@ -174,6 +173,7 @@ export class InternalCallTree {
       i += 1
       if (i > 1000) throw new Error('retrieFunctionStack: recursion too deep')
       const functionDefinition = this.functionDefinitionsByScope[scopeId]
+      const scopeDetail = this.scopes[scopeId]
       if (functionDefinition !== undefined) {
         functions.push({ ...functionDefinition, ...scopeDetail })
       }
@@ -214,7 +214,7 @@ export class InternalCallTree {
     }
     throw new Error('Could not find gas cost per line')
   }
-  
+
   getLocalVariableById (id: number) {
     return this.variables[id]
   }
@@ -226,7 +226,7 @@ async function buildTree (tree, step, scopeId, isCreation, functionDefinition?, 
     const address = tree.traceManager.getCurrentCalledAddressAt(step)
     await registerFunctionParameters(tree, functionDefinition, step, scopeId, contractObj, validSourceLocation, address)
   }
-  
+
   function callDepthChange (step, trace) {
     if (step + 1 < trace.length) {
       return trace[step].depth !== trace[step + 1].depth
@@ -252,11 +252,11 @@ async function buildTree (tree, step, scopeId, isCreation, functionDefinition?, 
     let sourceLocation
     let validSourceLocation
     let address
-    
+
     try {
       address = tree.traceManager.getCurrentCalledAddressAt(step)
       sourceLocation = await tree.extractSourceLocation(step, address)
-      
+
       if (!includedSource(sourceLocation, currentSourceLocation)) {
         tree.reducedTrace.push(step)
         currentSourceLocation = sourceLocation
@@ -270,7 +270,7 @@ async function buildTree (tree, step, scopeId, isCreation, functionDefinition?, 
         validSourceLocation = previousValidSourceLocation
       } else
         validSourceLocation = currentSourceLocation
-    
+
     } catch (e) {
       return { outStep: step, error: 'InternalCallTree - Error resolving source location. ' + step + ' ' + e }
     }
@@ -280,9 +280,12 @@ async function buildTree (tree, step, scopeId, isCreation, functionDefinition?, 
     const stepDetail: StepDetail = tree.traceManager.trace[step]
     const nextStepDetail: StepDetail = tree.traceManager.trace[step + 1]
     if (stepDetail && nextStepDetail) {
+      // for complicated opcodes which don't have a static gas cost:
       stepDetail.gasCost = parseInt(stepDetail.gas as string) - parseInt(nextStepDetail.gas as string)
+    } else {
+      stepDetail.gasCost = parseInt(stepDetail.gasCost as unknown as string)
     }
-        
+
     // gas per line
     let lineColumnPos
     if (tree.offsetToLineColumnConverter) {
@@ -296,7 +299,7 @@ async function buildTree (tree, step, scopeId, isCreation, functionDefinition?, 
             sources[genSource.name] = { content: genSource.contents }
           }
         }
-        
+
         lineColumnPos = await tree.offsetToLineColumnConverter.offsetToLineColumn(validSourceLocation, validSourceLocation.file, sources, astSources)
         if (!tree.gasCostPerLine[validSourceLocation.file]) tree.gasCostPerLine[validSourceLocation.file] = {}
         if (!tree.gasCostPerLine[validSourceLocation.file][lineColumnPos.start.line]) {
@@ -337,7 +340,7 @@ async function buildTree (tree, step, scopeId, isCreation, functionDefinition?, 
         const newScopeId = scopeId === '' ? subScope.toString() : scopeId + '.' + subScope
         tree.scopeStarts[step] = newScopeId
         tree.scopes[newScopeId] = { firstStep: step, locals: {}, isCreation, gasCost: 0 }
-        // for the ctor we we are at the start of its trace, we have to replay this step in order to catch all the locals:
+        // for the ctor we are at the start of its trace, we have to replay this step in order to catch all the locals:
         const nextStep = constructorExecutionStarts ? step : step + 1
         if (constructorExecutionStarts) {
           tree.constructorsStartExecution[tree.pendingConstructorId] = tree.pendingConstructorExecutionAt
@@ -388,7 +391,7 @@ function getGeneratedSources (tree, scopeId, contractObj) {
 
 async function registerFunctionParameters (tree, functionDefinition, step, scopeId, contractObj, sourceLocation, address) {
   tree.functionCallStack.push(step)
-  const functionDefinitionAndInputs = { functionDefinition, inputs: [] }
+  const functionDefinitionAndInputs = { functionDefinition, inputs: []}
   // means: the previous location was a function definition && JUMPDEST
   // => we are at the beginning of the function and input/output are setup
   try {

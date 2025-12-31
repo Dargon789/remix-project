@@ -3,22 +3,22 @@
     width: 42px;
     height: 42px;
     cursor: pointer;
-  }
+    justify-content: space-between;
+    align-self: center;
+}
   .remixui_homeIcon:hover {
     box-shadow: 0px 0px 14px -7px;
   }
 
   .remixui_homeIcon svg path {
-    fill: var(--primary);
+    fill: var(--bs-primary);
   }
   .remixui_homeIcon svg polygon {
-    fill: var(--primary);
+    fill: var(--bs-primary);
   }
   .remixui_icons {
     display: flex;
     flex-flow: column nowrap;
-    justify-content: space-between;
-    align-items: center;
   }
   .remixui_icon:hover {
     box-shadow: 0px 0px 14px -7px;
@@ -30,12 +30,25 @@
     height: 36px;
     border-radius: 8px;
     align-items: center;
+     animation: highlight 2s forwards ;
   }
+
+  @keyframes highlight {
+    from {background-color: var(--bs-secondary);}
+    to {background-color: transparent;}
+  }
+
   .remixui_icon img {
     width: 28px;
     height: 28px;
     padding: 4px;
     filter: invert(0.5);
+  }
+
+  .remixui_icon_ai img {
+    width: 28px;
+    height: 28px;
+    padding: 4px;
   }
 
   .remixui_icon .selected-dark {
@@ -69,7 +82,7 @@
   .remixui_statusWithBG {
     border-radius: 8px;
     background-color: var(--danger);
-    color: var(--light);
+    color: var(--bs-light);
     font-size: 12px;
     height: 15px;
     text-align: center;
@@ -77,7 +90,7 @@
     padding-left: 5px;
     padding-right: 5px;
   }
-  
+
   .remixui_verticalIconContextcontainer {
     display: block;
     position: fixed;
@@ -93,12 +106,12 @@
     padding-left: 6px;
     cursor: pointer;
     color: var(--text-dark);
-    background-color: var(--light);
+    background-color: var(--bs-light);
   }
   .remixui_liitem:hover {
-    background-color: var(--secondary);
+    background-color: var(--bs-secondary);
   }
-  
+
   .remixui_scrollbar {
     overflow-y: scroll;
     scrollbar-width: none; /* Firefox hide scrollbar */
@@ -132,6 +145,10 @@
 
   .remixui_settings {
     flex-basis: 50px;
+  }
+
+  .remixui_icons_height {
+    height: 97vh;
   }
 
   #menuitems {

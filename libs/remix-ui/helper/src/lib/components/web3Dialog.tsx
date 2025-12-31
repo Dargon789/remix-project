@@ -27,7 +27,7 @@ export function Web3ProviderDialog(props: web3ProviderDialogProps) {
         </a>
         )
         <div className="border p-1">
-          geth --http --http.corsdomain="{window.origin}" --http.api web3,eth,debug,personal,net --vmdebug --datadir {thePath} --dev console
+          geth --http --http.corsdomain="{window.origin}" --http.api web3,eth,debug,net --vmdebug --datadir {thePath} --dev console
         </div>
         <br />
         <br />
@@ -47,7 +47,7 @@ export function Web3ProviderDialog(props: web3ProviderDialogProps) {
         type="text"
         name="prompt_text"
         id="prompt_text"
-        style={{width: '100%'}}
+        style={{ width: '100%' }}
         className="form-control"
         defaultValue={props.externalEndpoint}
         data-id="modalDialogCustomPromptText"

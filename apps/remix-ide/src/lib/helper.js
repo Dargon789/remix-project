@@ -1,5 +1,5 @@
 var async = require('async')
-import { toChecksumAddress } from '@ethereumjs/util'
+import { toChecksumAddress, bytesToHex } from '@ethereumjs/util'
 
 export default  {
   shortenAddress: function (address, etherBalance) {
@@ -9,7 +9,7 @@ export default  {
   addressToString: function (address) {
     if (!address) return null
     if (typeof address !== 'string') {
-      address = address.toString('hex')
+      address = bytesToHex(address)
     }
     if (address.indexOf('0x') === -1) {
       address = '0x' + address
@@ -18,9 +18,10 @@ export default  {
   },
   shortenHexData: function (data) {
     if (!data) return ''
-    if (data.length < 5) return data
+    var sliceLen = 5
     var len = data.length
-    return data.slice(0, 5) + '...' + data.slice(len - 5, len)
+    if (len < sliceLen * 2) return data
+    return data.slice(0, sliceLen) + '...' + data.slice(len - sliceLen, len)
   },
   createNonClashingNameWithPrefix (name, fileProvider, prefix, cb) {
     if (!name) name = 'Undefined'

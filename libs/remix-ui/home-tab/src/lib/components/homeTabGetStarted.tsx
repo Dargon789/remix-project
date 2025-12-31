@@ -1,27 +1,87 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, {useEffect, useRef, useContext} from 'react'
-import {useIntl, FormattedMessage} from 'react-intl'
-import {TEMPLATE_NAMES} from '@remix-ui/workspace'
-import {ThemeContext} from '../themeContext'
-import Carousel from 'react-multi-carousel'
+import React, { useEffect, useRef, useContext, SyntheticEvent, useState } from 'react'
+import { useIntl, FormattedMessage } from 'react-intl'
+import { TEMPLATE_NAMES, TEMPLATE_METADATA } from '@remix-ui/workspace'
+import { ThemeContext } from '../themeContext'
 import WorkspaceTemplate from './workspaceTemplate'
 import 'react-multi-carousel/lib/styles.css'
-import CustomNavButtons from './customNavButtons'
-declare global {
-  interface Window {
-    _paq: any
-  }
-}
-const _paq = (window._paq = window._paq || []) //eslint-disable-line
+import { AppContext, appPlatformTypes, platformContext } from '@remix-ui/app'
+import { HomeTabEvent, MatomoEvent } from '@remix-api'
+import { TrackingContext } from '@remix-ide/tracking'
+import { Plugin } from "@remixproject/engine";
+import { CustomRemixApi } from '@remix-api'
+import { CustomTooltip } from '@remix-ui/helper'
+
 interface HomeTabGetStartedProps {
   plugin: any
 }
 
-function HomeTabGetStarted({plugin}: HomeTabGetStartedProps) {
+type WorkspaceTemplate = {
+  gsID: string
+  workspaceTitle: string
+  description: string
+  projectLogo: string
+  templateName: string
+}
+
+const workspaceTemplates: WorkspaceTemplate[] = [
+  {
+    gsID: 'sUTLogo',
+    workspaceTitle: 'Start Coding',
+    description: 'Start coding using the default template.',
+    projectLogo: 'assets/img/remixverticaltextLogo.png',
+    templateName: 'remixDefault',
+  },
+  {
+    gsID: 'sUTLogo',
+    workspaceTitle: 'ZK Semaphore',
+    description: 'Create a new ZK Project with Circom using this template.',
+    projectLogo: 'assets/img/circom.webp',
+    templateName: 'semaphore',
+  },
+  {
+    gsID: 'sUTLogo',
+    workspaceTitle: 'ERC20',
+    description: 'Create a new ERC20 token using this template.',
+    projectLogo: 'assets/img/oxprojectLogo.png',
+    templateName: 'ozerc20',
+  },
+  {
+    gsID: 'sUTLogo',
+    workspaceTitle: 'Uniswap V4 Hooks',
+    description: 'Create a new workspace based on this template.',
+    projectLogo: 'assets/img/gnosissafeLogo.png',
+    templateName: 'uniswapV4Template',
+  },
+  {
+    gsID: 'sUTLogo',
+    workspaceTitle: 'NFT / ERC721',
+    description: 'Create a new ERC721 token using this template.',
+    projectLogo: 'assets/img/openzeppelinLogo.png',
+    templateName: 'ozerc721',
+  },
+  {
+    gsID: 'sUTLogo',
+    workspaceTitle: 'MultiSig',
+    description: 'Create a new MultiSig wallet using this template.',
+    projectLogo: 'assets/img/gnosissafeLogo.png',
+    templateName: 'gnosisSafeMultisig',
+  }
+]
+
+function HomeTabGetStarted({ plugin }: HomeTabGetStartedProps) {
+  const platform = useContext(platformContext)
   const themeFilter = useContext(ThemeContext)
+  const appContext = useContext(AppContext)
+  const { trackMatomoEvent: baseTrackEvent } = useContext(TrackingContext)
+
+  // Component-specific tracker with default type, but allows overrides
+  const trackMatomoEvent = <T extends MatomoEvent = HomeTabEvent>(event: T) => {
+    baseTrackEvent?.<T>(event)
+  }
+  const intl = useIntl()
   const carouselRef = useRef<any>({})
   const carouselRefDiv = useRef(null)
-  const intl = useIntl()
 
   useEffect(() => {
     document.addEventListener('wheel', handleScroll)
@@ -58,99 +118,83 @@ function HomeTabGetStarted({plugin}: HomeTabGetStartedProps) {
   }
 
   const createWorkspace = async (templateName) => {
-    await plugin.appManager.activatePlugin('filePanel')
-    const timeStamp = Date.now()
+    if (platform === appPlatformTypes.desktop) {
+      await plugin.call('remix-templates', 'loadTemplateInNewWindow', templateName)
+      return
+    }
+
     let templateDisplayName = TEMPLATE_NAMES[templateName]
-    templateDisplayName = await plugin.call('filePanel', 'getAvailableWorkspaceName', templateDisplayName)
-    await plugin.call('filePanel', 'createWorkspace', templateDisplayName, templateName)
-    await plugin.call('filePanel', 'setWorkspace', templateDisplayName)
-    plugin.verticalIcons.select('filePanel')
-    _paq.push(['trackEvent', 'hometab', 'homeGetStarted', templateName])
+    const metadata = TEMPLATE_METADATA[templateName]
+
+    if (metadata) {
+      if (metadata.type === 'git') {
+        await (plugin as Plugin<any, CustomRemixApi>).call('dgitApi', 'clone',
+          {
+            url: metadata.url,
+            branch: metadata.branch,
+            workspaceName: templateDisplayName,
+            depth: 10
+          })
+      } else if (metadata && metadata.type === 'plugin') {
+        await plugin.appManager.activatePlugin('filePanel')
+        templateDisplayName = await plugin.call('filePanel', 'getAvailableWorkspaceName', templateDisplayName)
+        await plugin.call('filePanel', 'createWorkspace', templateDisplayName, 'blank')
+        await plugin.call('filePanel', 'setWorkspace', templateDisplayName)
+        plugin.verticalIcons.select('filePanel')
+        await plugin.call(metadata.name, metadata.endpoint, ...metadata.params)
+      }
+    } else {
+      await plugin.appManager.activatePlugin('filePanel')
+      templateDisplayName = await plugin.call('filePanel', 'getAvailableWorkspaceName', templateDisplayName)
+      await plugin.call('filePanel', 'createWorkspace', templateDisplayName, templateName)
+      await plugin.call('filePanel', 'setWorkspace', templateDisplayName)
+      plugin.verticalIcons.select('filePanel')
+    }
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'homeGetStarted',
+      name: templateName,
+      isClick: true
+    })
   }
 
   return (
-    <div className="pl-2" id="hTGetStartedSection">
-      <label style={{fontSize: '1.2rem'}}>
-        <span className="mr-2">
-          <FormattedMessage id="home.getStarted" />
-        </span>
-        - <FormattedMessage id="home.projectTemplates" />
+    <div className="ps-2" id="hTGetStartedSection">
+      <label className="pt-3" style={{ fontSize: '1.2rem' }}>
+        <FormattedMessage id="home.projectTemplates" />
       </label>
-      <div ref={carouselRefDiv} className="w-100 d-flex flex-column">
+      <div ref={carouselRefDiv} className="w-100 d-flex flex-column pt-1">
         <ThemeContext.Provider value={themeFilter}>
-          <Carousel
-            ref={carouselRef}
-            focusOnSelect={true}
-            customButtonGroup={<CustomNavButtons next={undefined} previous={undefined} goToSlide={undefined} parent={carouselRef} />}
-            arrows={false}
-            swipeable={false}
-            draggable={true}
-            showDots={false}
-            responsive={{
-              superLargeDesktop: {
-                breakpoint: {max: 4000, min: 3000},
-                items: 5
-              },
-              desktop: {
-                breakpoint: {max: 3000, min: 1024},
-                items: 5,
-                partialVisibilityGutter: 0
-              }
-            }}
-            renderButtonGroupOutside={true}
-            ssr={true} // means to render carousel on server-side.
-            keyBoardControl={true}
-            containerClass="carousel-container"
-            deviceType={'desktop'}
-            itemClass="w-100"
-          >
-            <WorkspaceTemplate
-              gsID="sUTLogo"
-              workspaceTitle="Gnosis Safe MultiSig"
-              description={intl.formatMessage({
-                id: 'home.gnosisSafeMultisigTemplateDesc'
-              })}
-              callback={() => createWorkspace('gnosisSafeMultisig')}
-            />
-            <WorkspaceTemplate
-              gsID="sUTLogo"
-              workspaceTitle="0xProject ERC20"
-              description={intl.formatMessage({
-                id: 'home.zeroxErc20TemplateDesc'
-              })}
-              callback={() => createWorkspace('zeroxErc20')}
-            />
-            <WorkspaceTemplate
-              gsID="sourcifyLogo"
-              workspaceTitle="OpenZeppelin ERC20"
-              description={intl.formatMessage({id: 'home.ozerc20TemplateDesc'})}
-              callback={() => createWorkspace('ozerc20')}
-            />
-            <WorkspaceTemplate
-              gsID="sUTLogo"
-              workspaceTitle="OpenZeppelin ERC721"
-              description={intl.formatMessage({
-                id: 'home.ozerc721TemplateDesc'
-              })}
-              callback={() => createWorkspace('ozerc721')}
-            />
-            <WorkspaceTemplate
-              gsID="sUTLogo"
-              workspaceTitle="OpenZeppelin ERC1155"
-              description={intl.formatMessage({
-                id: 'home.ozerc1155TemplateDesc'
-              })}
-              callback={() => createWorkspace('ozerc1155')}
-            />
-            <WorkspaceTemplate
-              gsID="solhintLogo"
-              workspaceTitle="Remix Basic"
-              description={intl.formatMessage({
-                id: 'home.remixDefaultTemplateDesc'
-              })}
-              callback={() => createWorkspace('remixDefault')}
-            />
-          </Carousel>
+          <div className="pt-3">
+            <div className="d-flex flex-row align-items-center flex-wrap">
+              {workspaceTemplates.map((template, index) => (
+                <CustomTooltip
+                  tooltipText={template.description}
+                  tooltipId={template.gsID}
+                  tooltipClasses="text-nowrap"
+                  tooltipTextClasses="border bg-light text-dark p-1 pe-3"
+                  placement="top-start"
+                  key={`${template.gsID}-${template.workspaceTitle}-${index}`}
+                >
+                  <button
+                    key={index}
+                    className={index === 0 ?
+                      'btn btn-primary border p-2 text-nowrap me-3 mb-3' :
+                      index === workspaceTemplates.length - 1 ?
+                        'btn border p-2 text-nowrap me-2 mb-3' :
+                        'btn border p-2 text-nowrap me-3 mb-3'
+                    }
+                    onClick={async (e) => {
+                      createWorkspace(template.templateName)
+                    }}
+                    data-id={`homeTabGetStarted${template.templateName}`}
+                  >
+                    {template.workspaceTitle}
+                  </button>
+                </CustomTooltip>
+              ))}
+            </div>
+          </div>
         </ThemeContext.Provider>
       </div>
     </div>

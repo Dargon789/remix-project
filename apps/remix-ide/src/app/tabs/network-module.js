@@ -1,10 +1,10 @@
 import { Plugin } from '@remixproject/engine'
 import * as packageJson from '../../../../../package.json'
-import { Web3 } from 'web3'
+import { ethers } from 'ethers'
 
 export const profile = {
   name: 'network',
-  description: 'Manage the network (mainnet, ropsten, goerli...) and the provider (web3, vm, injected)',
+  description: 'Manage the network (mainnet, sepolia,...) and the provider (web3, vm, injected)',
   methods: ['getNetworkProvider', 'getEndpoint', 'detectNetwork', 'addNetwork', 'removeNetwork'],
   version: packageJson.version,
   kind: 'network'
@@ -18,10 +18,16 @@ export class NetworkModule extends Plugin {
   constructor (blockchain) {
     super(profile)
     this.blockchain = blockchain
-    // TODO: See with remix-lib to make sementic coherent
+
+    // TODO: See with remix-lib to make semantic coherent
     this.blockchain.event.register('contextChanged', (provider) => {
       this.emit('providerChanged', provider)
     })
+  }
+
+  onActivation () {
+    // emit the initial provider type
+    this.emit('providerChanged', this.blockchain.getProvider)
   }
 
   /** Return the current network provider (web3, vm, injected) */
@@ -49,11 +55,11 @@ export class NetworkModule extends Plugin {
 
   /** Add a custom network to the list of available networks */
   addNetwork (network) { // { name, url }
-    const provider = network.url === 'ipc' ? new Web3.providers.IpcProvider() : new Web3.providers.HttpProvider(network.url)
+    const provider = network.url === 'ipc' ? new ethers.IpcProvider() : new ethers.JsonRpcProvider(network.url)
     this.blockchain.addProvider({ name: network.name, provider })
   }
 
-  /** Remove a network to the list of availble networks */
+  /** Remove a network to the list of available networks */
   removeNetwork (name) {
     this.blockchain.removeProvider(name)
   }

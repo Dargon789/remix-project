@@ -1,11 +1,14 @@
-import { Ref } from 'react'
+import { Dispatch, Ref } from 'react'
 import { CompilerAbstract } from '@remix-project/remix-solidity'
 import { ContractData, FuncABI, OverSizeLimit } from '@remix-project/core-plugin'
 import { RunTab } from './run-tab'
 import { SolcInput, SolcOutput } from '@openzeppelin/upgrades-core'
+import { Provider } from '@remix-ui/environment-explorer'
 import { LayoutCompatibilityReport } from '@openzeppelin/upgrades-core/dist/storage/report'
+import { CheckStatus } from '../run-tab'
 export interface RunTabProps {
-  plugin: RunTab
+  plugin: RunTab,
+  initialState?: RunTabState
 }
 
 export interface Contract {
@@ -19,6 +22,32 @@ export interface Contract {
 export interface ContractList {
   [file: string]: Contract[]
 }
+
+export type SmartAccount = {
+  address: string
+  salt: number
+  ownerEOA: string
+  timestamp: number
+}
+
+export interface UdappInstance {
+  contractData?: ContractData,
+  address: string,
+  balance?: number,
+  name: string,
+  decodedResponse?: Record<number, any>,
+  abi?: any,
+  isPinned?: boolean,
+  pinnedAt?: number,
+  filePath?: string
+}
+
+export type EnvDropdownLabelStateType = {
+  name: string,
+  value: string,
+  chainId?: string | number
+}
+
 export interface RunTabState {
   accounts: {
     loadedAccounts: Record<string, string>,
@@ -27,21 +56,17 @@ export interface RunTabState {
     error: string,
     selectedAccount: string
   },
+  smartAccounts: Record<string, SmartAccount>
   sendValue: string,
   sendUnit: 'ether' | 'finney' | 'gwei' | 'wei',
   gasLimit: number,
   selectExEnv: string,
   personalMode: boolean,
   networkName: string,
+  chainId: string,
+  displayName: string,
   providers: {
-    providerList: {
-      id?: string,
-      dataId?: string,
-      title?: string,
-      value: string,
-      fork?: string
-      content: string
-    }[],
+    providerList: Provider[],
     isRequesting: boolean,
     isSuccessful: boolean,
     error: string
@@ -69,7 +94,7 @@ export interface RunTabState {
       }[]
     },
     deployOptions: { [file: string]: { [name: string]: DeployOptions } },
-    loadType: 'abi' | 'sol' | 'other'
+    loadType: 'abi' | 'sol' | 'vyper' | 'lexon' | 'contract' | 'other'
     currentFile: string,
     compilationSource: string,
     currentContract: string,
@@ -86,14 +111,7 @@ export interface RunTabState {
   baseFeePerGas: string,
   gasPrice: string,
   instances: {
-    instanceList: {
-      contractData?: ContractData,
-      address: string,
-      balance?: number,
-      name: string,
-      decodedResponse?: Record<number, any>,
-      abi?: any
-    }[],
+    instanceList: UdappInstance[],
     error: string
   },
   recorder: {
@@ -103,11 +121,17 @@ export interface RunTabState {
   remixdActivated: boolean,
   proxy: {
     deployments: { address: string, date: string, contractName: string }[]
-  }
+  },
+  compilerVersion?: string
 }
 
 export interface SettingsProps {
+  runTabPlugin: RunTab,
+  udappState: RunTabState
+  envLabel: string,
+  currentSelectedEnv?: string,
   selectExEnv: string,
+  EvaluateEnvironmentSelection: any
   accounts: {
     loadedAccounts: Record<string, any>,
     selectedAccount: string,
@@ -124,23 +148,19 @@ export interface SettingsProps {
   personalMode: boolean,
   networkName: string,
   providers: {
-    providerList: {
-      id?: string,
-      dataId?: string,
-      title?: string,
-      value: string,
-      fork?: string
-      content: string
-    }[],
+    providerList: Provider[],
     isRequesting: boolean,
     isSuccessful: boolean,
     error: string
   },
+  addFile: (path: string, content: string) => void,
   setExecutionContext: (executionContext: { context: string, fork: string }) => void,
   createNewBlockchainAccount: (cbMessage: JSX.Element) => void,
+  createNewSmartAccount: () => void,
+  delegationAuthorization: (contractAddress: string) => void,
   setPassphrase: (passphrase: string) => void,
   setMatchPassphrase: (passphrase: string) => void,
-  modal: (title: string, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void,
+  modal: (title: string | JSX.Element, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void,
   tooltip: (toasterMsg: string) => void,
   signMessageWithAddress: (account: string, message: string, modalContent: (hash: string, data: string) => JSX.Element, passphrase?: string) => void,
   passphrase: string,
@@ -148,21 +168,21 @@ export interface SettingsProps {
 }
 
 export interface EnvironmentProps {
+  checkSelectionCorrectness: any
+  runTabPlugin: RunTab,
+  envLabel: string,
   selectedEnv: string,
   providers: {
-    providerList: {
-      id?: string,
-      dataId?: string,
-      title?: string,
-      value: string,
-      fork?: string
-      content: string
-    }[],
+    providerList: Provider[],
     isRequesting: boolean,
     isSuccessful: boolean,
     error: string
   },
   setExecutionContext: (executionContext: { context: string }) => void
+  modal: (title: string | JSX.Element, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void,
+  config: any,
+  currentSelectedEnv?: string,
+  udappState: RunTabState
 }
 
 export interface NetworkProps {
@@ -170,6 +190,7 @@ export interface NetworkProps {
 }
 
 export interface AccountProps {
+  runTabPlugin: RunTab,
   selectExEnv: string,
   accounts: {
     loadedAccounts: Record<string, any>,
@@ -178,15 +199,19 @@ export interface AccountProps {
     isSuccessful: boolean,
     error: string
   },
+  addFile: (path: string, content: string) => void,
   setAccount: (account: string) => void,
   personalMode: boolean,
   createNewBlockchainAccount: (cbMessage: JSX.Element) => void,
+  createNewSmartAccount: () => void,
+  delegationAuthorization: (contractAddress: string) => void
   setPassphrase: (passphrase: string) => void,
   setMatchPassphrase: (passphrase: string) => void,
   tooltip: (toasterMsg: string) => void,
-  modal: (title: string, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void,
+  modal: (title: string | JSX.Element, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void,
   signMessageWithAddress: (account: string, message: string, modalContent: (hash: string, data: string) => JSX.Element, passphrase?: string) => void,
-  passphrase: string
+  passphrase: string,
+  networkName: string
 }
 
 export interface GasPriceProps {
@@ -205,7 +230,7 @@ export interface Tx {
   from: string,
   to: string,
   data: string,
-  gas: string
+  gasLimit?: string
 }
 
 export interface Network {
@@ -224,12 +249,17 @@ export type MainnetPrompt = (
   ) => JSX.Element
 
 export interface ContractDropdownProps {
+  getCompilerDetails: () => Promise<CheckStatus>
+  evmCheckComplete?: boolean,
+  setEvmCheckComplete?: Dispatch<React.SetStateAction<boolean>>,
+  plugin: RunTab,
+  runTabState: RunTabState
   selectedAccount: string,
   exEnvironment: string,
   contracts: {
     contractList: ContractList,
     deployOptions: { [file: string]: { [name: string]: DeployOptions } },
-    loadType: 'abi' | 'sol' | 'other',
+    loadType: 'abi' | 'sol' | 'vyper' | 'lexon' | 'contract' | 'other',
     currentFile: string,
     compilationSource: string
     currentContract: string,
@@ -240,7 +270,7 @@ export interface ContractDropdownProps {
   },
   syncContracts: () => void,
   getSelectedContract: (contractName: string, compiler: CompilerAbstract) => ContractData,
-  modal: (title: string, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void,
+  modal: (title: string | JSX.Element, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void,
   passphrase: string,
   setPassphrase: (passphrase: string) => void,
   createInstance: (
@@ -252,7 +282,8 @@ export interface ContractDropdownProps {
     mainnetPrompt: MainnetPrompt,
     isOverSizePrompt: (values: OverSizeLimit) => JSX.Element,
     args,
-    deployMode: DeployMode[]) => void,
+    deployMode: DeployMode[],
+    isVerifyChecked: boolean) => void,
   ipfsCheckedState: boolean,
   setIpfsCheckedState: (value: boolean) => void,
   publishToStorage: (storage: 'ipfs' | 'swarm', contract: ContractData) => void,
@@ -266,8 +297,13 @@ export interface ContractDropdownProps {
   setSelectedContract: (contractName: string) => void
   remixdActivated: boolean,
   isValidProxyAddress?: (address: string) => Promise<boolean>,
-  isValidProxyUpgrade?: (proxyAddress: string, contractName: string, solcInput: SolcInput, solcOuput: SolcOutput) => Promise<LayoutCompatibilityReport | { ok: boolean, pass: boolean, warning: boolean }>,
+  isValidProxyUpgrade?: (proxyAddress: string, contractName: string, solcInput: SolcInput, solcOutput: SolcOutput, solcVersion: string) => Promise<LayoutCompatibilityReport | { ok: boolean, pass: boolean, warning: boolean }>,
   proxy: { deployments: { address: string, date: string, contractName: string }[] }
+  solCompilerVersion: { version: string, canReceive: boolean }
+  setCompilerVersion: React.Dispatch<React.SetStateAction<{
+    version: string;
+    canReceive: boolean;}>>
+  getCompilerVersion: () => void
 }
 
 export interface RecorderProps {
@@ -279,22 +315,21 @@ export interface RecorderProps {
   scenarioPrompt: (msg: string, defaultValue: string) => JSX.Element,
   count: number
   currentFile: string
+  plugin: RunTab
 }
 
 export interface InstanceContainerProps {
+  getCompilerDetails: () => Promise<CheckStatus>
+  evmCheckComplete?: boolean
+  runTabState: RunTabState
   instances: {
-    instanceList: {
-      contractData?: ContractData,
-      address: string,
-      balance?: number,
-      name: string,
-      decodedResponse?: Record<number, any>,
-      abi?: any
-    }[],
+    instanceList: UdappInstance[],
     error: string
   },
   clearInstances: () => void,
   removeInstance: (index: number) => void,
+  pinInstance: (index: number, pinnedAt: number, filePath: string) => void,
+  unpinInstance: (index: number) => void,
   getContext: () => 'memory' | 'blockchain',
   runTransactions: (
     instanceIndex: number,
@@ -314,11 +349,23 @@ export interface InstanceContainerProps {
   mainnetPrompt: (tx: Tx, network: Network, amount: string, gasEstimation: string, gasFees: (maxFee: string, cb: (txFeeText: string, priceStatus: boolean) => void) => void, determineGasPrice: (cb: (txFeeText: string, gasPriceValue: string, gasPriceStatus: boolean) => void) => void) => JSX.Element,
   sendValue: string,
   getFuncABIInputs: (funcABI: FuncABI) => string
+  exEnvironment: string
+  editInstance: (
+    addressOrInstance: string | UdappInstance,
+    abi?: any,
+    name?: string,
+    devdoc?: any,
+    metadata?: string,
+    htmlTemplate?: any
+  ) => void
+  plugin: RunTab
+  solcVersion: { version: string, canReceive: boolean }
+  getVersion: any
 }
 
 export interface Modal {
   hide?: boolean
-  title: string
+  title: string | JSX.Element
   // eslint-disable-next-line no-undef
   message: string | JSX.Element
   okLabel: string
@@ -353,6 +400,11 @@ export interface DeployOptions {
 }
 
 export interface ContractGUIProps {
+  getCompilerDetails: () => Promise<CheckStatus>
+  evmCheckComplete?: boolean,
+  setEvmCheckComplete?: React.Dispatch<React.SetStateAction<boolean>>,
+  plugin: RunTab,
+  runTabState: RunTabState
   title?: string,
   funcABI: FuncABI,
   inputs: string,
@@ -367,7 +419,12 @@ export interface ContractGUIProps {
   proxy?: { deployments: { address: string, date: string, contractName: string }[] },
   isValidProxyAddress?: (address: string) => Promise<boolean>,
   isValidProxyUpgrade?: (proxyAddress: string) => Promise<LayoutCompatibilityReport | { ok: boolean, pass: boolean, warning: boolean }>,
-  modal?: (title: string, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void
+  modal?: (title: string | JSX.Element, message: string | JSX.Element, okLabel: string, okFn: () => void, cancelLabel?: string, cancelFn?: () => void, okBtnClass?: string, cancelBtnClass?: string) => void
+  solcVersion?: { version: string, canReceive: boolean }
+  setSolcVersion?: React.Dispatch<React.SetStateAction<{
+    version: string;
+    canReceive: boolean;}>>
+  getVersion: () => void
 }
 export interface MainnetProps {
   network: Network,
@@ -387,16 +444,14 @@ export interface MainnetProps {
 }
 
 export interface UdappProps {
-  instance: {
-    contractData?: ContractData,
-    address: string,
-    balance?: number,
-    name: string,
-    decodedResponse?: Record<number, any>,
-    abi?: any
-  },
+  getCompilerDetails: () => Promise<CheckStatus>
+  evmCheckComplete?: boolean,
+  runTabState: RunTabState
+  instance: UdappInstance,
   context: 'memory' | 'blockchain',
   removeInstance: (index: number) => void,
+  pinInstance: (index: number, pinnedAt: number, filePath: string) => void,
+  unpinInstance: (index: number) => void,
   index: number,
   gasEstimationPrompt: (msg: string) => JSX.Element,
   passphrasePrompt: (message: string) => JSX.Element,
@@ -416,6 +471,18 @@ export interface UdappProps {
     funcIndex?: number) => void,
   sendValue: string,
   getFuncABIInputs: (funcABI: FuncABI) => string
+  exEnvironment: string
+  editInstance: (
+    addressOrInstance: string | UdappInstance,
+    abi?: any,
+    name?: string,
+    devdoc?: any,
+    metadata?: string,
+    htmlTemplate?: any
+  ) => void
+  plugin: RunTab
+  solcVersion: { version: string, canReceive: boolean }
+  getVersion: () => string
 }
 
 export interface DeployButtonProps {

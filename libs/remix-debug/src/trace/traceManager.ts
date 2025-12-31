@@ -37,10 +37,10 @@ export class TraceManager {
         this.trace = result['structLogs']
 
         try {
-          const networkId = await this.web3.eth.net.getId()
+          const networkId = (await this.web3.getNetwork()).chainId
           this.fork = execution.forkAt(networkId, tx.blockNumber)
         } catch (e) {
-          this.fork = 'merge'
+          this.fork = 'osaka'
           console.log(`unable to detect fork, defaulting to ${this.fork}..`)
           console.error(e)
         }
@@ -155,7 +155,7 @@ export class TraceManager {
         return stack.map(el => toHexPaddedString(el))
       } else {
         // it's an object coming from the VM.
-        // for performance reasons, 
+        // for performance reasons,
         // we don't turn the stack coming from the VM into an array when the tx is executed
         // but now when the app needs it.
         const stack = []

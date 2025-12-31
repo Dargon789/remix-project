@@ -1,6 +1,6 @@
-import { toHex } from 'web3-utils'
+import { hexlify } from 'ethers'
 import { VMContext } from '../vm-context'
-import { bigIntToHex } from '@ethereumjs/util'
+import { bigIntToHex, bytesToHex } from '@ethereumjs/util'
 
 export class Blocks {
   vmContext: VMContext
@@ -29,6 +29,7 @@ export class Blocks {
 
   eth_getBlockByNumber (payload, cb) {
     let blockIndex = payload.params[0]
+    const includeTransactions = payload.params[1]
     if (blockIndex === 'latest') {
       blockIndex = this.vmContext.latestBlockNumber
     }
@@ -42,27 +43,34 @@ export class Blocks {
       return cb(new Error('block not found'))
     }
 
-    const transactions = block.transactions.map((t) => {
-      const hash = '0x' + t.hash().toString('hex')
-      const tx = this.vmContext.txByHash[hash]
-      const receipt = this.vmContext.currentVm.web3vm.txsReceipt[hash]
-      if (receipt) {
-        return {
-          blockHash: '0x' + block.hash().toString('hex'),
-          blockNumber: bigIntToHex(block.header.number),
-          from: receipt.from,
-          gas: bigIntToHex(receipt.gas),
-          chainId: '0xd05',
-          gasPrice: '0x4a817c800', // 20000000000
-          hash: receipt.transactionHash,
-          input: receipt.input,
-          nonce: bigIntToHex(tx.nonce),
-          transactionIndex: this.TX_INDEX,
-          value: bigIntToHex(tx.value),
-          to: receipt.to ?  receipt.to : null
+    let transactions = []
+    if (includeTransactions) {
+      transactions = block.transactions.map((t) => {
+        const hash = bytesToHex(t.hash())
+        const tx = this.vmContext.txByHash[hash]
+        const receipt = this.vmContext.currentVm.web3vm.txsReceipt[hash]
+        if (receipt) {
+          return {
+            blockHash: bytesToHex(block.hash()),
+            blockNumber: bigIntToHex(block.header.number),
+            from: receipt.from,
+            gas: bigIntToHex(receipt.gas),
+            chainId: '0xd05',
+            gasPrice: '0x4a817c800', // 20000000000
+            hash: receipt.transactionHash,
+            input: receipt.input,
+            nonce: bigIntToHex(tx.nonce),
+            transactionIndex: this.TX_INDEX,
+            value: bigIntToHex(tx.value),
+            to: receipt.to ? receipt.to : null,
+            v: bigIntToHex(tx.v),
+            r: bigIntToHex(tx.r),
+            s: bigIntToHex(tx.s)
+          }
         }
-      }
-    })
+      })
+    }
+
     const b = {
       baseFeePerGas: '0x01',
       number: bigIntToHex(block.header.number),
@@ -88,35 +96,43 @@ export class Blocks {
   }
 
   toHex (value) {
-    if (!value) return '0x0'
-    const v = value.toString('hex')
-    return ((v === '0x' || v === '') ? '0x0' : ('0x' + v))
+    if (!value) return '0x00'
+    const v = bytesToHex(value)
+    // @ts-ignore
+    return ((v === '0x' || v === '') ? '0x00' : v)
   }
 
   eth_getBlockByHash (payload, cb) {
     const block = this.vmContext.blocks[payload.params[0]]
-
-    const transactions = block.transactions.map((t) => {
-      const hash = '0x' + t.hash().toString('hex')
-      const tx = this.vmContext.txByHash[hash]
-      const receipt = this.vmContext.currentVm.web3vm.txsReceipt[hash]
-      if (receipt) {
-        return {
-          blockHash: '0x' + block.hash().toString('hex'),
-          blockNumber: bigIntToHex(block.header.number),
-          from: receipt.from,
-          gas: toHex(receipt.gas),
-          chainId: '0xd05',
-          gasPrice: '0x4a817c800', // 20000000000
-          hash: receipt.transactionHash,
-          input: receipt.input,
-          nonce: bigIntToHex(tx.nonce),
-          transactionIndex: this.TX_INDEX,
-          value: bigIntToHex(tx.value),
-          to: receipt.to ?  receipt.to : null
+    const includeTransactions = payload.params[1]
+    let transactions = []
+    if (includeTransactions) {
+      transactions = block.transactions.map((t) => {
+        const hash = bytesToHex(t.hash())
+        const tx = this.vmContext.txByHash[hash]
+        const receipt = this.vmContext.currentVm.web3vm.txsReceipt[hash]
+        if (receipt) {
+          return {
+            blockHash: bytesToHex(block.hash()),
+            blockNumber: bigIntToHex(block.header.number),
+            from: receipt.from,
+            gas: hexlify(receipt.gas),
+            chainId: '0xd05',
+            gasPrice: '0x4a817c800', // 20000000000
+            hash: receipt.transactionHash,
+            input: receipt.input,
+            nonce: bigIntToHex(tx.nonce),
+            transactionIndex: this.TX_INDEX,
+            value: bigIntToHex(tx.value),
+            to: receipt.to ? receipt.to : null,
+            v: bigIntToHex(tx.v),
+            r: bigIntToHex(tx.r),
+            s: bigIntToHex(tx.s)
+          }
         }
-      }
-    })
+      })
+    }
+
     const b = {
       baseFeePerGas: '0x01',
       number: bigIntToHex(block.header.number),
@@ -175,7 +191,7 @@ export class Blocks {
   }
 
   eth_getStorageAt (payload, cb) {
-    return this.vmContext.web3().eth.getStorageAt(
+    return this.vmContext.web3().getStorageAt(
       payload.params[0],
       payload.params[1],
       payload.params[2],

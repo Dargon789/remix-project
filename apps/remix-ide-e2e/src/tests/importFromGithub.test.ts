@@ -3,9 +3,9 @@ import { NightwatchBrowser } from 'nightwatch'
 import init from '../helpers/init'
 
 const testData = {
-  validURL: 'https://github.com/OpenZeppelin/openzeppelin-solidity/blob/67bca857eedf99bf44a4b6a0fc5b5ed553135316/contracts/access/Roles.sol',
+  validURL: 'https://github.com/remix-project-org/git-hometab-test.git',
   invalidURL: 'https://github.com/Oppelin/Roles.sol',
-  JSON: 'https://github.com/ethereum/remix-project/blob/master/package.json'
+  JSON: 'https://github.com/remix-project-org/git-hometab-test.git'
 }
 
 module.exports = {
@@ -15,70 +15,68 @@ module.exports = {
   },
 
   'Import from GitHub Modal #group1': function (browser: NightwatchBrowser) {
-    browser.clickLaunchIcon('home')
+    browser
+      .clickLaunchIcon('filePanel')
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
       .clickLaunchIcon('filePanel')
-      .click('div[data-id="verticalIconsHomeIcon"]')
-      .waitForElementVisible('button[data-id="landingPageImportFromGitHubButton"]')
+      .waitForElementVisible('*[data-id="verticalIconsHomeIcon"]')
+      .click('*[data-id="verticalIconsHomeIcon"]')
       .pause(1000)
-      .click('button[data-id="landingPageImportFromGitHubButton"]')
-      .waitForElementVisible('*[data-id="homeTabModalDialogModalTitle-react"]')
-      .assert.containsText('*[data-id="homeTabModalDialogModalTitle-react"]', 'Import from GitHub')
-      .waitForElementVisible('*[data-id="homeTabModalDialogModalBody-react"]')
-      .assert.containsText('*[data-id="homeTabModalDialogModalBody-react"]', 'Enter the github URL you would like to load.')
-      .waitForElementVisible('input[data-id="homeTabModalDialogCustomPromptText"]')
+      .waitForElementVisible('*[data-id="github-dropdown-toggle"]')
+      .click('*[data-id="github-dropdown-toggle"]')
+      .waitForElementVisible('*[data-id="github-dropdown-item-clone"]')
+      .click('*[data-id="github-dropdown-item-clone"]')
+      .waitForElementVisible('*[data-id="topbarModalModalDialogModalTitle-react"]')
+      .assert.containsText('*[data-id="topbarModalModalDialogModalTitle-react"]', 'Clone Git Repository')
+      .waitForElementVisible('*[data-id="topbarModalModalDialogModalBody-react"]')
+      .waitForElementVisible('input[data-id="modalDialogCustomPromptTextClone"]')
   },
 
   'Display Error Message For Invalid GitHub URL Modal #group1': function (browser: NightwatchBrowser) {
     browser
       .execute(() => {
-        (document.querySelector('input[data-id="homeTabModalDialogCustomPromptText"]') as any).focus()
+        (document.querySelector('input[data-id="modalDialogCustomPromptTextClone"]') as any).focus()
       }, [], () => { })
-      .setValue('input[data-id="homeTabModalDialogCustomPromptText"]', testData.invalidURL)
-      .waitForElementVisible('*[data-id="homeTab-modal-footer-ok-react"]')
-      .click('[data-id="homeTab-modal-footer-ok-react"]') // submitted
+      .setValue('input[data-id="modalDialogCustomPromptTextClone"]', testData.invalidURL)
+      .waitForElementVisible('*[data-id="topbarModalModalDialogModalFooter-react"]')
+      .click('[data-id="topbarModal-modal-footer-ok-react"]') // submitted
       //.waitForElementVisible('*[data-shared="tooltipPopup"]')
       //.waitForElementContainsText('*[data-shared="tooltipPopup"] span', 'not found ' + testData.invalidURL)
   },
 
-  'Import From GitHub For Valid URL #group2': function (browser: NightwatchBrowser) {
+  'Clone From GitHub with Valid URL #group2': function (browser: NightwatchBrowser) {
     browser
       .waitForElementVisible('*[data-id="remixIdeIconPanel"]', 10000)
       .clickLaunchIcon('filePanel')
-      .click('div[data-id="verticalIconsHomeIcon"]')
-      .waitForElementVisible('button[data-id="landingPageImportFromGitHubButton"]').pause(1000)
-      .click('button[data-id="landingPageImportFromGitHubButton"]')
-      .waitForElementVisible('input[data-id="homeTabModalDialogCustomPromptText"]')
+      .waitForElementVisible('*[data-id="verticalIconsHomeIcon"]')
+      .click('*[data-id="verticalIconsHomeIcon"]')
+      .waitForElementVisible('*[data-id="github-dropdown-toggle"]')
+      .click('*[data-id="github-dropdown-toggle"]')
+      .waitForElementVisible('*[data-id="github-dropdown-item-clone"]')
+      .click('*[data-id="github-dropdown-item-clone"]')
+      .waitForElementVisible('input[data-id="modalDialogCustomPromptTextClone"]')
       .execute(() => {
-        (document.querySelector('input[data-id="homeTabModalDialogCustomPromptText"]') as any).focus()
+        (document.querySelector('input[data-id="modalDialogCustomPromptTextClone"]') as any).focus()
       }, [], () => { })
-      .clearValue('input[data-id="homeTabModalDialogCustomPromptText"]').pause(1000)
-      .setValue('input[data-id="homeTabModalDialogCustomPromptText"]', testData.validURL)
-      .waitForElementVisible('*[data-id="homeTab-modal-footer-ok-react"]')
-      .click('[data-id="homeTab-modal-footer-ok-react"]')
-      .openFile('github/OpenZeppelin/openzeppelin-solidity/contracts/access/Roles.sol')
+      .clearValue('input[data-id="modalDialogCustomPromptTextClone"]').pause(1000)
+      .setValue('input[data-id="modalDialogCustomPromptTextClone"]', testData.validURL)
+      .waitForElementVisible('*[data-id="topbarModal-modal-footer-ok-react"]')
+      .click('[data-id="topbarModal-modal-footer-ok-react"]')
+      .openFile('Roles.sol')
       .waitForElementVisible({
-        selector: `//*[@data-id='tab-active' and @data-path="default_workspace/github/OpenZeppelin/openzeppelin-solidity/contracts/access/Roles.sol"]`,
+        selector: `//*[@data-id='tab-active' and @data-path="git-hometab-test.git/Roles.sol"]`,
         locateStrategy: 'xpath'
       })
       .getEditorValue((content) => {
         browser.assert.ok(content.indexOf('library Roles {') !== -1, 'content does contain "library Roles {"')
       })
   },
-  'Import JSON From GitHub For Valid URL #group2': function (browser: NightwatchBrowser) {
+  'Confirm JSON After Cloning From GitHub For Valid URL #group2': function (browser: NightwatchBrowser) {
     browser
-      .click('div[data-id="verticalIconsHomeIcon"]')
-      .click('button[data-id="landingPageImportFromGitHubButton"]')
-      .waitForElementVisible('input[data-id="homeTabModalDialogCustomPromptText"]').pause(1000)
-      .execute(() => {
-        (document.querySelector('input[data-id="homeTabModalDialogCustomPromptText"]') as any).focus()
-      }, [], () => { })
-      .clearValue('input[data-id="homeTabModalDialogCustomPromptText"]').pause(1000)
-      .setValue('input[data-id="homeTabModalDialogCustomPromptText"]', testData.JSON)
-      .waitForElementVisible('*[data-id="homeTab-modal-footer-ok-react"]')
-      .click('[data-id="homeTab-modal-footer-ok-react"]')
-      .openFile('github/ethereum/remix-project/package.json')
-      .waitForElementVisible("div[data-path='default_workspace/github/ethereum/remix-project/package.json'")
+      .waitForElementVisible('*[data-id="verticalIconsHomeIcon"]')
+      .click('*[data-id="verticalIconsHomeIcon"]')
+      .openFile('package.json')
+      .waitForElementVisible("*[data-path='git-hometab-test.git/package.json'")
       .getEditorValue((content) => {
         browser.assert.ok(content.indexOf('"name": "remix-project",') !== -1, 'content does contain "name": "remix-project"')
       })

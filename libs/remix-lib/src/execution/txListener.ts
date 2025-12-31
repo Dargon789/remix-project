@@ -1,6 +1,6 @@
 'use strict'
-import { ethers } from 'ethers'
-import { toBuffer, addHexPrefix } from '@ethereumjs/util'
+import { AbiCoder, Block } from 'ethers'
+import { toBytes, addHexPrefix } from '@ethereumjs/util'
 import { EventManager } from '../eventManager'
 import { compareByteCode, getinputParameters } from '../util'
 import { decodeResponse } from './txFormat'
@@ -33,10 +33,10 @@ export class TxListener {
   _listenOnNetwork:boolean
   _loopId
   blocks
-  
+
   constructor (opt, executionContext) {
     this.event = new EventManager()
-    // has a default for now for backwards compatability
+    // has a default for now for backwards compatibility
     this.executionContext = executionContext
     this._api = opt.api
     this._resolvedTransactions = {}
@@ -63,10 +63,10 @@ export class TxListener {
       let returnValue
       let execResult
       if (this.executionContext.isVM()) {
-        execResult = await this.executionContext.web3().eth.getExecutionResultFromSimulator(txResult.transactionHash)
-        returnValue = toBuffer(execResult.returnValue)
+        execResult = await this.executionContext.web3().remix.getExecutionResultFromSimulator(txResult.transactionHash)
+        returnValue = toBytes(execResult.returnValue)
       } else {
-        returnValue = toBuffer(addHexPrefix(txResult.result))
+        returnValue = toBytes(addHexPrefix(txResult.result))
       }
       const call = {
         from: from,
@@ -94,19 +94,19 @@ export class TxListener {
       // in web3 mode && listen remix txs only
       if (!this._isListening) return // we don't listen
       if (this._loopId) return // we seems to already listen on a "web3" network
-      this.executionContext.web3().eth.getTransaction(txResult.transactionHash, async (error, tx) => {
-        if (error) return console.log(error)
-
+      this.executionContext.web3().getTransaction(txResult.transactionHash).then(async tx=>{
         let execResult
         if (this.executionContext.isVM()) {
-          execResult = await this.executionContext.web3().eth.getExecutionResultFromSimulator(txResult.transactionHash)
+          execResult = await this.executionContext.web3().remix.getExecutionResultFromSimulator(txResult.transactionHash)
         }
 
         addExecutionCosts(txResult, tx, execResult)
         tx.envMode = this.executionContext.getProvider()
         tx.status = txResult.receipt.status
+        tx.isUserOp = txResult.tx.isUserOp
+        tx.originTo = txResult.tx.originTo
         this._resolve([tx])
-      })
+      }).catch(error=>console.log(error))
     })
   }
 
@@ -159,9 +159,8 @@ export class TxListener {
   }
 
   async _startListenOnNetwork () {
-    let lastSeenBlock = this.executionContext.lastBlock?.number - 1
+    let lastSeenBlock = BigInt(this.executionContext.lastBlock?.number) - BigInt(1)
     let processingBlock = false
-
     const processBlocks = async () => {
       if (!this._isListening) return
       if (processingBlock) return
@@ -203,9 +202,9 @@ export class TxListener {
 
   async _manageBlock (blockNumber) {
     try {
-      const result = await this.executionContext.web3().eth.getBlock(blockNumber, true)
-      return await this._newBlock(Object.assign({ type: 'web3' }, result))  
-    } catch (e) {}
+      const result: Block = await this.executionContext.web3().getBlock(blockNumber, true)
+      return await this._newBlock(Object.assign(result, { type: 'web3' } ))
+    } catch (e) { }
   }
 
   /**
@@ -231,7 +230,7 @@ export class TxListener {
 
   async _newBlock (block) {
     this.blocks.push(block)
-    await this._resolve(block.transactions)
+    await this._resolve(block.prefetchedTransactions || block.transactions)
     this.event.trigger('newBlock', [block])
   }
 
@@ -256,7 +255,7 @@ export class TxListener {
       try {
         if (!this._isListening) break
         await this._resolveAsync(tx)
-      } catch (e) {}
+      } catch (e) { console.error(e)}
     }
   }
 
@@ -269,7 +268,7 @@ export class TxListener {
       // contract creation / resolve using the creation bytes code
       // if web3: we have to call getTransactionReceipt to get the created address
       // if VM: created address already included
-      const code = tx.input
+      const code = tx.data
       contract = this._tryResolveContract(code, contracts, true)
       if (contract) {
         const address = receipt.contractAddress
@@ -285,8 +284,7 @@ export class TxListener {
       // first check known contract, resolve against the `runtimeBytecode` if not known
       contract = this._resolvedContracts[tx.to]
       if (!contract) {
-        this.executionContext.web3().eth.getCode(tx.to, (error, code) => {
-          if (error) return cb(error)
+        this.executionContext.web3().getCode(tx.to).then(code=>{
           if (code) {
             const contract = this._tryResolveContract(code, contracts, false)
             if (contract) {
@@ -296,7 +294,7 @@ export class TxListener {
             }
           }
           return cb()
-        })
+        }).catch(error=>cb(error))
         return
       }
       if (contract) {
@@ -313,7 +311,8 @@ export class TxListener {
       return
     }
     const abi = contract.object.abi
-    const inputData = tx.input.replace('0x', '')
+    const txInput = tx.data || tx.input
+    const inputData = txInput.replace('0x', '')
     if (!isCtor) {
       const methodIdentifiers = contract.object.evm.methodIdentifiers
       for (const fn in methodIdentifiers) {
@@ -377,15 +376,15 @@ export class TxListener {
   }
 
   _decodeInputParams (data, abi) {
-    data = toBuffer(addHexPrefix(data))
-    if (!data.length) data = new Uint8Array(32 * abi.inputs.length) // ensuring the data is at least filled by 0 cause `AbiCoder` throws if there's not engouh data
+    data = toBytes(addHexPrefix(data))
+    if (!data.length) data = new Uint8Array(32 * abi.inputs.length) // ensuring the data is at least filled by 0 cause `AbiCoder` throws if there's not enough data
 
     const inputTypes = []
     for (let i = 0; i < abi.inputs.length; i++) {
       const type = abi.inputs[i].type
       inputTypes.push(type.indexOf('tuple') === 0 ? makeFullTypeDefinition(abi.inputs[i]) : type)
     }
-    const abiCoder = new ethers.utils.AbiCoder()
+    const abiCoder = new AbiCoder()
     const decoded = abiCoder.decode(inputTypes, data)
     const ret = {}
     for (const k in abi.inputs) {

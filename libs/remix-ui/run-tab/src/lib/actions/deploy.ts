@@ -1,4 +1,5 @@
-import { ContractData, FuncABI, NetworkDeploymentFile, SolcBuildFile, OverSizeLimit } from "@remix-project/core-plugin"
+import { ContractData, FuncABI, NetworkDeploymentFile, SolcBuildFile, OverSizeLimit, getContractData } from "@remix-project/core-plugin"
+import { trackMatomoEvent } from '@remix-api'
 import { RunTab } from "../types/run-tab"
 import { CompilerAbstract as CompilerAbstractType } from '@remix-project/remix-solidity'
 import * as remixLib from '@remix-project/remix-lib'
@@ -6,79 +7,30 @@ import { SolcInput, SolcOutput } from "@openzeppelin/upgrades-core"
 // Used direct path to UpgradeableContract class to fix cyclic dependency error from @openzeppelin/upgrades-core library
 import { UpgradeableContract } from '../../../../../../node_modules/@openzeppelin/upgrades-core/dist/standalone'
 import { DeployMode, MainnetPrompt } from "../types"
-import { displayNotification, displayPopUp, fetchProxyDeploymentsSuccess, setDecodedResponse, updateInstancesBalance } from "./payload"
+import { displayNotification, fetchProxyDeploymentsSuccess, setDecodedResponse, updateInstancesBalance } from "./payload"
 import { addInstance } from "./actions"
 import { addressToString, logBuilder } from "@remix-ui/helper"
-import Web3 from "web3"
+import { isAddress } from "ethers"
 
-declare global {
-  interface Window {
-    _paq: any
-  }
-}
-
-const _paq = window._paq = window._paq || []  //eslint-disable-line
 const txHelper = remixLib.execution.txHelper
 const txFormat = remixLib.execution.txFormat
 
 const loadContractFromAddress = (plugin: RunTab, address, confirmCb, cb) => {
-  if (/.(.abi)$/.exec(plugin.config.get('currentFile'))) {
+  if (/\.(abi)$/.exec(plugin.config.get('currentFile'))) {
     confirmCb(() => {
       let abi
       try {
         abi = JSON.parse(plugin.editor.currentContent())
+        if (!Array.isArray(abi)) return cb('ABI should be an array object.')
       } catch (e) {
         return cb('Failed to parse the current file as JSON ABI.')
       }
-      _paq.push(['trackEvent', 'udapp', 'useAtAddress' , 'AtAddressLoadWithABI'])
+      trackMatomoEvent(plugin, { category: 'udapp', action: 'useAtAddress', name: 'AtAddressLoadWithABI', isClick: true })
       cb(null, 'abi', abi)
     })
   } else {
-    _paq.push(['trackEvent', 'udapp', 'useAtAddress', 'AtAddressLoadWithArtifacts'])
+    trackMatomoEvent(plugin, { category: 'udapp', action: 'useAtAddress', name: 'AtAddressLoadWithArtifacts', isClick: true })
     cb(null, 'instance')
-  }
-}
-
-export const getSelectedContract = (contractName: string, compiler: CompilerAbstractType): ContractData => {
-  if (!contractName) return null
-  // const compiler = plugin.compilersArtefacts[compilerAtributeName]
-
-  if (!compiler) return null
-
-  const contract = compiler.getContract(contractName)
-
-  return {
-    name: contractName,
-    contract: contract,
-    compiler: compiler,
-    abi: contract.object.abi,
-    bytecodeObject: contract.object.evm.bytecode.object,
-    bytecodeLinkReferences: contract.object.evm.bytecode.linkReferences,
-    object: contract.object,
-    deployedBytecode: contract.object.evm.deployedBytecode,
-    getConstructorInterface: () => {
-      return txHelper.getConstructorInterface(contract.object.abi)
-    },
-    getConstructorInputs: () => {
-      const constructorInteface = txHelper.getConstructorInterface(contract.object.abi)
-
-      return txHelper.inputParametersDeclarationToString(constructorInteface.inputs)
-    },
-    isOverSizeLimit: async (args: string) => {
-      const encodedParams = await txFormat.encodeParams(args, txHelper.getConstructorInterface(contract.object.abi))
-      const bytecode = contract.object.evm.bytecode.object + (encodedParams as any).dataHex
-      // https://eips.ethereum.org/EIPS/eip-3860
-      const initCodeOversize = bytecode && (bytecode.length / 2 > 2 * 24576)
-
-      const deployedBytecode = contract.object.evm.deployedBytecode
-      // https://eips.ethereum.org/EIPS/eip-170
-      const deployedBytecodeOversize = deployedBytecode && (deployedBytecode.object.length / 2 > 24576)
-      return {
-        overSizeEip3860: initCodeOversize,
-        overSizeEip170: deployedBytecodeOversize
-      }
-    },
-    metadata: contract.object.metadata
   }
 }
 
@@ -119,12 +71,26 @@ const getConfirmationCb = (plugin: RunTab, dispatch: React.Dispatch<any>, confir
 
 export const continueHandler = (dispatch: React.Dispatch<any>, gasEstimationPrompt: (msg: string) => JSX.Element, error, continueTxExecution, cancelCb) => {
   if (error) {
-    const msg = typeof error !== 'string' ? error.message : error
+    let msg = ''
+    if (typeof error === 'string') {
+      msg = error
+    }
+    if (error && error.innerError) {
+      msg += '\n' + error.innerError
+    }
+    if (error && error.message) {
+      msg += '\n' + error.message
+    }
+    if (error && error.error) {
+      msg += '\n' + error.error
+    }
+
+    if (msg.includes('invalid opcode')) msg += '\nThe EVM version used by the selected environment is not compatible with the compiler EVM version.'
 
     dispatch(displayNotification('Gas estimation failed', gasEstimationPrompt(msg), 'Send Transaction', 'Cancel Transaction', () => {
       continueTxExecution()
     }, () => {
-      cancelCb()
+      cancelCb(error)
     }))
   } else {
     continueTxExecution()
@@ -142,11 +108,12 @@ export const createInstance = async (
   gasEstimationPrompt: (msg: string) => JSX.Element,
   passphrasePrompt: (msg: string) => JSX.Element,
   publishToStorage: (storage: 'ipfs' | 'swarm',
-  contract: ContractData) => void,
+    contract: ContractData) => void,
   mainnetPrompt: MainnetPrompt,
   isOverSizePrompt: (values: OverSizeLimit) => JSX.Element,
   args,
-  deployMode: DeployMode[]) => {
+  deployMode: DeployMode[],
+  isVerifyChecked: boolean) => {
   const isProxyDeployment = (deployMode || []).find(mode => mode === 'Deploy with Proxy')
   const isContractUpgrade = (deployMode || []).find(mode => mode === 'Upgrade with Proxy')
   const statusCb = (msg: string) => {
@@ -158,22 +125,46 @@ export const createInstance = async (
   const finalCb = async (error, contractObject, address) => {
     if (error) {
       const log = logBuilder(error)
-
       return terminalLogger(plugin, log)
     }
+
     addInstance(dispatch, { contractData: contractObject, address, name: contractObject.name })
     const data = await plugin.compilersArtefacts.getCompilerAbstract(contractObject.contract.file)
-
     plugin.compilersArtefacts.addResolvedContract(addressToString(address), data)
-    if (plugin.REACT_API.ipfsChecked) {
-      _paq.push(['trackEvent', 'udapp', 'DeployAndPublish', plugin.REACT_API.networkName])
-      publishToStorage('ipfs', selectedContract)
+
+    if (isVerifyChecked) {
+      trackMatomoEvent(plugin, { category: 'udapp', action: 'DeployAndPublish', name: plugin.REACT_API.networkName, isClick: true })
+
+      try {
+        const status = plugin.blockchain.getCurrentNetworkStatus()
+        const currentChainId = status?.network?.id
+
+        if (currentChainId) {
+
+          setTimeout(() => {
+            plugin.call('contract-verification', 'verifyOnDeploy', {
+              contractName: selectedContract.name,
+              filePath: selectedContract.contract.file,
+              address: addressToString(address),
+              chainId: currentChainId,
+              args: args
+            }).catch(e => console.error("Verification trigger failed:", e))
+          }, 1000)
+
+        } else {
+          console.error("Network ID not found, skipping verification.")
+        }
+
+      } catch (e) {
+        console.error("Error triggering verification:", e)
+      }
+
     } else {
-      _paq.push(['trackEvent', 'udapp', 'DeployOnly', plugin.REACT_API.networkName])
+      trackMatomoEvent(plugin, { category: 'udapp', action: 'DeployOnly', name: plugin.REACT_API.networkName, isClick: true })
     }
+
     if (isProxyDeployment) {
       const initABI = contractObject.abi.find(abi => abi.name === 'initialize')
-
       plugin.call('openzeppelin-proxy', 'executeUUPSProxy', addressToString(address), args, initABI, contractObject)
     } else if (isContractUpgrade) {
       plugin.call('openzeppelin-proxy', 'executeUUPSContractUpgrade', args, addressToString(address), contractObject)
@@ -228,7 +219,7 @@ export const createInstance = async (
 }
 
 const deployContract = (plugin: RunTab, selectedContract, args, contractMetadata, compilerContracts, callbacks, confirmationCb) => {
-  _paq.push(['trackEvent', 'udapp', 'DeployContractTo', plugin.REACT_API.networkName])
+  trackMatomoEvent(plugin, { category: 'udapp', action: 'DeployContractTo', name: plugin.REACT_API.networkName, isClick: true })
   const { statusCb } = callbacks
 
   if (!contractMetadata || (contractMetadata && contractMetadata.autoDeployLib)) {
@@ -248,12 +239,13 @@ export const loadAddress = (plugin: RunTab, dispatch: React.Dispatch<any>, contr
         return dispatch(displayNotification('Alert', error, 'OK', null))
       }
       if (loadType === 'abi') {
-        return addInstance(dispatch, { abi, address, name: '<at address>' })
+        const contractData = { name: '<at address>', abi, contract: { file: plugin.REACT_API.contracts.currentFile } } as ContractData
+        return addInstance(dispatch, { contractData, address, name: '<at address>' })
       } else if (loadType === 'instance') {
-        if (!contract) return dispatch(displayPopUp('No compiled contracts found.'))
+        if (!contract) return plugin.call('notification', 'toast', 'No compiled contracts found.')
         const currentFile = plugin.REACT_API.contracts.currentFile
         const compiler = plugin.REACT_API.contracts.contractList[currentFile].find(item => item.alias === contract.name)
-        const contractData = getSelectedContract(contract.name, compiler.compiler)
+        const contractData = getContractData(contract.name, compiler.compiler)
         return addInstance(dispatch, { contractData, address, name: contract.name })
       }
     }
@@ -270,7 +262,7 @@ export const syncContractsInternal = async (plugin: RunTab) => {
   }
   if (await plugin.call('manager', 'isActive', 'hardhat')) {
     plugin.call('hardhat', 'sync')
-  } 
+  }
   if (await plugin.call('manager', 'isActive', 'foundry')) {
     plugin.call('foundry', 'sync')
   }
@@ -286,16 +278,24 @@ export const runTransactions = (
   contractName: string,
   contractABI, contract,
   address,
-  logMsg:string,
+  logMsg: string,
   mainnetPrompt: MainnetPrompt,
   gasEstimationPrompt: (msg: string) => JSX.Element,
   passphrasePrompt: (msg: string) => JSX.Element,
   funcIndex?: number) => {
   let callinfo = ''
-  if (lookupOnly) callinfo = 'call'
-  else if (funcABI.type === 'fallback' || funcABI.type === 'receive') callinfo = 'lowLevelInteracions'
-  else callinfo = 'transact'
-  _paq.push(['trackEvent', 'udapp', callinfo, plugin.blockchain.getCurrentNetworkStatus().network.name])
+  let eventAction
+  if (lookupOnly) {
+    callinfo = 'call'
+    eventAction = 'call'
+  } else if (funcABI.type === 'fallback' || funcABI.type === 'receive') {
+    callinfo = 'lowLevelinteractions'
+    eventAction = 'lowLevelinteractions'
+  } else {
+    callinfo = 'transact'
+    eventAction = 'transact'
+  }
+  trackMatomoEvent(plugin, { category: 'udapp', action: eventAction, name: plugin.REACT_API.networkName, isClick: true })
 
   const params = funcABI.type !== 'fallback' ? inputsValues : ''
   plugin.blockchain.runOrCallContractMethod(
@@ -336,21 +336,21 @@ export const getFuncABIInputs = (plugin: RunTab, funcABI: FuncABI) => {
 
 export const updateInstanceBalance = async (plugin: RunTab, dispatch: React.Dispatch<any>) => {
   if (plugin.REACT_API?.instances?.instanceList?.length) {
-    const instances = plugin.REACT_API?.instances?.instanceList
+    const instances = plugin.REACT_API?.instances?.instanceList?.length ? plugin.REACT_API?.instances?.instanceList : []
     for (const instance of instances) {
       const balInEth = await plugin.blockchain.getBalanceInEther(instance.address)
       instance.balance = balInEth
     }
     dispatch(updateInstanceBalance(instances, dispatch))
-  } 
+  }
 }
 
 export const isValidContractAddress = async (plugin: RunTab, address: string) => {
   if (!address) {
     return false
   } else {
-    if (Web3.utils.isAddress(address)) {
-      return await plugin.blockchain.web3().eth.getCode(address) !== '0x'
+    if (isAddress(address)) {
+      return await plugin.blockchain.web3().getCode(address) !== '0x'
     } else {
       return false
     }
@@ -380,10 +380,10 @@ export const getNetworkProxyAddresses = async (plugin: RunTab, dispatch: React.D
   }
 }
 
-export const isValidContractUpgrade = async (plugin: RunTab, proxyAddress: string, newContractName: string, solcInput: SolcInput, solcOutput: SolcOutput) => {
+export const isValidContractUpgrade = async (plugin: RunTab, proxyAddress: string, newContractName: string, solcInput: SolcInput, solcOutput: SolcOutput, solcVersion: string) => {
   // build current contract first to get artefacts.
   const network = plugin.blockchain.networkStatus.network
-  const identifier = network.name === 'custom' ? network.name + '-' + network.id : network.name
+  const identifier = network.name === 'custom' ? network.name + '-' + network.id : network.name === 'VM' ? plugin.blockchain.getProvider() : network.name
   const networkDeploymentsExists = await plugin.call('fileManager', 'exists', `.deploys/upgradeable-contracts/${identifier}/UUPS.json`)
 
   if (networkDeploymentsExists) {
@@ -392,12 +392,12 @@ export const isValidContractUpgrade = async (plugin: RunTab, proxyAddress: strin
 
     if (parsedNetworkFile.deployments[proxyAddress] && parsedNetworkFile.deployments[proxyAddress].implementationAddress) {
       const solcBuildExists = await plugin.call('fileManager', 'exists', `.deploys/upgradeable-contracts/${identifier}/solc-${parsedNetworkFile.deployments[proxyAddress].implementationAddress}.json`)
-        
+
       if (solcBuildExists) {
         const solcFile: string = await plugin.call('fileManager', 'readFile', `.deploys/upgradeable-contracts/${identifier}/solc-${parsedNetworkFile.deployments[proxyAddress].implementationAddress}.json`)
         const parsedSolcFile: SolcBuildFile = JSON.parse(solcFile)
-        const oldImpl = new UpgradeableContract(parsedNetworkFile.deployments[proxyAddress].contractName, parsedSolcFile.solcInput, parsedSolcFile.solcOutput, { kind: 'uups' })
-        const newImpl = new UpgradeableContract(newContractName, solcInput, solcOutput, { kind: 'uups' })
+        const oldImpl = new UpgradeableContract(parsedNetworkFile.deployments[proxyAddress].contractName, parsedSolcFile.solcInput, parsedSolcFile.solcOutput, { kind: 'uups' }, solcVersion)
+        const newImpl = new UpgradeableContract(newContractName, solcInput, solcOutput, { kind: 'uups' }, solcVersion)
         const report = oldImpl.getStorageUpgradeReport(newImpl, { kind: 'uups' })
 
         return report

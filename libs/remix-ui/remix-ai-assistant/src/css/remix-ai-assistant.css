@@ -1,0 +1,697 @@
+.ai-assistant-introtop {
+
+}
+
+.ai-assistant-top-height {
+  min-height: 84vh;
+}
+
+.ai-assistant-bottom-height {
+  min-height: 10vh;
+}
+
+.ai-assistant-ai-prompt {
+  height: 100%;
+}
+
+.ai-assistant-text {
+  font-size: 1.1rem;
+}
+
+.ai-assistant-text-heading {
+  font-size: 1.2rem;
+}
+
+/* Existing CSS */
+
+.remix_ai_plugin_search_result_item_title {
+  display: flex;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+/Edge */
+  user-select: none; /* Standard */
+  cursor: pointer;
+  align-items: center;
+  color: #58a6ff;
+  text-decoration: none;
+  font-size: 1.2em;
+  margin: 10px 0;
+}
+
+.remix_ai_plugin_search_result_item_title:hover {
+  text-decoration: underline;
+}
+
+.remix_ai_plugin_wrap_summary {
+  overflow: hidden;
+  white-space: nowrap;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+/Edge */
+  user-select: none; /* Standard */
+  cursor: pointer;
+}
+
+.remix_ai_plugin_find-part {
+  display: flex;
+  flex-direction: column;
+  padding-top: 5px;
+}
+
+.remix_ai_plugin_controls {
+  display: flex;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_search_line_container {
+  display: flex;
+  flex-direction: row;
+  position: relative;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_search_line {
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_search_control {
+  flex-grow: 0;
+  position: absolute;
+  right: 0px;
+  top: 0px;
+}
+
+.remix_ai_plugin_summary_right {
+  min-width: 0;
+  white-space: pre;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_replace_strike {
+  text-decoration: line-through;
+}
+
+.remix_ai_plugin_summary_left {
+  white-space: pre;
+}
+
+.remix_ai_plugin_search_tab mark {
+  padding: 0;
+  white-space: pre;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_search_line_container .remix_ai_plugin_search_control {
+  display: none;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_search_line_container:hover .remix_ai_plugin_search_control {
+  display: block;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_search_line_container:hover .remix_ai_plugin_search_line {
+  width: 93%;
+}
+
+.remix_ai_plugin_search-input {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px;
+  margin: 10px 0;
+  width: 100%;
+  max-width: 500px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.remix_ai_plugin_search_tab .checked {
+  background-color: var(--bs-secondary);
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_search_file_name {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  text-transform: uppercase;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_result_count {
+  flex-grow: 1;
+  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.remix_ai_plugin_search_tab .remix_ai_plugin_result_count_number {
+  font-size: x-small;
+}
+
+.remix_ai_plugin_search_container {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.remix_ai_plugin_search_container_internal {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  margin-top: 20px;
+  align-items: center;
+}
+
+.remix_ai_plugin_search_container_arrow {
+  display: flex !important;
+  align-items: center;
+  cursor: pointer !important;
+}
+
+.remix_ai_plugin_wrap_summary_replace {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+}
+
+.remix_ai_plugin_search_indicator {
+  white-space: pre;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.remix_ai_plugin_search_result_textbox {
+  width: 100%;
+  max-width: 500px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: none;
+  margin: 10px 0;
+  color: #333;
+}
+
+/* Assistant avatar in message list */
+.assistant-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+
+/* --------------------------------------------------------
+   PROMPT / COMMAND AREA PANEL
+   -------------------------------------------------------- */
+
+.prompt-area {
+  /* matches the dark tone we used inline */
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  gap: 0.5rem;                /* same as BS5 .gap-2 but column layout */
+  padding: 0.5rem;
+}
+
+/* selector panels (context + assistant) */
+.prompt-area .rounded.selector-box,
+.prompt-area .rounded.p-3 {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  padding: 1rem !important;   /* keep existing spacing */
+  margin-bottom: 0.5rem;
+}
+
+/* --------------------------------------------------------
+   MINI COMMAND BUTTONS
+   -------------------------------------------------------- */
+
+.prompt-area .btn-dark,
+.prompt-area .btn-secondary,
+.prompt-area .btn-primary,
+.prompt-area .btn-info {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* caret spacing */
+.prompt-area .btn i {
+  margin-left: 2px;
+}
+
+/* --------------------------------------------------------
+   CHAT INPUT FIELD
+   -------------------------------------------------------- */
+
+.ai-chat-input input.form-control {
+  flex: 1 1 auto;  /* fills the row without extra inline flexGrow */
+}
+
+/* --------------------------------------------------------
+   CODE BLOCK WRAPPER
+   -------------------------------------------------------- */
+
+.code-block {
+  position: relative;
+  margin-bottom: 0.5rem;
+}
+
+/* --------------------------------------------------------
+   CONTEXT BADGE LIST
+   -------------------------------------------------------- */
+
+.context-badge-list,
+.mt-2.d-flex.flex-wrap {      /* matches generated inline attrs */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-height: 110px;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+
+.context-badge-list .badge,
+.aiContext-file,
+.badge.badge-pill.badge-secondary {
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.context-badge-list .badge i,
+.aiContext-file i {
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------
+   HIDDEN STREAMING FLAG (optional visibility tweak)
+   -------------------------------------------------------- */
+
+[data-id="remix-ai-streaming"] {
+  display: none !important;
+}
+
+.remix-aichat-background {
+  background-color: #2A2C3F;
+}
+
+.preserve-wrap {
+  white-space: pre-wrap;
+}
+
+.border-box-sizing {
+  box-sizing: border-box;
+}
+
+@media (max-width: 1280px) {
+  @container container-img (inline-size < 150px) {
+    .container-img {
+      width: 80px;
+      min-height: 80px;
+    }
+  }
+}
+
+/* ========================================================
+   MODERN AI CHAT STYLING - VS Code / Cursor Style
+   ======================================================== */
+
+/* Paragraphs */
+.ai-paragraph {
+  margin: 0.5em 0;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.ai-paragraph:first-child {
+  margin-top: 0;
+}
+
+.ai-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* Headings */
+.ai-heading {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ai-heading:first-child {
+  margin-top: 0.5em;
+}
+
+.ai-h1 {
+  font-size: 1.85rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  padding-bottom: 0.3em;
+}
+
+.ai-h2 {
+  font-size: 1.6rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  padding-bottom: 0.3em;
+}
+
+.ai-h3 {
+  font-size: 1.35rem;
+}
+
+.ai-h4 {
+  font-size: 1.15rem;
+}
+
+.ai-h5 {
+  font-size: 1.05rem;
+}
+
+.ai-h6 {
+  font-size: 0.95rem;
+  color: var(--bs-secondary);
+}
+
+/* Inline Code */
+.ai-inline-code {
+  background: rgba(110, 118, 129, 0.4);
+  color: var(--bs-body-color);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.75em;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Code Block Wrapper */
+.ai-code-block-wrapper {
+  position: relative;
+  margin: 1em 0;
+  background: rgba(110, 118, 129, 0.15);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.75em;
+}
+
+/* Code Header with Language Tag */
+.ai-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: rgba(112, 149, 200, 0.2);
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.ai-code-language {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Copy Button Styles */
+.ai-copy-btn {
+  background: transparent;
+  border: none;
+  color: var(--bs-secondary);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+}
+
+.ai-copy-btn:hover {
+  background: var(--bs-tertiary-bg, rgba(0, 0, 0, 0.1));
+  color: var(--bs-emphasis-color);
+}
+
+.ai-copy-btn:active {
+  transform: scale(0.95);
+}
+
+.ai-copy-btn-absolute {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 10;
+}
+
+/* Code Pre */
+.ai-code-pre {
+  margin: 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  background: transparent;
+  line-height: 1.5;
+  font-size: 0.6rem;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+}
+
+.ai-code-pre code {
+  background: transparent;
+  padding: 0;
+  border: none;
+  font-size: inherit;
+  color: inherit;
+  white-space: pre;
+  word-break: normal;
+}
+
+/* Lists */
+.ai-list {
+  margin: 0;
+  padding-left: 1.5rem;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.ai-list-unordered {
+  list-style-type: disc;
+}
+
+.ai-list-ordered {
+  list-style-type: decimal;
+}
+
+.ai-list-item {
+  margin: 0.25em 0;
+  padding-left: 0.25rem;
+}
+
+.ai-list-item > .ai-list {
+  margin: 0.25em 0;
+}
+
+.ai-list-item > p {
+  margin: 0.25em 0;
+}
+
+/* Links */
+.ai-link {
+  color: var(--bs-link-color);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-link-color);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: all 0.2s ease;
+}
+
+.ai-link:hover {
+  color: var(--bs-link-hover-color);
+  text-decoration-color: var(--bs-link-hover-color);
+  text-decoration-thickness: 2px;
+}
+
+/* Blockquotes */
+.ai-blockquote {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--bs-primary, #0d6efd);
+  background: rgba(110, 118, 129, 0.15);
+  border-radius: 0 4px 4px 0;
+  color: var(--bs-body-color);
+  font-style: italic;
+}
+
+.ai-blockquote > p:first-child {
+  margin-top: 0;
+}
+
+.ai-blockquote > p:last-child {
+  margin-bottom: 0;
+}
+
+/* Highlighted text / mark elements */
+mark,
+.ai-paragraph mark,
+.ai-list-item mark {
+  background: rgba(255, 212, 59, 0.4);
+  color: var(--bs-body-color);
+  padding: 0.1em 0.2em;
+  border-radius: 2px;
+}
+
+/* Tables */
+.ai-table-wrapper {
+  margin: 1em 0;
+  overflow-x: auto;
+  border-radius: 6px;
+  border: 1px solid var(--bs-border-color);
+}
+
+.ai-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  background: transparent;
+}
+
+.ai-table-head {
+  background: rgba(110, 118, 129, 0.2);
+  border-bottom: 2px solid var(--bs-border-color);
+}
+
+.ai-table-header-cell {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--bs-body-color);
+  border-bottom: 2px solid var(--bs-border-color);
+}
+
+.ai-table-body .ai-table-row:nth-child(even) {
+  background: rgba(110, 118, 129, 0.1);
+}
+
+.ai-table-body .ai-table-row:hover {
+  background: rgba(110, 118, 129, 0.2);
+}
+
+.ai-table-cell {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.ai-table-body .ai-table-row:last-child .ai-table-cell {
+  border-bottom: none;
+}
+
+/* Horizontal Rule */
+.ai-divider {
+  margin: 1.5em 0;
+  border: none;
+  border-top: 1px solid var(--bs-border-color);
+  opacity: 0.5;
+}
+
+/* Strong and Emphasis */
+.ai-strong {
+  font-weight: 600;
+  color: var(--bs-emphasis-color);
+}
+
+.ai-emphasis {
+  font-style: italic;
+}
+
+/* Improve chat bubble styling for better contrast */
+.chat-bubble {
+  background: var(--bs-body-bg) !important;
+  border: 1px solid var(--bs-border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Better scrollbar for code blocks */
+.ai-code-pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.ai-code-pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-code-pre::-webkit-scrollbar-thumb {
+  background: var(--bs-secondary);
+  border-radius: 4px;
+}
+
+.ai-code-pre::-webkit-scrollbar-thumb:hover {
+  background: var(--bs-secondary-color);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ai-paragraph {
+    font-size: 0.9rem;
+  }
+
+  .ai-h1 {
+    font-size: 1.5rem;
+  }
+
+  .ai-h2 {
+    font-size: 1.25rem;
+  }
+
+  .ai-h3 {
+    font-size: 1.1rem;
+  }
+
+  .ai-code-pre {
+    font-size: 0.8rem;
+  }
+
+  .ai-table {
+    font-size: 0.85rem;
+  }
+}
+
+
+
+.aiMarkup {
+  display: block;
+  white-space: normal;
+  line-height: var(--bs-body-line-height, 1.5);
+}
+
+/* remove default margins inside elements. Bootstrap is just too generous here.*/
+.aiMarkup :where(p, h1, h2, h3, h4, h5, h6, ul, ol, pre, blockquote, table, hr) {
+  margin: 0 !important;
+}
+
+/* Add clean vertical spacing between elements.*/
+.aiMarkup > :where(* + *) {
+  margin-top: .95rem;
+}
+
+
+.aiMarkup :where(li + li) { margin-top: .45rem; }
+.aiMarkup pre { margin-top: .45rem; }
+
+.aiMarkup :where(h1) { margin-top: 1rem; }
+.aiMarkup :where(h2) { margin-top: .95rem; }
+.aiMarkup :where(h3) { margin-top: .85rem; }
+
+.aiMarkup hr { margin: .95rem 0; }
+
+/* Tool execution indicator */
+.tool-execution-indicator {
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: rgba(88, 166, 255, 0.1);
+  border-left: 3px solid rgba(88, 166, 255, 0.5);
+}
+
+.tool-execution-indicator i {
+  color: #58a6ff;
+  font-size: 1rem;
+}
+
+.tool-execution-indicator span {
+  color: inherit;
+}

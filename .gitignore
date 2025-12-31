@@ -15,7 +15,12 @@ soljson.js
 *_group*.*.ts
 *_group*.ts
 stats.json
-
+release
+.env
+.env.local
+.idea/
+.yalc/
+.yalc
 
 # compiled output
 /dist
@@ -57,3 +62,29 @@ testem.log
 .DS_Store
 .vscode/settings.json
 .vscode/launch.json
+
+apps/remixdesktop/.webpack
+apps/remixdesktop/out
+apps/remixdesktop/release/
+apps/remixdesktop/build*/
+apps/remix-ide/src/assets/list.json
+apps/remix-ide/src/assets/esbuild.wasm
+apps/remixdesktop/build*
+apps/remixdesktop/reports
+apps/remixdesktop/logs/
+apps/remixdesktop/bin/
+apps/remixdesktop/circom-download
+apps/remixdesktop/log_input_signals.txt
+apps/remixdesktop/log_input_signals_new.txt
+logs
+apps/remix-ide-e2e/src/extensions/chrome/metamask
+apps/remix-ide-e2e/tmp/
+
+# Generated import resolution cache and fetched artifacts
+.deps/
+/@*
+
+# IDE - Cursor
+.cursor/
+PR_MESSAGE.md
+apps/remix-ide-e2e/tmp/

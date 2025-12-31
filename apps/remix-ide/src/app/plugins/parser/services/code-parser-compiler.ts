@@ -1,6 +1,6 @@
 'use strict'
 import { CompilerAbstract } from '@remix-project/remix-solidity'
-import { Compiler } from '@remix-project/remix-solidity'
+import { DependencyResolvingCompiler } from '../../../lib/dependency-resolving-compiler'
 
 import { CompilationResult, CompilationSource } from '@remix-project/remix-solidity'
 import { CodeParser } from "../code-parser";
@@ -12,30 +12,30 @@ import { lastCompilationResult } from '@remixproject/plugin-api';
 import { monacoTypes } from '@remix-ui/editor';
 
 enum MarkerSeverity {
-    Hint = 1,
-    Info = 2,
-    Warning = 4,
-    Error = 8
+  Hint = 1,
+  Info = 2,
+  Warning = 4,
+  Error = 8
 }
 
 type errorMarker = {
-    message: string
-    severity: monacoTypes.MarkerSeverity
-    position: {
-        start: {
-            line: number
-            column: number
-        },
-        end: {
-            line: number
-            column: number
-        }
+  message: string
+  severity: monacoTypes.MarkerSeverity
+  position: {
+    start: {
+      line: number
+      column: number
     },
-    file: string
+    end: {
+      line: number
+      column: number
+    }
+  },
+  file: string
 }
 export default class CodeParserCompiler {
   plugin: CodeParser
-  compiler: any // used to compile the current file seperately from the main compiler
+  compiler: DependencyResolvingCompiler // used to compile the current file separately from the main compiler
   onAstFinished: (success: any, data: CompilationResult, source: CompilationSourceCode, input: any, version: any) => Promise<void>;
   errorState: boolean;
   gastEstimateTimeOut: any
@@ -48,7 +48,7 @@ export default class CodeParserCompiler {
   init() {
 
     this.onAstFinished = async (success, data: CompilationResult, source: CompilationSourceCode, input: any, version) => {
-      this.plugin.call('editor', 'clearAnnotations')
+      await this.plugin.call('editor', 'clearAnnotations')
       this.errorState = true
       const result = new CompilerAbstract('soljson', data, source, input)
       let allErrors: errorMarker[] = []
@@ -75,7 +75,6 @@ export default class CodeParserCompiler {
                 length: error.sourceLocation.end - error.sourceLocation.start
               }, lineBreaks)
 
-
               const filePath = error.sourceLocation.file
               const fileTarget = await this.plugin.call('fileManager', 'getUrlFromPath', filePath)
 
@@ -93,40 +92,49 @@ export default class CodeParserCompiler {
 
         const displayErrors = await this.plugin.call('config', 'getAppParameter', 'display-errors')
         if (displayErrors) await this.plugin.call('editor', 'addErrorMarker', allErrors)
-        this.addDecorators(allErrors, sources)
+        await this.addDecorators(allErrors, sources)
       } else {
         await this.plugin.call('editor', 'clearErrorMarkers', result.getSourceCode().sources)
         await this.clearDecorators(result.getSourceCode().sources)
       }
 
-
       if (!data.sources) return
       if (data.sources && Object.keys(data.sources).length === 0) return
       this.plugin.compilerAbstract = new CompilerAbstract('soljson', data, source, input)
       this.errorState = false
+
       this.plugin.nodeIndex = {
         declarations: {},
         flatReferences: {},
         nodesPerFile: {},
       }
 
-
       this.plugin._buildIndex(data, source)
       // cast from the remix-plugin interface to the solidity one. Should be fixed when remix-plugin move to the remix-project repository
-      this.plugin.nodeIndex.nodesPerFile[this.plugin.currentFile] = this.plugin._extractFileNodes(this.plugin.currentFile, this.plugin.compilerAbstract as unknown as lastCompilationResult)
+      const extractedFiledNodes = this.plugin._extractFileNodes(this.plugin.currentFile, this.plugin.compilerAbstract as unknown as lastCompilationResult)
+      if (extractedFiledNodes) {
+        this.plugin.nodeIndex.nodesPerFile[this.plugin.currentFile] = extractedFiledNodes
+      }
       await this.plugin.gasService.showGasEstimates()
       this.plugin.emit('astFinished')
     }
-        
-    this.compiler = new Compiler((url, cb) => this.plugin.call('contentImport', 'resolveAndSave', url, undefined).then((result) => cb(null, result)).catch((error) => cb(error.message)))
+
+    this.compiler = new DependencyResolvingCompiler(
+      this.plugin,
+      (url, cb) => {
+        cb(`${url} not found.`)
+      },
+      null, // importResolverFactory - not used by DependencyResolvingCompiler
+      false // debug - set to false for code-parser to reduce noise
+    )
     this.compiler.event.register('compilationFinished', this.onAstFinished)
   }
 
   // COMPILER
 
   /**
-     * 
-     * @returns 
+     *
+     * @returns
      */
   async compile() {
     try {
@@ -137,28 +145,38 @@ export default class CodeParserCompiler {
         this.compiler.set('evmVersion', state.evmVersion)
         this.compiler.set('language', state.language)
         this.compiler.set('runs', state.runs)
-        this.compiler.set('useFileConfiguration', true)
+        this.compiler.set('useFileConfiguration', state.useFileConfiguration)
         this.compiler.set('compilerRetriggerMode', CompilerRetriggerMode.retrigger)
-        const configFileContent = {
-          "language": "Solidity",
-          "settings": {
-            "optimizer": {
-              "enabled": state.optimize,
-              "runs": state.runs
-            },
-            "outputSelection": {
-              "*": {
-                "": ["ast"],
-                "*": ["evm.gasEstimates"]
-              }
-            },
-            "evmVersion": state.evmVersion && state.evmVersion.toString() || "berlin",
-          }
-        }
 
-        this.compiler.set('configFileContent', JSON.stringify(configFileContent))
-        this.plugin.currentFile = await this.plugin.call('fileManager', 'file')
-        if (!this.plugin.currentFile) return
+        const configFileContent =
+          state.useFileConfiguration ?
+            state.configFileContent :
+
+            {
+              "language": "Solidity",
+              "settings": {
+                "optimizer": {
+                  "enabled": state.optimize,
+                  "runs": state.runs
+                },
+                "outputSelection": {
+                  "*": {
+                    "": ["ast"],
+                    "*": ["evm.gasEstimates"]
+                  }
+                },
+                "evmVersion": state.evmVersion && state.evmVersion.toString() || undefined,
+              }
+            }
+
+        this.compiler.set('configFileContent', state.useFileConfiguration ? configFileContent : JSON.stringify(configFileContent))
+
+        if (await this.plugin.call('fileManager', 'exists', 'remappings.txt')) {
+          const remappings = await this.plugin.call('fileManager', 'readFile', 'remappings.txt')
+          this.compiler.set('remappings', remappings.split('\n').filter(Boolean))
+        } else {
+          this.compiler.set('remappings', [])
+        }
         const content = await this.plugin.call('fileManager', 'readFile', this.plugin.currentFile)
         const sources = { [this.plugin.currentFile]: { content } }
         this.compiler.compile(sources, this.plugin.currentFile)
@@ -216,20 +234,10 @@ export default class CodeParserCompiler {
     }
     for (const fileName of filesWithOutErrors) {
       const fileTarget = await this.plugin.call('fileManager', 'getPathFromUrl', fileName)
-      const decorator: fileDecoration = {
-        path: fileTarget.file,
-        isDirectory: false,
-        fileStateType: fileDecorationType.None,
-        fileStateLabelClass: '',
-        fileStateIconClass: '',
-        fileStateIcon: '',
-        text: '',
-        owner: 'code-parser',
-        bubble: false
-      }
-      decorators.push(decorator)
+      await this.plugin.call('fileDecorator', 'clearFileDecorators', fileTarget.file)
     }
-    await this.plugin.call('fileDecorator', 'setFileDecorators', decorators)
+    if (decorators.length > 0)
+      await this.plugin.call('fileDecorator', 'setFileDecorators', decorators)
     await this.plugin.call('editor', 'clearErrorMarkers', filesWithOutErrors)
 
   }
@@ -256,22 +264,8 @@ export default class CodeParserCompiler {
     const decorators: fileDecoration[] = []
     if (!sources) return
     for (const fileName of Object.keys(sources)) {
-      const decorator: fileDecoration = {
-        path: fileName,
-        isDirectory: false,
-        fileStateType: fileDecorationType.None,
-        fileStateLabelClass: '',
-        fileStateIconClass: '',
-        fileStateIcon: '',
-        text: '',
-        owner: 'code-parser',
-        bubble: false
-      }
-      decorators.push(decorator)
+      await this.plugin.call('fileDecorator', 'clearFileDecorators', fileName)
     }
-
-
-    await this.plugin.call('fileDecorator', 'setFileDecorators', decorators)
   }
 
   async getPositionForImportErrors(importedFileName: string, text: string) {

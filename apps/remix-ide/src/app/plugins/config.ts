@@ -1,12 +1,12 @@
 import { Plugin } from '@remixproject/engine'
 import { QueryParams } from '@remix-project/remix-lib'
-import Registry from '../state/registry'
+import { Registry } from '@remix-project/remix-lib'
 
 const profile = {
   name: 'config',
   displayName: 'Config',
   description: 'Config',
-  methods: ['getAppParameter', 'setAppParameter'],
+  methods: ['getAppParameter', 'setAppParameter', 'getEnv'],
   events: ['configChanged']
 }
 
@@ -28,5 +28,17 @@ export class ConfigPlugin extends Plugin {
   setAppParameter (name: string, value: any) {
     const config = Registry.getInstance().get('config').api
     config.set(name, value)
+  }
+
+  async getEnv (key: string): Promise<string | undefined> {
+    const env: string = await this.call('fileManager', 'readFile', '.env')
+    let value
+    env.split('\n').forEach((line: string) => {
+      const [envKey, envValue] = line.split('=');
+      if (envKey === key) {
+        value = envValue;
+      }
+    })
+    return value
   }
 }

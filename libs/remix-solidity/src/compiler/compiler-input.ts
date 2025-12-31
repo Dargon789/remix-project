@@ -1,14 +1,13 @@
 'use strict'
 
 import { CompilerInput, Source, CompilerInputOptions, Language } from './types'
-
 export default (sources: Source, opts: CompilerInputOptions): string => {
   const o: CompilerInput = {
     language: 'Solidity',
     sources: sources,
     settings: {
       optimizer: {
-        enabled: opts.optimize === true || opts.optimize === 1,
+        enabled: opts.optimize === true,
         runs: opts.runs > -1 ? opts.runs : 200
       },
       libraries: opts.libraries,
@@ -17,9 +16,11 @@ export default (sources: Source, opts: CompilerInputOptions): string => {
           '': ['ast'],
           '*': ['abi', 'metadata', 'devdoc', 'userdoc', 'storageLayout', 'evm.legacyAssembly', 'evm.bytecode', 'evm.deployedBytecode', 'evm.methodIdentifiers', 'evm.gasEstimates', 'evm.assembly']
         }
-      }
+      },
+      remappings: opts.remappings || [],
+      viaIR: opts.viaIR ? opts.viaIR : undefined
     }
-  }  
+  }
   if (opts.evmVersion) {
     if (opts.evmVersion.toLowerCase() == 'default') {
       opts.evmVersion = null

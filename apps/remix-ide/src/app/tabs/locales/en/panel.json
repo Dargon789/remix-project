@@ -2,5 +2,12 @@
   "panel.author": "Author",
   "panel.maintainedBy": "Maintained By",
   "panel.documentation": "Documentation",
-  "panel.description": "Description"
+  "panel.description": "Description",
+  "panel.maintainedByRemix": "Maintained by Remix",
+  "panel.pinnedMsg": "Move plugin to the Right Side Panel",
+  "panel.unPinnedMsg": "Move plugin to the Left Side Panel",
+  "panel.maintainedExternally": "Not maintained by Remix",
+  "panel.pluginInfo": "Plugin info",
+  "panel.linkToDoc": "Link to documentation",
+  "panel.makeAnissue": "Make an issue"
 }

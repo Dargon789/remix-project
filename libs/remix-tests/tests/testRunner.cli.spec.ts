@@ -4,15 +4,15 @@ import { expect } from 'chai';
 
 describe('testRunner: remix-tests CLI', function(){
   this.timeout(120000)
-  // remix-tests binary, after build, is used as executable 
-    
+  // remix-tests binary, after build, is used as executable
+
   const executablePath = resolve(__dirname + '/../../../dist/libs/remix-tests/bin/remix-tests')
-    
+
   const result = spawnSync('ls', { cwd: resolve(__dirname + '/../../../dist/libs/remix-tests') })
-  if(result) {
+  if (result) {
     const dirContent = result.stdout.toString()
     // Install dependencies if 'node_modules' is not already present
-    if(!dirContent.includes('node_modules')) {
+    if (!dirContent.includes('node_modules')) {
       execSync('yarn add @remix-project/remix-lib ../../libs/remix-lib', { cwd: resolve(__dirname + '/../../../dist/libs/remix-tests') })
       execSync('yarn add @remix-project/remix-url-resolver ../../libs/remix-url-resolver', { cwd: resolve(__dirname + '/../../../dist/libs/remix-tests') })
       execSync('yarn add @remix-project/remix-solidity ../../libs/remix-solidity', { cwd: resolve(__dirname + '/../../../dist/libs/remix-tests') })
@@ -20,17 +20,17 @@ describe('testRunner: remix-tests CLI', function(){
       execSync('yarn install', { cwd: resolve(__dirname + '/../../../dist/libs/remix-tests') })
     }
   }
-    
 
   describe('test various CLI options', function() {
     it('remix-tests version', () => {
       const res = spawnSync(executablePath, ['-V'])
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      expect(res.stdout.toString().trim()).to.equal(require('../package.json').version)
+      expect(res.stdout.toString().trim()).to.equal(require('../package.json').version, `actual value: ${res.stdout.toString()}`)
     })
 
     it('remix-tests help', () => {
       const res = spawnSync(executablePath, ['-h'])
+      console.log(res.stdout.toString())
       const expectedHelp = `Usage: remix-tests [options] [command] <file_path>
 
 Arguments:
@@ -45,7 +45,7 @@ Options:
   -v, --verbose <level>       set verbosity level (0 to 5)
   -f, --fork <string>         set hard fork (e.g: istanbul, berlin etc. See
                               full list of hard forks here:
-                              https://github.com/ethereumjs/ethereumjs-monorepo/tree/master/packages/common/src/hardforks)
+                              https://github.com/ethereumjs/ethereumjs-monorepo/tree/master/packages/common/src/hardforks.ts)
   -n, --nodeUrl <string>      set node url (e.g:
                               https://mainnet.infura.io/v3/your-api-key)
   -b, --blockNumber <string>  set block number (e.g: 123456)
@@ -60,8 +60,8 @@ Commands:
 
     it('remix-tests running a test file', function() {
       const res = spawnSync(executablePath, [resolve(__dirname + '/examples_0/assert_ok_test.sol')])
-      //console.log(res.stdout.toString())
       // match initial lines
+      console.log(res.stdout.toString())
       expect(res.stdout.toString().trim()).to.match(/:: Running tests using remix-tests ::/)
       expect(res.stdout.toString().trim()).to.match(/creation of library remix_tests.sol:Assert pending.../)
       // match test result
@@ -74,10 +74,8 @@ Commands:
       expect(res.stdout.toString().trim()).to.match(/Expected value should be ok to: true/)
       expect(res.stdout.toString().trim()).to.match(/Received: false/)
       expect(res.stdout.toString().trim()).to.match(/Message: okFailTest fails/)
-      
-    })
 
-    
+    })
 
     it('remix-tests running a test file with custom compiler version', () => {
       const res = spawnSync(executablePath, ['--compiler', '0.7.4', resolve(__dirname + '/examples_0/assert_ok_test.sol')])
@@ -92,13 +90,13 @@ Commands:
       // match fail test details
       expect(res.stdout.toString().trim()).to.match(/Message: okFailTest fails/)
     })
-    
+
     it('remix-tests running a test file with unavailable custom compiler version (should fail)', () => {
       const res = spawnSync(executablePath, ['--compiler', '1.10.4', resolve(__dirname + '/examples_0/assert_ok_test.sol')])
       // match initial lines
       expect(res.stdout.toString().trim()).to.contain('No compiler found in releases with version 1.10.4')
     })
-    
+
     it('remix-tests running a test file with custom EVM', () => {
       const res = spawnSync(executablePath, ['--evm', 'petersburg', resolve(__dirname + '/examples_0/assert_ok_test.sol')])
       // match initial lines
@@ -111,7 +109,7 @@ Commands:
       // match fail test details
       expect(res.stdout.toString().trim()).to.match(/Message: okFailTest fails/)
     })
-    
+
     it('remix-tests running a test file by enabling optimization', () => {
       const res = spawnSync(executablePath, ['--optimize', 'true', resolve(__dirname + '/examples_0/assert_ok_test.sol')])
       // match initial lines
@@ -124,7 +122,7 @@ Commands:
       // match fail test details
       expect(res.stdout.toString().trim()).to.match(/Message: okFailTest fails/)
     })
-    
+
     it('remix-tests running a test file by enabling optimization and setting runs', () => {
       const res = spawnSync(executablePath, ['--optimize', 'true', '--runs', '300', resolve(__dirname + '/examples_0/assert_ok_test.sol')])
       // match initial lines
@@ -161,6 +159,6 @@ Commands:
       // match fail test details
       expect(res.stdout.toString().trim()).to.match(/Message: okFailTest fails/)
     })
-    
+
   })
 })

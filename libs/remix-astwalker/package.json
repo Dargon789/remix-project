@@ -1,6 +1,6 @@
 {
   "name": "@remix-project/remix-astwalker",
-  "version": "0.0.62",
+  "version": "0.0.114",
   "description": "Tool to walk through Solidity AST",
   "main": "src/index.js",
   "scripts": {
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ethereum/remix-project.git"
+    "url": "git+https://github.com/remix-project-org/remix-project.git"
   },
   "keywords": [
     "Solidity",
@@ -21,9 +21,9 @@
   "author": "Remix Team",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ethereum/remix-project/issues"
+    "url": "https://github.com/remix-project-org/remix-project/issues"
   },
-  "homepage": "https://github.com/ethereum/remix-project/tree/master/libs/remix-astwalker#readme",
+  "homepage": "https://github.com/remix-project-org/remix-project/tree/master/libs/remix-astwalker#readme",
   "nyc": {
     "include": [
       "src/**/*.ts"
@@ -33,26 +33,25 @@
     ]
   },
   "dependencies": {
-    "@ethereumjs/block": "^4.2.0",
-    "@ethereumjs/tx": "^4.1.1",
-    "@ethereumjs/util": "^8.0.5",
-    "@ethereumjs/vm": "^6.4.1",
-    "@remix-project/remix-lib": "^0.5.39",
+    "@ethereumjs/block": "^10.1.0",
+    "@ethereumjs/tx": "github:yann300/ethereumjs-vm#tx_release_10.1.0",
+    "@ethereumjs/util": "^10.1.0",
+    "@ethereumjs/vm": "^10.1.0",
+    "@remix-project/remix-lib": "^0.5.91",
     "@types/tape": "^4.2.33",
     "async": "^2.6.2",
-    "ethers": "^5.4.2",
+    "ethers": "^6.14.0",
     "ethjs-util": "^0.1.6",
     "nyc": "^13.3.0",
     "string-similarity": "^4.0.4",
     "tape": "^4.10.1",
     "ts-node": "^8.0.3",
-    "typescript": "^3.4.3",
-    "web3": "^1.5.1"
+    "typescript": "^3.4.3"
   },
   "devDependencies": {
     "tap-spec": "^5.0.0"
   },
   "typings": "src/index.d.ts",
-  "gitHead": "335beb044cbd9d58c255bd8441a310757c99bf40",
+  "gitHead": "1fe3e95e3ed73bdf9d371ec06f04580e8205e553",
   "types": "./src/index.d.ts"
 }

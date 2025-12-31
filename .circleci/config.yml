@@ -1,18 +1,135 @@
-
 version: 2.1
+
+# Only the build job uses Nx Cloud; other jobs consume its dist via workspace
 parameters:
+  # Workflow triggers
+  run_all_tests:
+    type: boolean
+    default: false
+  run_pr_tests:
+    type: boolean
+    default: false
+  run_file_tests:
+    type: string
+    default: ""
+  run_file_tests_keyword:
+    type: enum
+    enum: ["", "ai_panel", "ballot", "ballot_0_4_14", "blockchain", "bottom-bar", "circom", "code_format", "compile_run_widget", "compiler_api", "contract_flattener", "contract_verification", "debugger", "defaultLayout", "deploy_vefiry", "dgit_github", "dgit_local", "editor", "editorGoToDefinition", "editorHoverContext", "editorReferences", "editor_autocomplete", "editor_error_marker", "editor_line_text", "eip1153", "eip7702", "environment-account", "erc721", "etherscan_api", "expandAllFolders", "fileExplorer", "fileManager_api", "file_decorator", "file_explorer_context_menu", "file_explorer_dragdrop", "file_explorer_multiselect", "generalSettings", "gist", "homeTab", "importFromGithub", "importResolver", "layout", "learneth", "libraryDeployment", "matomo-bot-detection", "matomo-consent", "maximizePanels", "mcp_all_resources", "mcp_all_tools", "mcp_server_complete", "mcp_server_connection", "mcp_server_lifecycle", "mcp_workflow_integration", "metamask", "migrateFileSystem", "noir", "pinned_contracts", "pluginManager", "plugin_api", "providers", "proxy_oz_v4", "proxy_oz_v5", "proxy_oz_v5_non_shanghai_runtime", "publishContract", "quickDapp_metamask", "recorder", "remixd", "runAndDeploy", "script-runner", "search", "signingMessage", "sol2uml", "solidityImport", "solidityUnittests", "specialFunctions", "staticAnalysis", "stressEditor", "template_exp_modal", "terminal", "toggle_panels", "transaction-simulator", "transactionExecution", "txListener", "uniswap_v4_core", "url", "usingWebWorker", "verticalIconsPanel", "vm_state", "vyper_api", "walkthrough", "workspace", "workspace_git"]
+    default: ""
   run_flaky_tests:
     type: boolean
     default: false
+  run_rerun_failed:
+    type: boolean
+    default: false
+  run_lint_only:
+    type: boolean
+    default: false
+  run_build_only:
+    type: boolean
+    default: false
+  run_libs_only:
+    type: boolean
+    default: false
+  run_deploy_alpha:
+    type: boolean
+    default: false
+
+  # Resource sizing
+  resource_class:
+    type: enum
+    enum: ["small", "medium", "medium+", "large", "xlarge", "2xlarge"]
+    default: "medium"
+
+  # E2E configuration
+  e2e_parallelism:
+    type: integer
+    default: 20
+  e2e_retries:
+    type: integer
+    default: 1
+  run_plan_shards:
+    type: boolean
+    default: false
+
+  # Timings fetch window (fewer = faster API calls)
+  timings_limit:
+    type: integer
+    default: 1
+
+  # Rerun-failed configuration
+  rerun_failed_history:
+    type: integer
+    default: 1
+  rerun_failed_mode:
+    type: string
+    default: "most-recent"
+  rerun_failed_workflow:
+    type: string
+    default: "web,run_file_tests,run_pr_tests,run_flaky_tests"
+
 orbs:
-  browser-tools: circleci/browser-tools@1.4.3
+  browser-tools: circleci/browser-tools@1.5.2
+
+commands:
+  nx-build-with-fallback:
+    description: "Run Nx build with Cloud fallback"
+    parameters:
+      target:
+        type: string
+        description: "Nx build target (e.g., 'build', 'remix-ide')"
+      config:
+        type: string
+        default: ""
+        description: "Configuration flag (e.g., '--configuration=production')"
+      memory:
+        type: string
+        default: "4096"
+        description: "Max memory in MB for Node.js"
+      fallback_command:
+        type: string
+        default: ""
+        description: "Custom fallback command (if empty, uses yarn build with skip-cache)"
+    steps:
+      - run:
+          name: Nx build << parameters.target >> (Cloud with fallback)
+          command: |
+            CONFIG_FLAG="<< parameters.config >>"
+            MEMORY="<< parameters.memory >>"
+            TARGET="<< parameters.target >>"
+            FALLBACK="<< parameters.fallback_command >>"
+            
+            if [ -n "${NX_CLOUD_ACCESS_TOKEN:-}" ]; then
+              echo "Attempting Nx Cloud build for $TARGET..."
+              if NX_VERBOSE_LOGGING=1 node --max-old-space-size=$MEMORY ./node_modules/.bin/nx build $TARGET $CONFIG_FLAG --cloud --verbose; then
+                echo "✓ Nx Cloud build succeeded"
+              else
+                echo "⚠ Nx Cloud build failed (out of credits or unavailable)"
+                echo "→ Falling back to local build..."
+                if [ -n "$FALLBACK" ]; then
+                  eval "$FALLBACK"
+                elif [ "$CONFIG_FLAG" = "--configuration=production" ]; then
+                  NODE_ENV=production yarn nx build $TARGET $CONFIG_FLAG
+                else
+                  NX_VERBOSE_LOGGING=1 yarn build --skip-nx-cache
+                fi
+              fi
+            else
+              echo "No NX_CLOUD_ACCESS_TOKEN; running local build"
+              if [ -n "$FALLBACK" ]; then
+                eval "$FALLBACK"
+              elif [ "$CONFIG_FLAG" = "--configuration=production" ]; then
+                NODE_ENV=production yarn nx build $TARGET $CONFIG_FLAG
+              else
+                NX_VERBOSE_LOGGING=1 yarn build --skip-nx-cache
+              fi
+            fi
+
 jobs:
   build:
     docker:
-      - image: cimg/node:20.0.0-browsers
-
-    resource_class:
-      xlarge
+      - image: cimg/node:20.19.0-browsers
+    resource_class: medium+
     working_directory: ~/remix-project
     steps:
       - checkout
@@ -24,87 +141,145 @@ jobs:
           key: v1-deps-{{ checksum "yarn.lock" }}
           paths:
             - node_modules
+      - nx-build-with-fallback:
+          target: "remix-ide"
+          fallback_command: "yarn build --skip-nx-cache"
       - run:
-          name: Build
+          name: Inject E2E test configuration
+          command: yarn inject-e2e-config
+      - run:
+          name: Compile E2E tests once
+          command: yarn run build:e2e
+      - run:
+          name: Compute soljson version list
+          command: grep -ir "[0-9]+commit" apps/* libs/* --include \*.ts --include \*.tsx --include \*.json > soljson-versions.txt || true
+      - run:
+          name: Download solc wasm assets (once)
+          command: yarn run downloadsolc_assets_e2e
+      - run:
+          name: Package dist for workspace
           command: |
-            if [ "${CIRCLE_BRANCH}" == "master" ]; then
-              NX_BIN_URL=http://127.0.0.1:8080/assets/js/soljson NX_WASM_URL=http://127.0.0.1:8080/assets/js/soljson NPM_URL=http://localhost:9090/ yarn build:production
+            set -e
+            tar -cf remix-dist.tar dist/apps/remix-ide dist/apps/remix-ide-e2e dist/apps/remix-ide/assets/js/soljson dist/libs 2>/dev/null || true
+            gzip -1 remix-dist.tar
+      - run:
+          name: Fetch CircleCI timings for shard planning (best effort)
+          command: |
+            if [ -n "${CIRCLECI_TOKEN:-}" ]; then
+              echo "Fetching timings for branch ${CIRCLE_BRANCH:-all}..."
+              yarn ci:timings --slug gh/remix-project-org/remix-project --workflow web --branch "${CIRCLE_BRANCH:-}" --limit << pipeline.parameters.timings_limit >> --json timings-current.json || true
+              if [ ! -s timings-current.json ] || [ "$(jq -r '.files | length' timings-current.json 2>/dev/null || echo 0)" -eq 0 ]; then
+                echo "No timings for current branch; falling back to master"
+                yarn ci:timings --slug gh/remix-project-org/remix-project --workflow web --branch master --limit << pipeline.parameters.timings_limit >> --json timings-current.json || true
+              fi
             else
-              NX_BIN_URL=http://127.0.0.1:8080/assets/js/soljson NX_WASM_URL=http://127.0.0.1:8080/assets/js/soljson NPM_URL=http://localhost:9090/ yarn build
+              echo "CIRCLECI_TOKEN not set; shard planning will use median defaults."
             fi
-      - run: yarn run build:e2e
-      
-      - run: grep -ir "[0-9]+commit" apps/* libs/* --include \*.ts --include \*.tsx --include \*.json > soljson-versions.txt
-      - restore_cache:
-          keys:
-            - soljson-v7-{{ checksum "soljson-versions.txt" }}
-      - run: yarn run downloadsolc_assets_e2e
+      - run:
+          name: Precompute and cache E2E shard splits
+          command: |
+            set -e
+            PARALLEL=<< pipeline.parameters.e2e_parallelism >>
+            COMMIT_SHA=${CIRCLE_SHA1:-unknown}
+            CACHE_PREFIX="reports/shards/cache/${COMMIT_SHA}-shards${PARALLEL}"
+            mkdir -p "$CACHE_PREFIX" reports/shards
+            echo "Enumerating enabled test basenames from dist..."
+            TEST_NAMES=$(find dist/apps/remix-ide-e2e/src/tests -type f \( -name "*.test.js" -o -name "*.spec.js" \) -print0 \
+              | xargs -0 grep -IL "@disabled" \
+              | xargs -I {} basename {} \
+              | sed 's/\.js$//' \
+              | grep -v metamask)
+            # Persist full test list for visibility
+            printf '%s\n' "$TEST_NAMES" > reports/shards/all-tests.txt
+            COUNT=$(printf '%s\n' "$TEST_NAMES" | wc -l | awk '{print $1}')
+            echo "Found $COUNT enabled tests. Planning for $PARALLEL shard(s)."
+            # Generate a manifest (index 0 is arbitrary; manifest includes all bins)
+            printf '%s\n' "$TEST_NAMES" | node scripts/plan-shards.js \
+              --shards "$PARALLEL" \
+              --index 0 \
+              --timings timings-current.json \
+              --manifest-out "${CACHE_PREFIX}/manifest.json" \
+              --verbose > /dev/null || true
+            # Generate per-shard file lists deterministically
+            for i in $(seq 0 $((PARALLEL-1))); do
+              OUT=$(printf '%s\n' "$TEST_NAMES" | node scripts/plan-shards.js --shards "$PARALLEL" --index "$i" --timings timings-current.json)
+              printf '%s\n' "$OUT" > "${CACHE_PREFIX}/files-$i.txt"
+            done
+            echo "Precomputed shard files saved under $CACHE_PREFIX"
+      - run:
+          name: Generate shard overview (human + JSON)
+          command: |
+            # Build overview.txt and overview.json next to manifest.json
+            PARALLEL=<< pipeline.parameters.e2e_parallelism >>
+            COMMIT_SHA=${CIRCLE_SHA1:-unknown}
+            CACHE_PREFIX="reports/shards/cache/${COMMIT_SHA}-shards${PARALLEL}"
+            MANIFEST_PATH="${CACHE_PREFIX}/manifest.json"
+            echo "Looking for manifest at: $MANIFEST_PATH"
+            if [ -f "$MANIFEST_PATH" ]; then
+              node scripts/generate-shard-overview.js "$CACHE_PREFIX" timings-current.json || true
+            else
+              echo "No manifest found at $MANIFEST_PATH; skipping overview generation."
+              ls -la "$(dirname "$MANIFEST_PATH")" || true
+            fi
       - save_cache:
-          key: soljson-v7-{{ checksum "soljson-versions.txt" }}
+          key: v1-shards-{{ .Environment.CIRCLE_SHA1 }}-<< pipeline.parameters.e2e_parallelism >>
           paths:
-            - dist/apps/remix-ide/assets/js/soljson
-      
-      - run: mkdir persist && zip -0 -r persist/dist.zip dist
+            - reports/shards/cache
       - persist_to_workspace:
           root: .
           paths:
-            - "persist"
-
+            - remix-dist.tar.gz
+            - reports/shards
+      - store_artifacts:
+          path: ./reports/shards
+      - store_artifacts:
+          path: ./timings-current.json
 
   build-plugin:
-      docker:
-      - image: cimg/node:20.0.0-browsers
-      resource_class:
-        xlarge
-      working_directory: ~/remix-project
-      parameters:
-        plugin:
-          type: string
-      steps:
-        - checkout
-        - restore_cache:
-            keys:
-              - v1-deps-{{ checksum "yarn.lock" }}
-        - run: yarn
-        - save_cache:
-            key: v1-deps-{{ checksum "yarn.lock" }}
-            paths:
-              - node_modules
-        - run: yarn nx build << parameters.plugin >> --configuration=production 
-        - run: mkdir persist && zip -0 -r persist/plugin-<< parameters.plugin >>.zip dist
-        - persist_to_workspace:
-            root: .
-            paths:
-              - "persist"
-
-  lint:
     docker:
-      - image: cimg/node:20.0.0-browsers
-    resource_class:
-      xlarge
+      - image: cimg/node:20.19.0-browsers
+    resource_class: << pipeline.parameters.resource_class >>
     working_directory: ~/remix-project
-
+    parameters:
+      plugin:
+        type: string
     steps:
       - checkout
       - restore_cache:
           keys:
             - v1-deps-{{ checksum "yarn.lock" }}
       - run: yarn
-      - run: yarn nx graph --file=./projects.json 
+      - save_cache:
+          key: v1-deps-{{ checksum "yarn.lock" }}
+          paths:
+            - node_modules
+      - nx-build-with-fallback:
+          target: "<< parameters.plugin >>"
+          config: "--configuration=production"
+
+  lint:
+    docker:
+      - image: cimg/node:20.19.0-browsers
+    resource_class: << pipeline.parameters.resource_class >>
+    working_directory: ~/remix-project
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "yarn.lock" }}
+      - run: yarn
+      - run: yarn nx graph --file=./projects.json
       - run:
           name: Remix Libs Linting
           command: node ./apps/remix-ide/ci/lint-targets.js
+
   remix-libs:
     docker:
-      - image: cimg/node:20.0.0-browsers
-    resource_class:
-      xlarge
+      - image: cimg/node:20.19.0-browsers
+    resource_class: medium
     working_directory: ~/remix-project
-
     steps:
       - checkout
-      - attach_workspace:
-          at: .
       - restore_cache:
           keys:
             - v1-deps-{{ checksum "yarn.lock" }}
@@ -120,75 +295,300 @@ jobs:
       - run: node dist/libs/remix-tests/bin/remix-tests ./libs/remix-tests/tests/examples_0/assert_ok_test.sol
       - run: yarn run test:libs
 
+  check-flaky-or-pr-tests:
+    docker:
+      - image: cimg/node:24.3.0
+    resource_class: << pipeline.parameters.resource_class >>
+    working_directory: ~/remix-project
+    parameters:
+      pattern:
+        type: string
+    steps:
+      - checkout
+      - run: node apps/remix-ide-e2e/src/buildGroupTests.js
+      - run:
+          name: Check for enabled tests matching tag
+          command: |
+            PATTERN="<< parameters.pattern >>"
+            if [ -z "$PATTERN" ]; then
+              echo "❌ Tag parameter is empty!"
+              exit 2
+            fi
+            echo "🔍 Searching for enabled tests with .$PATTERN extension..."
+            if grep -IRiL "'@disabled': \?true" "./apps/remix-ide-e2e/src/tests" | grep -i "${PATTERN}"; then
+              echo "✅ Found enabled .$PATTERN tests."
+              exit 0
+            else
+              echo "⚠️ No enabled .$PATTERN tests found. Skipping workflow."
+              exit 1
+            fi
+
   remix-ide-browser:
     docker:
-      - image: cimg/node:20.0.0-browsers
-    resource_class:
-      xlarge
+      - image: cimg/node:20.19.0-browsers
+    resource_class: << pipeline.parameters.resource_class >>
     working_directory: ~/remix-project
     parameters:
       browser:
         type: string
       script:
         type: string
+      scriptparameter:
+        type: string
       job:
         type: string
       jobsize:
         type: string
-    parallelism: 10
+      shard_index:
+        type: integer
+        default: 0
+      vertical_mode:
+        type: boolean
+        default: false
+      parallelism:
+        type: integer
+        default: 1
+      skip_timings:
+        type: boolean
+        default: false
+    parallelism: << parameters.parallelism >>
     steps:
-      - when:
-          condition:
-              equal: [ "chrome", << parameters.browser >> ]
-          steps:
-            - browser-tools/install-browser-tools:
-                install-firefox: false
-                install-chrome: true
-                install-geckodriver: false
-                install-chromedriver: true
-            - run: google-chrome --version
-            - run: chromedriver --version
-            - run: rm LICENSE.chromedriver 2> /dev/null || true
-      - when:
-          condition:
-              equal: [ "firefox", << parameters.browser >> ]
-          steps:
-            - browser-tools/install-browser-tools:
-                install-firefox: true
-                install-chrome: false
-                install-geckodriver: true
-                install-chromedriver: false
-            - run: firefox --version
-            - run: geckodriver --version
       - checkout
       - attach_workspace:
-          at: .
-      - run: unzip ./persist/dist.zip
-      - run: yarn install --cwd ./apps/remix-ide-e2e --modules-folder ../../node_modules
-
-      - run: ls -la ./dist/apps/remix-ide/assets/js
-      - run: yarn run selenium-install || yarn run selenium-install
+          at: ~/remix-project
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "yarn.lock" }}
+      - restore_cache:
+          keys:
+            - v1-shards-{{ .Environment.CIRCLE_SHA1 }}-<< pipeline.parameters.e2e_parallelism >>
+      - run: yarn
       - run:
-          name: Start Selenium
-          command: yarn run selenium
-          background: true
-      - run: ./apps/remix-ide/ci/<< parameters.script >> << parameters.browser >> << parameters.jobsize >> << parameters.job >>
+          name: Unpack dist from workspace
+          command: |
+            if [ -f remix-dist.tar.gz ]; then
+              tar -xzf remix-dist.tar.gz
+            fi
+      - run: ls -la ./dist/apps/remix-ide/assets/js || true
+      - browser-tools/install-browser-tools:
+          install-chrome: true
+          install-chromedriver: false
+          install-firefox: false
+          install-geckodriver: false
+      - run: yarn install_webdriver
+      - run: google-chrome --version
+      - when:
+          condition:
+            not: << parameters.skip_timings >>
+          steps:
+            - run:
+                name: Fetch CircleCI timings snapshot (best effort)
+                command: |
+                  if [ -n "${CIRCLECI_TOKEN:-}" ]; then
+                    echo "Fetching timings for branch ${CIRCLE_BRANCH:-all}..."
+                    yarn ci:timings --slug gh/remix-project-org/remix-project --workflow web --branch "${CIRCLE_BRANCH:-}" --limit << pipeline.parameters.timings_limit >> --json timings-current.json || true
+                    
+                    # If no timings found for this branch (new branch), fall back to master
+                    if [ ! -s timings-current.json ] || [ "$(jq -r '.files | length' timings-current.json 2>/dev/null || echo 0)" -eq 0 ]; then
+                      echo "⚠️  No timings found for branch ${CIRCLE_BRANCH:-current}, falling back to master..."
+                      yarn ci:timings --slug gh/remix-project-org/remix-project --workflow web --branch master --limit << pipeline.parameters.timings_limit >> --json timings-current.json || true
+                    fi
+                  else
+                    echo "CIRCLECI_TOKEN not set; skipping timings fetch. Self-split will fall back to median weights."
+                  fi
+      - run:
+          name: Run E2E shard (self-split)
+          command: |
+            # If running in vertical mode (parallelism=1 matrix), force shard env; otherwise let CircleCI provide them
+            if [ "<< parameters.vertical_mode >>" = "true" ]; then
+              export CIRCLE_NODE_TOTAL=<< pipeline.parameters.e2e_parallelism >>
+              export CIRCLE_NODE_INDEX=<< parameters.shard_index >>
+            fi
+            E2E_RETRIES=<< pipeline.parameters.e2e_retries >> SELF_SPLIT=1 TIMINGS_JSON=timings-current.json \
+            ./apps/remix-ide/ci/<< parameters.script >> << parameters.browser >> << parameters.jobsize >> << parameters.job >> << parameters.scriptparameter >>
       - store_test_results:
           path: ./reports/tests
       - store_artifacts:
           path: ./reports/screenshots
+      - store_artifacts:
+          path: ./reports/shards
+      - store_artifacts:
+          path: ./timings-current.json
+
+  plan-e2e-shards:
+    docker:
+      - image: cimg/node:20.19.0-browsers
+    resource_class: << pipeline.parameters.resource_class >>
+    working_directory: ~/remix-project
+    parameters:
+      shards:
+        type: integer
+        default: 20
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "yarn.lock" }}
+      - run: yarn
+      - run:
+          name: Compile E2E tests (generate groups)
+          command: yarn run build:e2e
+      - run:
+          name: Fetch CircleCI timings snapshot (best effort)
+          command: |
+            if [ -n "${CIRCLECI_TOKEN:-}" ]; then
+              echo "Fetching timings for branch ${CIRCLE_BRANCH:-all}..."
+              yarn ci:timings --slug gh/remix-project-org/remix-project --workflow web --branch "${CIRCLE_BRANCH:-}" --limit << pipeline.parameters.timings_limit >> --json timings-current.json || true
+              
+              # If no timings found for this branch (new branch), fall back to master
+              if [ ! -s timings-current.json ] || [ "$(jq -r '.files | length' timings-current.json 2>/dev/null || echo 0)" -eq 0 ]; then
+                echo "⚠️  No timings found for branch ${CIRCLE_BRANCH:-current}, falling back to master..."
+                yarn ci:timings --slug gh/remix-project-org/remix-project --workflow web --branch master --limit << pipeline.parameters.timings_limit >> --json timings-current.json || true
+              fi
+            else
+              echo "CIRCLECI_TOKEN not set; planning will use median default weights."
+            fi
+      - run:
+          name: Compute shard planning overview (no test execution)
+          command: |
+            set -e
+            mkdir -p reports/shards
+            echo "Enumerating enabled test basenames from dist..."
+            TEST_NAMES=$(find dist/apps/remix-ide-e2e/src/tests -type f \( -name "*.test.js" -o -name "*.spec.js" \) -print0 \
+              | xargs -0 grep -IL "@disabled" \
+              | xargs -I {} basename {} \
+              | sed 's/\\.js$//' \
+              | grep -v metamask)
+            COUNT=$(printf '%s\n' "$TEST_NAMES" | wc -l | awk '{print $1}')
+            echo "Found $COUNT enabled tests. Planning for << parameters.shards >> shard(s)."
+            
+            # Run planner once to produce a manifest with all bins
+            printf '%s\n' "$TEST_NAMES" | node scripts/plan-shards.js \
+              --shards << parameters.shards >> \
+              --index 0 \
+              --timings timings-current.json \
+              --manifest-out reports/shards/manifest.json \
+              --verbose > /dev/null
+            
+            # Generate overview and per-shard file lists using dedicated script
+            node scripts/generate-shard-overview.js reports/shards timings-current.json
+      - store_artifacts:
+          path: ./reports/shards
+      - store_artifacts:
+          path: ./timings-current.json
+
+  rerun-failed-e2e:
+    docker:
+      - image: cimg/node:20.19.0-browsers
+    resource_class: << pipeline.parameters.resource_class >>
+    working_directory: ~/remix-project
+    parameters:
+      history_limit:
+        type: integer
+        default: 5
+      selection_mode:
+        type: string
+        default: "first-failed"
+      workflow_name:
+        type: string
+        default: "web"
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/remix-project
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "yarn.lock" }}
+      - run: yarn
+      - run:
+          name: Unpack dist from workspace
+          command: |
+            if [ -f remix-dist.tar.gz ]; then
+              tar -xzf remix-dist.tar.gz
+            fi
+      - browser-tools/install-browser-tools:
+          install-chrome: true
+          install-chromedriver: false
+          install-firefox: false
+          install-geckodriver: false
+      - run: yarn install_webdriver
+      - run: google-chrome --version
+      - run:
+          name: Fetch failed tests from last run
+          command: |
+            if [ -n "${CIRCLECI_TOKEN:-}" ]; then
+              node scripts/circleci-failed-tests.js --slug gh/remix-project-org/remix-project --workflow "<< parameters.workflow_name >>" --branch "${CIRCLE_BRANCH:-}" --jobs "remix-ide-browser" --limit << parameters.history_limit >> --mode "<< parameters.selection_mode >>" --verbose > failed-basenames.txt || true
+            else
+              echo "CIRCLECI_TOKEN not set; cannot fetch failed tests." > failed-basenames.txt
+            fi
+            echo "Failed list (raw):"; cat failed-basenames.txt || true
+      - run:
+          name: Rerun only failed tests
+          command: |
+            if [ ! -s failed-basenames.txt ]; then
+              echo "No failing tests to rerun. Exiting."; exit 0; fi
+            # Pass browser and workflow name; use pipeline parameter for retries
+            E2E_RETRIES=<< pipeline.parameters.e2e_retries >> bash ./apps/remix-ide/ci/rerun_failed.sh chrome "<< parameters.workflow_name >>"
+      - store_test_results:
+          path: ./reports/tests
+      - store_artifacts:
+          path: ./reports/screenshots
+      - store_artifacts:
+          path: ./reports/failed
+
+  post-failed-report:
+    docker:
+      - image: cimg/node:20.19.0-browsers
+    resource_class: small
+    working_directory: ~/remix-project
+    steps:
+      - checkout
+      - run:
+          name: Install @octokit/auth-app for PR commenter
+          command: |
+            mkdir -p /tmp/pr-bot
+            cd /tmp/pr-bot
+            npm install --no-save @octokit/auth-app
+      - run:
+          name: "Post sticky PR comment: CI started"
+          command: |
+            NODE_PATH=/tmp/pr-bot/node_modules node scripts/post-pr-started.js || true
+      - run:
+          name: Wait for E2E jobs to finish (success or fail)
+          command: |
+            if [ -z "${CIRCLECI_TOKEN:-}" ]; then
+              echo "CIRCLECI_TOKEN not set; cannot poll CircleCI API. Skipping wait.";
+            else
+              # Set E2E job prefix - check if we're in rerun_failed workflow by checking job names
+              echo "Checking workflow jobs to determine E2E prefix..."
+              export E2E_JOB_PREFIX="remix-ide-browser,rerun-failed-e2e"
+              echo "Will wait for jobs matching: $E2E_JOB_PREFIX"
+              node scripts/wait-for-e2e-jobs.js;
+            fi
+      - run:
+          name: Generate HTML failed report for this workflow
+          command: |
+            mkdir -p reports/ci-latest-failed
+            # Just check all E2E job types - let the script filter what exists
+            node scripts/generate-failed-report.js --workflow-id "$CIRCLE_WORKFLOW_ID" --jobs "remix-ide-browser,rerun-failed-e2e" --out reports/ci-latest-failed || true
+      - store_artifacts:
+          path: ./reports/ci-latest-failed
+          destination: ci-latest-failed
+      - run:
+          name: Comment report link on PR (if failures)
+          command: |
+            NODE_PATH=/tmp/pr-bot/node_modules node scripts/post-pr-report.js reports/ci-latest-failed || true
 
   tests-passed:
     machine:
-      image: ubuntu-2004:202010-01
+      image: default
     steps:
       - run: echo done
 
   remix-test-plugins:
     docker:
-      - image: cimg/node:20.0.0-browsers
-    resource_class:
-      xlarge
+      - image: cimg/node:20.17.0-browsers
+    resource_class: << pipeline.parameters.resource_class >>
     working_directory: ~/remix-project
     parameters:
       plugin:
@@ -198,38 +598,39 @@ jobs:
         default: 1
     parallelism: << parameters.parallelism >>
     steps:
-      - browser-tools/install-browser-tools:
-          install-firefox: false
-          install-chrome: true
-          install-geckodriver: false
-          install-chromedriver: true
-      - run: google-chrome --version
-      - run: chromedriver --version
-      - run: rm LICENSE.chromedriver 2> /dev/null || true
       - checkout
-      - attach_workspace:
-          at: .
-      - run: unzip ./persist/dist.zip
-      - run: unzip ./persist/plugin-<< parameters.plugin >>.zip
-      - run: yarn install --cwd ./apps/remix-ide-e2e --modules-folder ../../node_modules
-      - run: yarn run selenium-install || yarn run selenium-install
-      - run:
-          name: Start Selenium
-          command: yarn run selenium
-          background: true
+      - run: git fetch origin master:master || true
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "yarn.lock" }}
+      - run: yarn
+      - nx-build-with-fallback:
+          target: "<< parameters.plugin >>"
+          config: "--configuration=production"
+      - browser-tools/install-browser-tools:
+          install-chrome: true
+          install-chromedriver: false
+          install-firefox: false
+          install-geckodriver: false
+      - run: yarn install_webdriver
+      - run: google-chrome --version
       - run: ./apps/remix-ide/ci/browser_test_plugin.sh << parameters.plugin >>
       - store_test_results:
           path: ./reports/tests
       - store_artifacts:
           path: ./reports/screenshots
 
-
-  predeploy:
+  deploy-build:
     docker:
-      - image: cimg/node:20.0.0-browsers
-    resource_class:
-      xlarge
+      - image: cimg/node:20.19.0-browsers
+    resource_class: xlarge
+    environment:
+      COMMIT_AUTHOR_EMAIL: "yann@ethereum.org"
+      COMMIT_AUTHOR: "Circle CI"
     working_directory: ~/remix-project
+    parameters:
+      script:
+        type: string
     steps:
       - checkout
       - restore_cache:
@@ -240,51 +641,112 @@ jobs:
           key: v1-deps-{{ checksum "yarn.lock" }}
           paths:
             - node_modules
-      - run: yarn build:production
-      - run: mkdir persist && zip -0 -r persist/predeploy.zip dist
-      - persist_to_workspace:
-          root: .
-          paths:
-            - "persist"
+      - run:
+          name: Build remix-ide for production
+          command: yarn build:production
+          no_output_timeout: 30m
+      - run: "./apps/remix-ide/ci/deploy_remix-<< parameters.script >>.sh"
 
-  deploy-build:
-    docker:
-      - image: cimg/node:20.0.0-browsers
 
-    resource_class:
-      xlarge
-    environment:
-      COMMIT_AUTHOR_EMAIL: "yann@ethereum.org"
-      COMMIT_AUTHOR: "Circle CI"
-    working_directory: ~/remix-project
-
-    parameters:
-      script:
-        type: string
-
-    steps:
-      - checkout
-      - attach_workspace:
-          at: .
-      - run: unzip ./persist/predeploy.zip
-      - run: ./apps/remix-ide/ci/deploy_from_travis_remix-<< parameters.script >>.sh
-    
 workflows:
-  run_flaky_tests:
-    when: << pipeline.parameters.run_flaky_tests >>
+  run_file_tests:
+    when: << pipeline.parameters.run_file_tests >>
     jobs:
-      - build
+      - check-flaky-or-pr-tests:
+          pattern: '<< pipeline.parameters.run_file_tests >>'
+      - build:
+          requires:
+            - check-flaky-or-pr-tests
       - remix-ide-browser:
           requires:
             - build
           matrix:
             parameters:
-              browser: ["chrome", "firefox"]
-              script: ["flaky.sh"]
+              browser: ["chrome"]
+              script: ["singletest.sh"]
               job: ["nogroup"]
               jobsize: ["1"]
-  build_all:
-    unless: << pipeline.parameters.run_flaky_tests >>
+              parallelism: [1]
+              scriptparameter: ["<< pipeline.parameters.run_file_tests >>"]
+              skip_timings: [true]
+      - post-failed-report:
+          requires:
+            - build
+
+  run_file_keyword:
+    when: << pipeline.parameters.run_file_tests_keyword >>
+    jobs:
+      - check-flaky-or-pr-tests:
+          pattern: "<< pipeline.parameters.run_file_tests_keyword >>"
+      - build:
+          requires:
+            - check-flaky-or-pr-tests
+      - remix-ide-browser:
+          requires:
+            - build
+          matrix:
+            parameters:
+              browser: ["chrome"]
+              script: ["singletest.sh"]
+              job: ["nogroup"]
+              jobsize: ["1"]
+              parallelism: [1]
+              scriptparameter: ["<< pipeline.parameters.run_file_tests_keyword >>"]
+              skip_timings: [true]
+      - post-failed-report:
+          requires:
+            - build
+
+  run_pr_tests:
+    when: << pipeline.parameters.run_pr_tests >>
+    jobs:
+      - check-flaky-or-pr-tests:
+          pattern: "\\.pr"
+      - build:
+          requires:
+            - check-flaky-or-pr-tests
+      - remix-ide-browser:
+          requires:
+            - build
+          matrix:
+            parameters:
+              browser: ["chrome"]
+              script: ["singletest.sh"]
+              job: ["nogroup"]
+              jobsize: ["1"]
+              parallelism: [1]
+              scriptparameter: ["\\.pr\\.js$"]
+              skip_timings: [true]
+      - post-failed-report:
+          requires:
+            - build
+
+  run_flaky_tests:
+    when: << pipeline.parameters.run_flaky_tests >>
+    jobs:
+      - check-flaky-or-pr-tests:
+          pattern: "\\.flaky"
+      - build:
+          requires:
+            - check-flaky-or-pr-tests
+      - remix-ide-browser:
+          requires:
+            - build
+          matrix:
+            parameters:
+              browser: ["chrome"]
+              script: ["singletest.sh"]
+              job: ["nogroup"]
+              jobsize: ["1"]
+              parallelism: [5]
+              scriptparameter: ["\\.flaky"]
+              skip_timings: [true]
+      - post-failed-report:
+          requires:
+            - build
+
+  web:
+    when: << pipeline.parameters.run_all_tests >>
     jobs:
       - build
       - build-plugin:
@@ -305,65 +767,98 @@ workflows:
             parameters:
               plugin: ["plugin_api"]
               parallelism: [1, 9]
-            exclude: 
+            exclude:
               - plugin: plugin_api
                 parallelism: 1
-
       - remix-ide-browser:
           requires:
             - build
           matrix:
+            alias: chrome-tests
             parameters:
-              browser: ["chrome", "firefox"]
+              browser: ["chrome"]
               script: ["browser_test.sh"]
-              job: ["0","1","2","3","4","5","6","7","8","9"]
-              jobsize: ["10"]
+              job: ["nogroup"]
+              jobsize: ["1"]
+              parallelism: [1]
+              scriptparameter: [""]
+              shard_index: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
+              vertical_mode: [true]
+              skip_timings: [true]
       - tests-passed:
           requires:
             - lint
             - remix-libs
-            - remix-ide-browser
+            - chrome-tests
             - plugins
-            
-      - predeploy:
-          filters:
-            branches:
-              only: ['master', 'remix_live', 'remix_beta']
-      - deploy-build:
-          script: "live"
-          name: "deploy-live"
-          requires:
-            - lint
-            - remix-libs
-            - remix-ide-browser
-            - plugins
-            - predeploy
-          filters:
-            branches:
-              only: remix_live
       - deploy-build:
           script: "alpha"
-          name: "deploy-alpha"
           requires:
-            - lint
-            - remix-libs
-            - remix-ide-browser
-            - plugins
-            - predeploy
+            - tests-passed
           filters:
             branches:
               only: master
       - deploy-build:
+          name: deploy-beta
           script: "beta"
-          name: "deploy-beta"
           requires:
-            - lint
-            - remix-libs
-            - remix-ide-browser
-            - plugins
-            - predeploy
+            - tests-passed
           filters:
             branches:
               only: remix_beta
+      - deploy-build:
+          name: deploy-live
+          script: "live"
+          requires:
+            - tests-passed
+          filters:
+            branches:
+              only: remix_live
+      - post-failed-report:
+          requires:
+            - build
 
-# VS Code Extension Version: 1.5.1
+  lint_only:
+    when: << pipeline.parameters.run_lint_only >>
+    jobs:
+      - lint
+
+  build_only:
+    when: << pipeline.parameters.run_build_only >>
+    jobs:
+      - build
+
+  libs_only:
+    when: << pipeline.parameters.run_libs_only >>
+    jobs:
+      - remix-libs
+
+  plan_e2e_shards:
+    when: << pipeline.parameters.run_plan_shards >>
+    jobs:
+      - plan-e2e-shards:
+          name: plan-e2e-shards
+          shards: << pipeline.parameters.e2e_parallelism >>
+
+  rerun_failed:
+    when: << pipeline.parameters.run_rerun_failed >>
+    jobs:
+      - build
+      - rerun-failed-e2e:
+          requires:
+            - build
+          history_limit: << pipeline.parameters.rerun_failed_history >>
+          selection_mode: << pipeline.parameters.rerun_failed_mode >>
+          workflow_name: << pipeline.parameters.rerun_failed_workflow >>
+      - post-failed-report:
+          requires:
+            - build
+
+  deploy_alpha:
+    when: << pipeline.parameters.run_deploy_alpha >>
+    jobs:
+      - deploy-build:
+          script: "alpha"
+          filters:
+            branches:
+              only: master

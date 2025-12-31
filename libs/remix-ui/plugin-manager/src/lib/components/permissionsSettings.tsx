@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, {Fragment, useState} from 'react' // eslint-disable-line no-use-before-define
-import {FormattedMessage, useIntl} from 'react-intl'
+import React, { Fragment, useState } from 'react' // eslint-disable-line no-use-before-define
+import { FormattedMessage, useIntl } from 'react-intl'
 /* eslint-disable-line */
-import {ModalDialog} from '@remix-ui/modal-dialog'
+import { ModalDialog } from '@remix-ui/modal-dialog'
 import useLocalStorage from '../custom-hooks/useLocalStorage'
-import {PluginPermissions} from '../../types'
-import {CustomTooltip} from '@remix-ui/helper'
+import { PluginPermissions } from '../../types'
+import { CustomTooltip } from '@remix-ui/helper'
 
 function PermisssionsSettings() {
   const [modalVisibility, setModalVisibility] = useState<boolean>(true)
@@ -51,7 +51,7 @@ function PermisssionsSettings() {
     })
   }
 
-  function RenderPluginHeader({headingName}) {
+  function RenderPluginHeader({ headingName }) {
     return (
       <div className="pb-2 remixui_permissionKey">
         <h3>
@@ -68,16 +68,16 @@ function PermisssionsSettings() {
     )
   }
 
-  function RenderPermissions({targetPlugin}) {
+  function RenderPermissions({ targetPlugin }) {
     return (
       <>
         {Object.keys(permissions[targetPlugin]).map((funcName) => {
           return Object.keys(permissions[targetPlugin][funcName]).map((pluginName, index) => (
-            <div className="form-group remixui_permissionKey" key={pluginName}>
+            <div className="mb-3 remixui_permissionKey" key={pluginName}>
               {permissions && Object.keys(permissions).length > 0 ? (
                 <>
                   <div className="remixui_checkbox">
-                    <span className="mr-2">
+                    <span className="me-2">
                       <input
                         type="checkbox"
                         onChange={() => handleCheckboxClick(targetPlugin, funcName, pluginName)}
@@ -86,11 +86,11 @@ function PermisssionsSettings() {
                         aria-describedby={`module ${pluginName} asks permission for ${funcName}`}
                       />
                       <label
-                        className="ml-4"
+                        className="ms-4"
                         htmlFor={`permission-checkbox-${targetPlugin}-${funcName}-${targetPlugin}`}
                         data-id={`permission-label-${targetPlugin}-${funcName}-${targetPlugin}`}
                       >
-                        <FormattedMessage id="pluginManager.allow" /> <u>{pluginName}</u> <FormattedMessage id="pluginManager.toCall" /> <u>{funcName}</u>
+                        <FormattedMessage id="pluginManager.allow" /><u>{pluginName}</u> <FormattedMessage id="pluginManager.toCall" /> <u>{funcName}</u>
                       </label>
                     </span>
                   </div>
@@ -120,8 +120,8 @@ function PermisssionsSettings() {
         title={intl.formatMessage({
           id: 'pluginManager.pluginManagerPermissions'
         })}
-        okLabel={intl.formatMessage({id: 'pluginManager.ok'})}
-        cancelLabel={intl.formatMessage({id: 'pluginManager.cancel'})}
+        okLabel={intl.formatMessage({ id: 'pluginManager.ok' })}
+        cancelLabel={intl.formatMessage({ id: 'pluginManager.cancel' })}
       >
         {permissions && Object.keys(permissions).length > 0 ? (
           <h4 className="text-center">
@@ -144,7 +144,13 @@ function PermisssionsSettings() {
         </form>
       </ModalDialog>
       <footer className="bg-light remixui_permissions remix-bg-opacity">
-        <CustomTooltip placement={'top'} tooltipId="pmPermissions" tooltipClasses="text-nowrap" tooltipText={'Manage plugins Permissions'} key={'keypmPermissions'}>
+        <CustomTooltip
+          placement={'top'}
+          tooltipId="pmPermissions"
+          tooltipClasses="text-nowrap"
+          tooltipText={<FormattedMessage id="pluginManager.managePluginsPermissions" />}
+          key={'keypmPermissions'}
+        >
           <button onClick={openModal} className="btn btn-primary settings-button" data-id="pluginManagerPermissionsButton">
             <FormattedMessage id="pluginManager.Permissions" />
           </button>

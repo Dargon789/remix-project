@@ -2,9 +2,11 @@ import { NightwatchBrowser, NightwatchContractContent } from 'nightwatch'
 import EventEmitter from 'events'
 
 class AddFile extends EventEmitter {
-  command(this: NightwatchBrowser, name: string, content: NightwatchContractContent): NightwatchBrowser {
+  command(this: NightwatchBrowser, name: string, content: NightwatchContractContent, readMeFile?:string): NightwatchBrowser {
+    if (!readMeFile)
+      readMeFile = 'README.txt'
     this.api.perform((done) => {
-      addFile(this.api, name, content, () => {
+      addFile(this.api, name, content, readMeFile, () => {
         done()
         this.emit('complete')
       })
@@ -13,7 +15,8 @@ class AddFile extends EventEmitter {
   }
 }
 
-function addFile(browser: NightwatchBrowser, name: string, content: NightwatchContractContent, done: VoidFunction) {
+function addFile(browser: NightwatchBrowser, name: string, content: NightwatchContractContent, readMeFile:string, done: VoidFunction) {
+  const readmeSelector = `li[data-id="treeViewLitreeViewItem${readMeFile}"]`
   browser
     .isVisible({
       selector: "//*[@data-id='sidePanelSwapitTitle' and contains(.,'File explorer')]",
@@ -25,9 +28,13 @@ function addFile(browser: NightwatchBrowser, name: string, content: NightwatchCo
         browser.clickLaunchIcon('filePanel')
       }
     })
-    .scrollInto('li[data-id="treeViewLitreeViewItemREADME.txt"]')
-    .waitForElementVisible('li[data-id="treeViewLitreeViewItemREADME.txt"]')
-    .click('li[data-id="treeViewLitreeViewItemREADME.txt"]').pause(1000) // focus on root directory
+    .execute(function () {
+      const container = document.querySelector('[data-test-id="virtuoso-scroller"]');
+      container.scrollTop = container.scrollHeight;
+    })
+    .scrollInto(readmeSelector)
+    .waitForElementVisible(readmeSelector)
+    .click(readmeSelector).pause(1000) // focus on root directory
     .isVisible({
       selector: `//*[@data-id="treeViewLitreeViewItem${name}"]`,
       locateStrategy: 'xpath',
@@ -43,10 +50,11 @@ function addFile(browser: NightwatchBrowser, name: string, content: NightwatchCo
             done()
           })
       } else {
-        browser.click('[data-id="fileExplorerNewFilecreateNewFile"]')
-          .waitForElementContainsText('*[data-id$="/blank"]', '', 60000)
-          .sendKeys('*[data-id$="/blank"] .remixui_items', name)
-          .sendKeys('*[data-id$="/blank"] .remixui_items', browser.Keys.ENTER)
+        browser.rightClickCustom('[data-id="treeViewUltreeViewMenu"]')
+          .click('*[data-id="contextMenuItemnewFile"]')
+          .waitForElementContainsText('*[data-id$="fileExplorerTreeItemInput"]', '', 60000)
+          .sendKeys('*[data-id$="fileExplorerTreeItemInput"]', name)
+          .sendKeys('*[data-id$="fileExplorerTreeItemInput"]', browser.Keys.ENTER)
           // isvisible is protocol action called isDisplayed https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebElement.html#isDisplayed--
           .isVisible({
             selector: `li[data-id="treeViewLitreeViewItem${name}"]`,
@@ -60,7 +68,7 @@ function addFile(browser: NightwatchBrowser, name: string, content: NightwatchCo
           })
           .setEditorValue(content.content)
           .getEditorValue((result) => {
-            if(result != content.content) {
+            if (result != content.content) {
               browser.setEditorValue(content.content)
             }
           })

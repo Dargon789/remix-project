@@ -1,31 +1,22 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, {useState, useRef, useReducer} from 'react'
-import {FormattedMessage} from 'react-intl'
-import {ModalDialog} from '@remix-ui/modal-dialog' // eslint-disable-line
+import React, { useState, useRef, useReducer, useEffect, useContext } from 'react'
+import { FormattedMessage } from 'react-intl'
 import {Toaster} from '@remix-ui/toaster' // eslint-disable-line
-const _paq = (window._paq = window._paq || []) // eslint-disable-line
-import {CustomTooltip} from '@remix-ui/helper'
+import { CustomTooltip } from '@remix-ui/helper'
+import { TrackingContext } from '@remix-ide/tracking'
+import { HomeTabEvent, MatomoEvent } from '@remix-api'
 
 interface HomeTabFileProps {
   plugin: any
 }
 
-const loadingInitialState = {
-  tooltip: '',
-  showModalDialog: false,
-  importSource: ''
-}
+function HomeTabFile({ plugin }: HomeTabFileProps) {
+  const { trackMatomoEvent: baseTrackEvent } = useContext(TrackingContext)
 
-const loadingReducer = (state = loadingInitialState, action) => {
-  return {
-    ...state,
-    tooltip: action.tooltip,
-    showModalDialog: false,
-    importSource: ''
+  // Component-specific tracker with default HomeTabEvent type
+  const trackMatomoEvent = <T extends MatomoEvent = HomeTabEvent>(event: T) => {
+    baseTrackEvent?.<T>(event)
   }
-}
-
-function HomeTabFile({plugin}: HomeTabFileProps) {
   const [state, setState] = useState<{
     searchInput: string
     showModalDialog: boolean
@@ -37,210 +28,240 @@ function HomeTabFile({plugin}: HomeTabFileProps) {
     }
     importSource: string
     toasterMsg: string
+    recentWorkspaces: Array<string>
   }>({
     searchInput: '',
     showModalDialog: false,
-    modalInfo: {title: '', loadItem: '', examples: [], prefix: ''},
+    modalInfo: { title: '', loadItem: '', examples: [], prefix: '' },
     importSource: '',
-    toasterMsg: ''
+    toasterMsg: '',
+    recentWorkspaces: [],
   })
 
-  const [, dispatch] = useReducer(loadingReducer, loadingInitialState)
+  useEffect(() => {
+    plugin.on('filePanel', 'setWorkspace', async () => {
+      let recents = JSON.parse(localStorage.getItem('recentWorkspaces'))
 
-  const inputValue = useRef(null)
+      if (!recents) {
+        recents = []
+      } else {
+        const filtered = recents.filter((workspace) => {
+          return workspace !== null
+        })
+        setState((prevState) => {
+          return { ...prevState, recentWorkspaces: filtered.slice(0, filtered.length <= 3 ? filtered.length : 3) }
+        })
+      }
+    })
 
-  const processLoading = (type: string) => {
-    _paq.push(['trackEvent', 'hometab', 'filesSection', 'importFrom' + type])
-    const contentImport = plugin.contentImport
-    const workspace = plugin.fileManager.getProvider('workspace')
-    const startsWith = state.importSource.substring(0, 4)
-
-    if ((type === 'ipfs' || type === 'IPFS') && startsWith !== 'ipfs' && startsWith !== 'IPFS') {
+    const deleteSavedWorkspace = (name) => {
+      const recents = JSON.parse(localStorage.getItem('recentWorkspaces'))
+      let newRecents = recents
+      if (!recents) {
+        newRecents = []
+      } else {
+        newRecents = recents.filter((el) => {
+          return el !== name
+        })
+        localStorage.setItem('recentWorkspaces', JSON.stringify(newRecents))
+      }
       setState((prevState) => {
-        return {...prevState, importSource: startsWith + state.importSource}
+        return { ...prevState, recentWorkspaces: newRecents.slice(0, newRecents.length <= 3 ? newRecents.length : 3) }
       })
     }
-    contentImport.import(
-      state.modalInfo.prefix + state.importSource,
-      (loadingMsg) => dispatch({tooltip: loadingMsg}),
-      async (error, content, cleanUrl, type, url) => {
-        if (error) {
-          toast(error.message || error)
-        } else {
-          try {
-            if (await workspace.exists(type + '/' + cleanUrl)) toast('File already exists in workspace')
-            else {
-              workspace.addExternal(type + '/' + cleanUrl, content, url)
-              plugin.call('menuicons', 'select', 'filePanel')
-            }
-          } catch (e) {
-            toast(e.message)
-          }
-        }
-      }
-    )
-    setState((prevState) => {
-      return {...prevState, showModalDialog: false, importSource: ''}
+    plugin.on('filePanel', 'workspaceDeleted', async (deletedName) => {
+      deleteSavedWorkspace(deletedName)
     })
-  }
+    return () => {
+      try {
+        plugin.off('filePanel', 'setWorkspace')
+        plugin.off('filePanel', 'workspaceDeleted')
+      } catch (e) {}
+    }
+  }, [plugin])
 
   const toast = (message: string) => {
     setState((prevState) => {
-      return {...prevState, toasterMsg: message}
+      return { ...prevState, toasterMsg: message }
     })
   }
 
-  const createNewFile = async () => {
-    _paq.push(['trackEvent', 'hometab', 'filesSection', 'createNewFile'])
+  const startCoding = async () => {
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'filesSection',
+      name: 'startCoding',
+      isClick: true
+    })
     plugin.verticalIcons.select('filePanel')
-    await plugin.call('filePanel', 'createNewFile')
+
+    const wName = 'Playground'
+    const workspaces = await plugin.call('filePanel', 'getWorkspaces')
+    let createFile = true
+    if (!workspaces.find((workspace) => workspace.name === wName)) {
+      await plugin.call('filePanel', 'createWorkspace', wName, 'playground')
+      createFile = false
+    }
+    await plugin.call('filePanel', 'switchToWorkspace', { name: wName, isLocalHost: false })
+    await plugin.call('filePanel', 'switchToWorkspace', { name: wName, isLocalHost: false }) // calling once is not working.
+    const content = `// SPDX-License-Identifier: MIT
+        pragma solidity >=0.6.12 <0.9.0;
+
+        contract HelloWorld {
+          /**
+           * @dev Prints Hello World string
+           */
+          function print() public pure returns (string memory) {
+            return "Hello World!";
+          }
+        }
+      `
+    if (createFile) {
+      const { newPath } = await plugin.call('fileManager', 'writeFileNoRewrite', '/contracts/HelloWorld.sol', content)
+      await plugin.call('fileManager', 'open', newPath)
+    } else {
+      await plugin.call('fileManager', 'open', '/contracts/HelloWorld.sol')
+    }
   }
 
   const uploadFile = async (target) => {
-    _paq.push(['trackEvent', 'hometab', 'filesSection', 'uploadFile'])
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'filesSection',
+      name: 'uploadFile',
+      isClick: true
+    })
     await plugin.call('filePanel', 'uploadFile', target)
   }
 
   const connectToLocalhost = () => {
-    _paq.push(['trackEvent', 'hometab', 'filesSection', 'connectToLocalhost'])
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'filesSection',
+      name: 'connectToLocalhost',
+      isClick: true
+    })
     plugin.appManager.activatePlugin('remixd')
   }
   const importFromGist = () => {
-    _paq.push(['trackEvent', 'hometab', 'filesSection', 'importFromGist'])
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'filesSection',
+      name: 'importFromGist',
+      isClick: true
+    })
     plugin.call('gistHandler', 'load', '')
     plugin.verticalIcons.select('filePanel')
   }
 
-  const showFullMessage = (title: string, loadItem: string, examples: Array<string>, prefix = '') => {
-    setState((prevState) => {
-      return {
-        ...prevState,
-        showModalDialog: true,
-        modalInfo: {
-          title: title,
-          loadItem: loadItem,
-          examples: examples,
-          prefix
-        }
-      }
+  const handleSwitchToRecentWorkspace = async (e, workspaceName) => {
+    e.preventDefault()
+    plugin.call('sidePanel', 'showContent', 'filePanel')
+    plugin.verticalIcons.select('filePanel')
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'filesSection',
+      name: 'loadRecentWorkspace',
+      isClick: true
     })
+    await plugin.call('filePanel', 'switchToWorkspace', { name: workspaceName, isLocalhost: false })
   }
-
-  const hideFullMessage = () => {
-    //eslint-disable-line
-    setState((prevState) => {
-      return {...prevState, showModalDialog: false, importSource: ''}
-    })
-  }
-
-  const examples = state.modalInfo.examples.map((urlEl, key) => (
-    <div key={key} className="p-1 user-select-auto">
-      <a>{urlEl}</a>
-    </div>
-  ))
 
   return (
     <>
-      <ModalDialog
-        id="homeTab"
-        title={'Import from ' + state.modalInfo.title}
-        okLabel="Import"
-        hide={!state.showModalDialog}
-        handleHide={() => hideFullMessage()}
-        okFn={() => processLoading(state.modalInfo.title)}
-      >
-        <div className="p-2 user-select-auto">
-          {state.modalInfo.loadItem !== '' && <span>Enter the {state.modalInfo.loadItem} you would like to load.</span>}
-          {state.modalInfo.examples.length !== 0 && (
-            <>
-              <div>e.g</div>
-              <div>{examples}</div>
-            </>
-          )}
-          <div className="d-flex flex-row">
-            {state.modalInfo.prefix && <span className="text-nowrap align-self-center mr-2">ipfs://</span>}
-            <input
-              ref={inputValue}
-              type="text"
-              name="prompt_text"
-              id="inputPrompt_text"
-              className="w-100 mt-1 form-control"
-              data-id="homeTabModalDialogCustomPromptText"
-              value={state.importSource}
-              onInput={(e) => {
-                setState((prevState) => {
-                  return {...prevState, importSource: inputValue.current.value}
-                })
-              }}
-            />
-          </div>
-        </div>
-      </ModalDialog>
       <Toaster message={state.toasterMsg} />
-      <div className="justify-content-start mt-1 p-2 d-flex flex-column" id="hTFileSection">
-        <label style={{fontSize: '1.2rem'}}>
-          <FormattedMessage id="home.files" />
-        </label>
-        <div className="dflex">
-          <button className="btn btn-primary p-2 mr-2 border my-1" data-id="homeTabNewFile" style={{width: 'fit-content'}} onClick={() => createNewFile()}>
-            <FormattedMessage id="home.newFile" />
-          </button>
-          <label className="btn p-2 mr-2 border my-1" style={{width: 'fit-content', cursor: 'pointer'}} htmlFor="openFileInput">
-            <FormattedMessage id="home.openFile" />
-          </label>
-          <input
-            title="open file"
-            type="file"
-            id="openFileInput"
-            onChange={(event) => {
-              event.stopPropagation()
-              plugin.verticalIcons.select('filePanel')
-              uploadFile(event.target)
-            }}
-            multiple
-          />
-          <CustomTooltip
-            placement={'top'}
-            tooltipId="overlay-tooltip"
-            tooltipClasses="text-nowrap"
-            tooltipText={'Connect to Localhost'}
-            tooltipTextClasses="border bg-light text-dark p-1 pr-3"
-          >
-            <button className="btn p-2 border my-1" style={{width: 'fit-content'}} onClick={() => connectToLocalhost()}>
-              <FormattedMessage id="home.connectToLocalhost" />
-            </button>
-          </CustomTooltip>
+      <div className="justify-content-start p-2 d-flex flex-column" id="hTFileSection">
+        <div className="mb-1">
+          {(state.recentWorkspaces[0] || state.recentWorkspaces[1] || state.recentWorkspaces[2]) && (
+            <div className="d-flex flex-column mb-5 remixui_recentworkspace">
+              <label style={{ fontSize: '0.8rem' }} className="mt-1">
+                Recent Workspaces
+              </label>
+              {state.recentWorkspaces[0] && state.recentWorkspaces[0] !== '' && (
+                <a className="cursor-pointer mb-1 ms-2" href="#" onClick={(e) => handleSwitchToRecentWorkspace(e, state.recentWorkspaces[0])}>
+                  {state.recentWorkspaces[0]}
+                </a>
+              )}
+              {state.recentWorkspaces[1] && state.recentWorkspaces[1] !== '' && (
+                <a className="cursor-pointer mb-1 ms-2" href="#" onClick={(e) => handleSwitchToRecentWorkspace(e, state.recentWorkspaces[1])}>
+                  {state.recentWorkspaces[1]}
+                </a>
+              )}
+              {state.recentWorkspaces[2] && state.recentWorkspaces[2] !== '' && (
+                <a className="cursor-pointer ms-2" href="#" onClick={(e) => handleSwitchToRecentWorkspace(e, state.recentWorkspaces[2])}>
+                  {state.recentWorkspaces[2]}
+                </a>
+              )}
+            </div>
+          )}
         </div>
-        <label style={{fontSize: '0.8rem'}} className="pt-2">
-          <FormattedMessage id="home.loadFrom" />
-        </label>
-        <div className="d-flex">
-          <button
-            className="btn p-2 border mr-2"
-            data-id="landingPageImportFromGitHubButton"
-            onClick={() =>
-              showFullMessage('GitHub', 'github URL', [
-                'https://github.com/0xcert/ethereum-erc721/src/contracts/tokens/nf-token-metadata.sol',
-                'https://github.com/OpenZeppelin/openzeppelin-solidity/blob/67bca857eedf99bf44a4b6a0fc5b5ed553135316/contracts/access/Roles.sol'
-              ])
-            }
-          >
-            GitHub
-          </button>
-          <button className="btn p-2 border mr-2" data-id="landingPageImportFromGistButton" onClick={() => importFromGist()}>
-            Gist
-          </button>
-          <button className="btn p-2 border mr-2" onClick={() => showFullMessage('Ipfs', 'ipfs hash', ['ipfs://QmQQfBMkpDgmxKzYaoAtqfaybzfgGm9b2LWYyT56Chv6xH'], 'ipfs://')}>
-            IPFS
-          </button>
-          <button
-            className="btn p-2 border"
-            onClick={() =>
-              showFullMessage('Https', 'http/https raw content', ['https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/master/contracts/token/ERC20/ERC20.sol'])
-            }
-          >
-            HTTPS
-          </button>
+        <div className="d-flex flex-column flex-nowrap mt-4">
+          <label style={{ fontSize: '1.2rem' }}>
+            <FormattedMessage id="home.files" />
+          </label>
+          <div className="d-flex flex-row flex-wrap">
+            <CustomTooltip placement={'top'} tooltipId="overlay-tooltip" tooltipClasses="text-nowrap" tooltipText={<FormattedMessage id="home.newFileTooltip" />} tooltipTextClasses="border bg-light text-dark p-1 pe-3">
+              <button className="btn text-nowrap p-2 me-2 border my-1 mb-2" data-id="homeTabNewFile" style={{ width: 'fit-content' }} onClick={async () => {
+                trackMatomoEvent({
+                  category: 'hometab',
+                  action: 'filesSection',
+                  name: 'newFile',
+                  isClick: true
+                })
+                await plugin.call('menuicons', 'select', 'filePanel')
+                await plugin.call('filePanel', 'createNewFile')
+              }}>
+                <i className="far fa-file ps-1 pe-2"></i>
+                <FormattedMessage id="home.newFile" />
+              </button>
+            </CustomTooltip>
+            <CustomTooltip placement={'top'} tooltipId="overlay-tooltip" tooltipClasses="text-nowrap" tooltipText={<FormattedMessage id="home.openFileTooltip" />} tooltipTextClasses="border bg-light text-dark p-1 pe-3">
+              <span>
+                <label className="btn text-nowrap p-2 me-2 border my-1 mb-2" style={{ width: 'fit-content', cursor: 'pointer' }} htmlFor="openFileInput">
+                  <i className="far fa-upload ps-1 pe-2"></i>
+                  <FormattedMessage id="home.openFile" />
+                </label>
+                <input
+                  type="file"
+                  id="openFileInput"
+                  onChange={async (event) => {
+                    event.stopPropagation()
+                    await plugin.call('menuicons', 'select', 'filePanel')
+                    uploadFile(event.target)
+                  }}
+                  multiple
+                />
+              </span>
+            </CustomTooltip>
+            <CustomTooltip placement={'top'} tooltipId="overlay-tooltip" tooltipClasses="text-nowrap" tooltipText={<FormattedMessage id="home.gistTooltip" />} tooltipTextClasses="border bg-light text-dark p-1 pe-3"
+            >
+              <button className="btn text-nowrap p-2 me-2 border my-1 mb-2" data-id="landingPageImportFromGistButton" onClick={() => importFromGist()}>
+                <i className="fab fa-github ps-1 pe-2"></i>
+                Gist
+              </button>
+            </CustomTooltip>
+            <CustomTooltip placement={'top'} tooltipId="overlay-tooltip" tooltipClasses="text-nowrap" tooltipText={<FormattedMessage id="home.gitCloneTooltip" />} tooltipTextClasses="border bg-light text-dark p-1 pe-3"
+            >
+              <button className="btn text-nowrap p-2 me-2 border my-1 mb-2" data-id="landingPageImportFromGitHubButton" onClick={async () => {
+                trackMatomoEvent({
+                  category: 'hometab',
+                  action: 'filesSection',
+                  name: 'Git Clone',
+                  isClick: true
+                })
+                await plugin.call('filePanel', 'clone')
+              }}>
+                <i className="fa-brands fa-github-alt ps-1 pe-2"></i>
+                Clone
+              </button>
+            </CustomTooltip>
+            <CustomTooltip placement={'top'} tooltipId="overlay-tooltip" tooltipClasses="text-nowrap" tooltipText={<FormattedMessage id="home.connectToLocalhost" />} tooltipTextClasses="border bg-light text-dark p-1 pe-3">
+              <button className="btn text-nowrap p-2 border my-1 mb-2" onClick={() => connectToLocalhost()}>
+                <i className="fa-regular fa-desktop pe-2"></i>
+                <FormattedMessage id="home.accessFileSystem" />
+              </button>
+            </CustomTooltip>
+          </div>
         </div>
       </div>
     </>

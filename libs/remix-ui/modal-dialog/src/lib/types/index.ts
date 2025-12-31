@@ -1,3 +1,5 @@
+import { AppModalCancelTypes } from "@remix-ui/app"
+
 export type ValidationResult = {
   valid: boolean,
   message?: string
@@ -15,8 +17,9 @@ export interface ModalDialogProps {
   okFn?: (value?:any) => void,
   donotHideOnOkClick?: boolean,
   cancelLabel?: string | JSX.Element,
-  cancelFn?: () => void,
+  cancelFn?: (reason?: AppModalCancelTypes) => void,
   modalClass?: string,
+  modalParentClass?: string
   showCancelIcon?: boolean,
   hide?: boolean,
   handleHide: (hideState?: boolean) => void,
@@ -25,5 +28,8 @@ export interface ModalDialogProps {
   next?: () => void,
   data?: any,
   okBtnClass?: string,
-  cancelBtnClass?: string
+  cancelBtnClass?: string,
+  preventBlur?: boolean
+  placeholderText?: string
+  genericData?: any
 }

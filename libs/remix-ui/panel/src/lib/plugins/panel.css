@@ -6,6 +6,38 @@
     flex: auto;
 }
 
+@font-face {
+    font-family: 'codicon-vscode';
+    font-display: block;
+    src: url('~@vscode/codicons/dist/codicon.ttf') format('truetype');
+}
+
+.codicon-screen-icon {
+    font: normal normal normal 20px/1 'codicon-vscode';
+    display: inline-block;
+    text-decoration: none;
+    text-rendering: auto;
+    text-align: center;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    user-select: none;
+    cursor: pointer;
+}
+
+/* Right panel header icon alignment adjustments */
+.swapitHeader .codicon-layout-sidebar-left-dock,
+.swapitHeader .codicon-layout-sidebar-right-dock {
+    margin-left: 0.75rem !important;
+}
+
+.swapitHeader .codicon-screen-icon {
+    margin-left: 0.75rem !important;
+}
+
+.swapitHeader .codicon-close {
+    margin-left: 0.5rem !important;
+}
+
 .swapitTitle {
     margin: 0;
     text-transform: uppercase;
@@ -41,7 +73,7 @@
 }
 
 .versionBadge {
-    background-color: var(--light);
+    background-color: var(--bs-light);
     padding: 0 7px;
     font-weight: bolder;
     margin-left: 5px;
@@ -66,7 +98,6 @@ iframe {
 }
 
 .plugItIn>div {
-    overflow-y: auto;
     overflow-x: hidden;
     height: 100%;
     width: 100%;
@@ -96,10 +127,23 @@ iframe {
 }
 
 .terminal-wrap {
-    min-height: 35px;
+    min-height: 70px;
     height: 20%;
+}
+
+.terminal-wrap.maximized {
+    height: 100% !important;
+    flex: 1;
 }
 
 .terminal-wrap.minimized {
     height: 2rem !important;
+}
+
+.highlight {
+    animation: highlight 2s forwards;
+}
+
+.remixui_height {
+  height: 97vh;
 }

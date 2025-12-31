@@ -1,7 +1,6 @@
 'use strict'
 import { Plugin } from '@remixproject/engine'
-import { Options } from 'prettier';
-import sol from './code-format/index'
+import { Options } from 'prettier'
 import path from 'path'
 import yaml from 'js-yaml'
 import toml from 'toml'
@@ -9,7 +8,7 @@ import { filePathFilter, AnyFilter } from '@jsdevtools/file-path-filter'
 
 const profile = {
   name: 'codeFormatter',
-  desciption: 'prettier plugin for Remix',
+  description: 'prettier plugin for Remix',
   methods: ['format'],
   events: [''],
   version: '0.0.1'
@@ -73,7 +72,7 @@ export class CodeFormat extends Plugin {
     super(profile)
   }
 
-  async format(file: string) {
+  async format(file: string, content?: string, onlyReturn?: boolean) {
 
     // lazy load
     if (!this.prettier) {
@@ -82,17 +81,18 @@ export class CodeFormat extends Plugin {
       this.babel = await import('prettier/parser-babel')
       this.espree = await import('prettier/parser-espree')
       this.yml = await import('prettier/parser-yaml')
+      this.sol = (await import('prettier-plugin-solidity')).default
     }
 
     try {
-      const content = await this.call('fileManager', 'readFile', file)
+      if (!content) content = await this.call('fileManager', 'readFile', file)
       if (!content) return
       let parserName = ''
       let options: Options = {
       }
       switch (path.extname(file)) {
       case '.sol':
-        parserName = 'solidity-parse'
+        parserName = 'slang'
         break
       case '.ts':
         parserName = 'typescript'
@@ -210,8 +210,6 @@ export class CodeFormat extends Plugin {
         this.call('notification', 'toast', `Error parsing prettier config file: ${prettierConfigFile}`)
       }
 
-
-
       // merge options
       if (parsed) {
         options = {
@@ -233,7 +231,7 @@ export class CodeFormat extends Plugin {
             }
           }
         })
-        const validParsers = ['typescript', 'babel', 'espree', 'solidity-parse', 'json', 'yaml', 'solidity-parse']
+        const validParsers = ['typescript', 'babel', 'espree', 'json', 'yaml', 'slang']
         if (override && override.options && override.options.parser) {
           if (validParsers.includes(override.options.parser)) {
             parserName = override.options.parser
@@ -251,15 +249,18 @@ export class CodeFormat extends Plugin {
         }
       }
 
-
-      const result = this.prettier.format(content, {
-        plugins: [sol as any, this.ts, this.babel, this.espree, this.yml],
+      const result = await this.prettier.format(content, {
+        plugins: [this.sol, this.ts, this.babel, this.espree, this.yml],
         parser: parserName,
         ...options
       })
-      await this.call('fileManager', 'writeFile', file, result)
+      if (!onlyReturn) {
+        await this.call('fileManager', 'writeFile', file, result)
+      }
+      return result
     } catch (e) {
       // do nothing
+      console.error(e)
     }
   }
 

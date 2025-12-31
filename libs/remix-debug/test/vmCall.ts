@@ -1,31 +1,32 @@
 'use strict'
-import { extendWeb3 } from '../src/init' 
-import { Address } from '@ethereumjs/util'
-const { Provider } = require('@remix-project/remix-simulator')
-const Web3 = require('web3')
-
+import { extendProvider } from '../src/init'
+import { createAddressFromPrivateKey } from '@ethereumjs/util'
+import { Provider } from '@remix-project/remix-simulator'
+import { ethers } from 'ethers'
 
 async function getWeb3 () {
-  const remixSimulatorProvider = new Provider({ fork: 'berlin' })
+  const remixSimulatorProvider = new Provider({ fork: 'cancun' })
   await remixSimulatorProvider.init()
   await remixSimulatorProvider.Accounts.resetAccounts()
-  const web3 = new Web3(remixSimulatorProvider)
-  extendWeb3(web3)
-  return web3
+  const provider = new ethers.BrowserProvider(remixSimulatorProvider as any)
+  extendProvider(provider)
+  return provider
 }
 
-async function sendTx (web3, from, to, value, data, cb) {
+async function sendTx (provider, from, to, value, data, cb) {
   try {
     cb = cb || (() => {})
-    const receipt = await web3.eth.sendTransaction({
-      from: Address.fromPrivateKey(from.privateKey).toString(),
+    if (!data.startsWith('0x')) data = '0x' + data
+    const signer = await provider.getSigner()
+    const receipt = await signer.sendTransaction({
+      from: createAddressFromPrivateKey(from.privateKey).toString(),
       to,
       value,
       data,
-      gas: 7000000
+      gasLimit: 7000000
     })
-    cb(null, receipt.transactionHash)
-    return receipt.transactionHash
+    cb(null, receipt.hash)
+    return receipt.hash
   } catch (e) {
     cb(e)
   }

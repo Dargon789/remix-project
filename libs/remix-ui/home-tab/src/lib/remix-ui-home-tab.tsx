@@ -1,33 +1,43 @@
-import React, {useState, useEffect} from 'react' // eslint-disable-line
-
+import React, { useContext, useState, useEffect } from 'react'
 import './remix-ui-home-tab.css'
-import {ThemeContext, themes} from './themeContext'
+import { ThemeContext, themes } from './themeContext'
 import HomeTabTitle from './components/homeTabTitle'
-import HomeTabFile from './components/homeTabFile'
-import HomeTabLearn from './components/homeTabLearn'
+import HomeTabRecentWorkspaces from './components/homeTabRecentWorkspaces'
+import HomeTabRecentWorkspacesElectron from './components/homeTabRecentWorkspacesElectron'
 import HomeTabScamAlert from './components/homeTabScamAlert'
-import HomeTabGetStarted from './components/homeTabGetStarted'
-import HomeTabFeatured from './components/homeTabFeatured'
 import HomeTabFeaturedPlugins from './components/homeTabFeaturedPlugins'
-
-declare global {
-  interface Window {
-    _paq: any
-  }
-}
+import { appActionTypes, AppContext, appPlatformTypes, platformContext } from '@remix-ui/app'
+import { HomeTabEvent, MatomoEvent } from '@remix-api'
+import { TrackingContext } from '@remix-ide/tracking'
+import { HomeTabFileElectron } from './components/homeTabFileElectron'
+import HomeTabUpdates from './components/homeTabUpdates'
+import { FormattedMessage } from 'react-intl'
+// import { desktopConnectionType } from '@remix-api'
+import { desktopConnectionType } from '@remix-api'
 
 export interface RemixUiHomeTabProps {
   plugin: any
 }
 
+// --- Main Layout ---
 export const RemixUiHomeTab = (props: RemixUiHomeTabProps) => {
-  const {plugin} = props
+  const platform = useContext(platformContext)
+  const appContext = useContext(AppContext)
+  const { trackMatomoEvent: baseTrackEvent } = useContext(TrackingContext)
+  const { plugin } = props
+
+  // Component-specific tracker with default HomeTabEvent type
+  const trackMatomoEvent = <T extends MatomoEvent = HomeTabEvent>(event: T) => {
+    baseTrackEvent?.<T>(event)
+  }
 
   const [state, setState] = useState<{
-    themeQuality: {filter: string; name: string}
+    themeQuality: { filter: string; name: string }
   }>({
     themeQuality: themes.light
   })
+
+  const [isTerminalHidden, setIsTerminalHidden] = useState<boolean>(false)
 
   useEffect(() => {
     plugin.call('theme', 'currentTheme').then((theme) => {
@@ -48,22 +58,69 @@ export const RemixUiHomeTab = (props: RemixUiHomeTabProps) => {
         }
       })
     })
+
+    // Listen to terminal panel visibility events
+    plugin.call('terminal', 'isPanelHidden').then((hidden) => {
+      setIsTerminalHidden(hidden)
+    })
+    plugin.on('terminal', 'terminalPanelShown', () => {
+      setIsTerminalHidden(false)
+    })
+    plugin.on('terminal', 'terminalPanelHidden', () => {
+      setIsTerminalHidden(true)
+    })
   }, [])
+
+  const startLearnEth = async () => {
+    if (await plugin.appManager.isActive('LearnEth')) {
+      plugin.verticalIcons.select('LearnEth')
+    } else {
+      await plugin.appManager.activatePlugin(['LearnEth', 'solidity', 'solidityUnitTesting'])
+      plugin.verticalIcons.select('LearnEth')
+    }
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'header',
+      name: 'Start Learning',
+      isClick: true
+    })
+  }
+
+  const openTemplateSelection = async () => {
+    await plugin.call('templateexplorermodal', 'updateTemplateExplorerInFileMode', false)
+    appContext.appStateDispatch({
+      type: appActionTypes.showGenericModal,
+      payload: true
+    })
+    trackMatomoEvent({
+      category: 'hometab',
+      action: 'header',
+      name: 'Create a new workspace',
+      isClick: true
+    })
+  }
+
+  // if (appContext.appState.connectedToDesktop != desktopConnectionType.disabled) {
+  //   return (<></>)
+  // }
 
   return (
     <div className="d-flex flex-column w-100" data-id="remixUIHTAll">
       <ThemeContext.Provider value={state.themeQuality}>
-        <div className="d-flex flex-row w-100 custom_home_bg">
-          <div className="px-2 pl-3 justify-content-start d-flex border-right flex-column" id="remixUIHTLeft" style={{width: 'inherit'}}>
-            <HomeTabTitle />
-            <HomeTabFile plugin={plugin} />
-            <HomeTabLearn plugin={plugin} />
-          </div>
-          <div className="pl-2 pr-3 justify-content-start d-flex flex-column" style={{width: '65%'}} id="remixUIHTRight">
-            <HomeTabFeatured></HomeTabFeatured>
-            <HomeTabGetStarted plugin={plugin}></HomeTabGetStarted>
-            <HomeTabFeaturedPlugins plugin={plugin}></HomeTabFeaturedPlugins>
-            <HomeTabScamAlert></HomeTabScamAlert>
+        <div className="container-fluid">
+          <div className="row">
+            <div className="d-flex w-100 m-3 justify-content-end">
+              <button className="btn btn-secondary btn-md me-3" onClick={startLearnEth}><i className="fa-solid fa-book me-1"></i><FormattedMessage id="home.startLearning" /></button>
+              <button data-id="landingPageImportFromTemplate" className="btn btn-primary btn-md me-2" onClick={openTemplateSelection}><i className="fa-solid fa-plus me-1"></i><FormattedMessage id="home.createNewWorkspace" /></button>
+            </div>
+            <div className="col-lg-8 col-xl-5 col-sm-12 mb-4">
+              <HomeTabTitle />
+              {!(platform === appPlatformTypes.desktop) ? <HomeTabRecentWorkspaces plugin={plugin} /> : <HomeTabRecentWorkspacesElectron plugin={plugin} />}
+            </div>
+            <div className="col-lg-4 col-xl-7 col-sm-12" style={{ overflowY: 'auto', maxHeight: isTerminalHidden ? '85vh' : '61vh' }}>
+              <HomeTabUpdates plugin={plugin} />
+              <HomeTabFeaturedPlugins plugin={plugin} />
+            </div>
           </div>
         </div>
       </ThemeContext.Provider>
