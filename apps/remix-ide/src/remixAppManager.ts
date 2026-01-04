@@ -101,7 +101,8 @@ let requiredModules = [
   'resolutionIndex',
   'amp',
   'vega',
-  'chartjs'
+  'chartjs',
+  'storageMonitor'
 ]
 
 // dependentModules shouldn't be manually activated (e.g hardhat is activated by remixd)
