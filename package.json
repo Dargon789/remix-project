@@ -93,7 +93,9 @@
     "ci:plan-shard": "node scripts/plan-shards.js",
     "ci:failed-report": "node scripts/generate-failed-report.js --workflow web --out reports/ci-latest-failed",
     "ci:post-pr-report": "node scripts/post-pr-report.js reports/ci-latest-failed",
-    "update:e2e-keywords": "node scripts/update-e2e-keywords.js"
+    "update:e2e-keywords": "node scripts/update-e2e-keywords.js",
+    "prepublish": "npm run snyk-protect",
+    "snyk-protect": "snyk-protect"
   },
   "dependencies": {
     "@apollo/client": "^3.9.5",
@@ -168,7 +170,7 @@
     "cbor": "^10.0.3",
     "change-case": "^4.1.1",
     "chart.js": "^4.5.1",
-    "chokidar": "^2.1.8",
+    "chokidar": "^3.0.0",
     "circom_wasm": "https://github.com/remix-project-org/circom_wasm.git",
     "color-support": "^1.1.3",
     "commander": "^9.4.1",
@@ -204,7 +206,7 @@
     "jquery": "^3.3.1",
     "js-yaml": "^4.1.0",
     "json-bigint": "^1.0.0",
-    "jspdf": "^2.5.1",
+    "jspdf": "^3.0.2",
     "jszip": "^3.6.0",
     "just-once": "^2.2.0",
     "latest-version": "^5.1.0",
@@ -266,7 +268,8 @@
     "winston": "^3.3.3",
     "ws": "^8.18.0",
     "xterm": "^5.2.1",
-    "xterm-addon-search": "^0.12.0"
+    "xterm-addon-search": "^0.12.0",
+    "@snyk/protect": "latest"
   },
   "devDependencies": {
     "@babel/cli": "^7.19.3",
@@ -448,5 +451,6 @@
     "@ethereumjs/vm": "^10.1.0",
     "@ethereumjs/binarytree": "^10.1.0"
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "snyk": true
 }
