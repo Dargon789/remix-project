@@ -1,6 +1,7 @@
 type EndpointUrls = {
     corsProxy: string;
     mcpCorsProxy: string;
+    mcpCorsProxy8443: string;
     solidityScan: string;
     ipfsGateway: string;
     commonCorsProxy: string;
@@ -23,6 +24,7 @@ type EndpointUrls = {
 const defaultUrls: EndpointUrls = {
   corsProxy: 'https://gitproxy.api.remix.live',
   mcpCorsProxy: "https://mcp.api.remix.live",
+  mcpCorsProxy8443: "https://mcp.api.remix.live:8443",
   solidityScan: 'https://solidityscan.api.remix.live',
   ipfsGateway: 'https://jqgt.api.remix.live',
   commonCorsProxy: 'https://common-corsproxy.api.remix.live',
@@ -45,6 +47,7 @@ const defaultUrls: EndpointUrls = {
 const endpointPathMap: Record<keyof EndpointUrls, string> = {
   corsProxy: 'corsproxy',
   mcpCorsProxy: 'mcp',
+  mcpCorsProxy8443: 'mcp',
   solidityScan: 'solidityscan',
   ipfsGateway: 'jqgt',
   commonCorsProxy: 'common-corsproxy',
@@ -71,6 +74,7 @@ const localhostUrls: EndpointUrls = {
   // PROXY service (port 3005)
   corsProxy: 'http://localhost:3005/corsproxy',
   mcpCorsProxy: 'http://localhost:3005/mcp',
+  mcpCorsProxy8443: 'http://localhost:8443/mcp',
   commonCorsProxy: 'http://localhost:3005/common-corsproxy',
   github: 'http://localhost:3005/github',
   ghfolderpull: 'http://localhost:3005/ghfolderpull',

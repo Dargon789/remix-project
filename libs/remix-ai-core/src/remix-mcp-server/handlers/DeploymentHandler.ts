@@ -172,7 +172,6 @@ export class CallContractHandler extends BaseToolHandler {
       contractName: {
         type: 'string',
         description: 'Contract name',
-        pattern: '^0x[a-fA-F0-9]{40}$'
       },
       address: {
         type: 'string',
@@ -530,7 +529,8 @@ export class SetExecutionEnvironmentHandler extends BaseToolHandler {
       environment: {
         type: 'string',
         enum: ['vm-osaka', 'vm-prague', 'vm-cancun', 'vm-shanghai', 'vm-paris', 'vm-london', 'vm-berlin', 'vm-mainnet-fork', 'vm-sepolia-fork', 'vm-custom-fork', 'walletconnect', 'basic-http-provider', 'hardhat-provider', 'ganache-provider', 'foundry-provider', 'injected-Rabby Wallet', 'injected-MetaMask', 'injected-metamask-optimism', 'injected-metamask-arbitrum', 'injected-metamask-sepolia', 'injected-metamask-ephemery', 'injected-metamask-gnosis', 'injected-metamask-chiado', 'injected-metamask-linea'],
-        description: 'Execution environment'
+        description: 'Execution environment',
+        default: 'vm-osaka'
       },
       networkUrl: {
         type: 'string',
