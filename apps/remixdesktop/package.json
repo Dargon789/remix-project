@@ -64,7 +64,7 @@
     "yarn": "^1.22.21"
   },
   "dependencies": {
-    "@remix-project/remix-url-resolver": "^0.0.67",
+    "@remix-project/remix-url-resolver": "^0.0.98",
     "@remixproject/engine": "0.3.44",
     "@remixproject/engine-electron": "0.3.44",
     "@remixproject/plugin": "0.3.44",
