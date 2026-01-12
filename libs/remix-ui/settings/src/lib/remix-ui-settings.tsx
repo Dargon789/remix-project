@@ -37,6 +37,18 @@ const settingsSections: SettingsSection[] = [
     description: 'settings.generalSettingsDescription',
     subSections: [
       {
+        title: 'Appearance',
+        options: [{
+          name: 'theme',
+          label: 'settings.theme',
+          type: 'select',
+          selectOptions: settingsConfig.themes.map((theme) => ({
+            label: theme.name + ' (' + theme.quality + ')',
+            value: theme.name
+          }))
+        }]
+      },
+      {
         title: 'Code editor',
         options: [{
           name: 'generate-contract-metadata',
@@ -70,32 +82,45 @@ const settingsSections: SettingsSection[] = [
           label: 'settings.enableSaveEnvState',
           type: 'toggle'
         }]
+      }
+    ]
+  },
+  {
+    key: 'account',
+    label: 'settings.account',
+    description: 'settings.accountDescription',
+    requiresAuth: true, // Special flag for auth-required sections
+    subSections: [
+      {
+        title: 'Profile',
+        options: [{
+          name: 'profile-section',
+          label: '',
+          type: 'custom' as const,
+          customComponent: 'profileSection'
+        }]
       },
       {
-        title: 'Appearance',
+        title: 'Credits Balance',
         options: [{
-          name: 'theme',
-          label: 'settings.theme',
-          type: 'select',
-          selectOptions: settingsConfig.themes.map((theme) => ({
-            label: theme.name + ' (' + theme.quality + ')',
-            value: theme.name
-          }))
+          name: 'credits-balance',
+          label: '',
+          type: 'custom' as const,
+          customComponent: 'creditsBalance'
+        }]
+      },
+      {
+        title: 'Connected Accounts',
+        description: 'Link multiple authentication providers to access your account from anywhere. All linked accounts share the same credits and subscriptions.',
+        options: [{
+          name: 'connected-accounts',
+          label: '',
+          type: 'custom' as const,
+          customComponent: 'connectedAccounts'
         }]
       }
     ]
   },
-  { key: 'account', label: 'settings.account', description: 'settings.accountDescription', subSections: [
-    {
-      options: [{
-        name: 'account-manager',
-        label: 'settings.linkedAccounts',
-        description: 'settings.linkedAccountsDescription',
-        type: 'custom' as const,
-        customComponent: 'accountManager'
-      }]
-    }
-  ]},
   { key: 'analytics', label: 'settings.analytics', description: 'settings.analyticsDescription', subSections: [
     { options: [{
       name: 'matomo-analytics',
@@ -265,7 +290,7 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
       })
     })
 
-    props.plugin.on('theme', 'themeChanged', (theme) => {
+    props.plugin.on('theme', 'themeChanged', (theme: any) => {
       setState((prevState) => {
         dispatch({ type: 'SET_VALUE', payload: { name: 'theme', value: theme.name } })
         return {
@@ -275,11 +300,11 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
       })
     })
 
-    props.plugin.on('settings', 'copilotChoiceUpdated', (isChecked) => {
+    props.plugin.on('settings', 'copilotChoiceUpdated', (isChecked: any) => {
       dispatch({ type: 'SET_VALUE', payload: { name: 'copilot/suggest/activate', value: isChecked } })
     })
 
-    props.plugin.on('settings', 'matomoPerfAnalyticsChoiceUpdated', (isChecked) => {
+    props.plugin.on('settings', 'matomoPerfAnalyticsChoiceUpdated', (isChecked: any) => {
       dispatch({ type: 'SET_VALUE', payload: { name: 'matomo-perf-analytics', value: isChecked } })
     })
 
@@ -342,27 +367,28 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
       {settingsState.toaster.value ? <Toaster message={settingsState.toaster.value as string} /> : null}
       <div className="container-fluid bg-light h-100 d-flex flex-column">
         <div className='pt-5'></div>
-        <div className='d-flex flex-row pb-4'>
-          <div data-id="settings-sidebar-header" className="input-group ps-5 remix-settings-sidebar">
-            <h2 className={`d-inline-block pe-5 ${state.themeQuality.name === 'dark' ? 'text-white' : 'text-black'}`} style={{ width: '7.8em' }}><FormattedMessage id="settings.displayName" /></h2>
-            <div className='d-flex flex-grow-1 remix-settings-search' style={{ maxWidth: '53.5em', minHeight: '4em' }}>
-              <span className="input-group-text rounded-0 border-end-0 pe-0" style={{ backgroundColor: state.themeQuality.name === 'dark' ? 'var(--custom-onsurface-layer-4)' : 'var(--bs-body-bg)' }}><i className="fa fa-search"></i></span>
-              <input type="text" className="form-control shadow-none h-100 rounded-0 border-start-0 no-outline w-100" placeholder="Search settings" style={{ minWidth: '21.5em' }} value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
+        <div className='d-flex flex-row pb-4 gap-4'>
+          <div data-id="settings-sidebar-header" className="ps-3 remix-settings-sidebar" style={{ width: '24em' }}>
+            <h3 className={`fw-semibold ${state.themeQuality.name === 'dark' ? 'text-white' : 'text-black'}`} style={{ fontSize: '1.5rem' }}><FormattedMessage id="settings.displayName" /></h3>
+          </div>
+          <div className='d-flex flex-grow-1 remix-settings-search' style={{ maxWidth: '53.5em', minHeight: '4em' }}>
+            <span className="input-group-text rounded-0 border-end-0 pe-0" style={{ backgroundColor: state.themeQuality.name === 'dark' ? 'var(--custom-onsurface-layer-4)' : 'var(--bs-body-bg)' }}><i className="fa fa-search"></i></span>
+            <input type="text" className="form-control shadow-none h-100 rounded-0 border-start-0 no-outline w-100" placeholder="Search settings" style={{ minWidth: '21.5em' }} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
         {filteredSections.length === 0 ? <div className="text-info text-center cursor-pointer">No match found</div> :
-          <div className="d-flex flex-wrap align-items-stretch flex-fill" style={{ minHeight: 0 }}>
+          <div className="d-flex flex-wrap align-items-stretch flex-fill gap-4" style={{ minHeight: 0, overflow: 'hidden' }}>
             {/* Sidebar */}
             <div
-              className="flex-column bg-transparent p-0 px-5 remix-settings-sidebar"
-              style={{ width: '28.2em' }}
+              className="flex-column bg-transparent p-0 px-3 remix-settings-sidebar overflow-auto"
+              style={{ width: '25em', height: '100%' }}
             >
               <ul className="list-unstyled">
                 {filteredSections.map((section, index) => (
                   <li
                     className={`nav-item ${index !== filteredSections.length - 1 ? 'border-bottom' : ''} px-0 py-3 ${selected === section.key ? state.themeQuality.name === 'dark' ? 'active text-white' : 'active text-black' : 'text-secondary'}`}
                     key={index}
+                    style={{ cursor: 'pointer' }}
                   >
                     <a
                       data-id={`settings-sidebar-${section.key}`}
@@ -372,8 +398,8 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
                         setFilteredSection(section)
                       }}
                     >
-                      <h4 className={`${selected === section.key ? state.themeQuality.name === 'dark' ? 'active text-white' : 'active text-black' : 'text-secondary'}`}><FormattedMessage id={section.label} /></h4>
-                      {selected !== section.key && <span><FormattedMessage id={section.description} /></span>}
+                      <h5 className={`fw-semibold mb-2 ${selected === section.key ? state.themeQuality.name === 'dark' ? 'active text-white' : 'active text-black' : 'text-secondary'}`} style={{ fontSize: '1.1rem' }}><FormattedMessage id={section.label} /></h5>
+                      {selected !== section.key && <span style={{ fontSize: '0.85rem' }}><FormattedMessage id={section.description} /></span>}
                     </a>
                   </li>
                 ))}
@@ -382,7 +408,7 @@ export const RemixUiSettings = (props: RemixUiSettingsProps) => {
             {/* Main Content */}
             <div
               className="flex-column p-0 flex-grow-1 flex-shrink-1 mw-50"
-              style={{ minWidth: 0, flexBasis: '27.3em', minHeight: 0 }}
+              style={{ minWidth: 0, flexBasis: '27.3em', height: '100%' }}
             >
               <div className="remix-settings-main h-100 overflow-auto" style={{ maxWidth: '53.5em' }}>
                 <SettingsSectionUI plugin={props.plugin} section={filteredSection} state={settingsState} dispatch={dispatch} />

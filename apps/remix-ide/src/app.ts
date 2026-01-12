@@ -35,6 +35,7 @@ import { OffsetToLineColumnConverter, CompilerMetadata, CompilerArtefacts, Fetch
 import { Registry } from '@remix-project/remix-lib'
 import { ConfigPlugin } from './app/plugins/config'
 import { StoragePlugin } from './app/plugins/storage'
+import { StorageMonitorPlugin } from './app/plugins/storage-monitor'
 import { Layout } from './app/panels/layout'
 import { NotificationPlugin } from './app/plugins/notification'
 import { Blockchain } from './blockchain/blockchain'
@@ -297,6 +298,9 @@ class AppComponent {
     // ----------------- Storage plugin ---------------------------------
     const storagePlugin = new StoragePlugin()
 
+    // ----------------- Storage Monitor plugin ---------------------------------
+    const storageMonitor = new StorageMonitorPlugin()
+
     // ------- FILE DECORATOR PLUGIN ------------------
     const fileDecorator = new FileDecorator()
 
@@ -457,6 +461,7 @@ class AppComponent {
       fetchAndCompile,
       dGitProvider,
       storagePlugin,
+      storageMonitor,
       vmProviderShanghai,
       vmProviderCancun,
       vmProviderPectra,
@@ -674,7 +679,7 @@ class AppComponent {
     await this.appManager.activatePlugin(['auth'])
     await this.appManager.activatePlugin(['settings'])
 
-    await this.appManager.activatePlugin(['walkthrough', 'storage', 'search', 'compileAndRun', 'recorder', 'dgitApi', 'dgit'])
+    await this.appManager.activatePlugin(['walkthrough', 'storage', 'storageMonitor', 'search', 'compileAndRun', 'recorder', 'dgitApi', 'dgit'])
     await this.appManager.activatePlugin(['solidity-script', 'remix-templates'])
 
     if (isElectron()) {

@@ -31,7 +31,7 @@ import type { AIEvent, RemixAIAssistantEvent } from './events/ai-events';
 import type { CompilerEvent, SolidityCompilerEvent, CompilerContainerEvent } from './events/compiler-events';
 import type { GitEvent } from './events/git-events';
 import type { HomeTabEvent, TopbarEvent, LayoutEvent, SettingsEvent, ThemeEvent, LocaleEvent, LandingPageEvent, StatusBarEvent } from './events/ui-events';
-import type { FileExplorerEvent, WorkspaceEvent, StorageEvent, BackupEvent } from './events/file-events';
+import type { FileExplorerEvent, WorkspaceEvent, StorageEvent, BackupEvent, WorkspaceStorageEvent } from './events/file-events';
 import type { BlockchainEvent, UdappEvent, RunEvent } from './events/blockchain-events';
 import type { PluginEvent, ManagerEvent, PluginManagerEvent, AppEvent, MatomoManagerEvent, PluginPanelEvent, MigrateEvent } from './events/plugin-events';
 import type { DebuggerEvent, EditorEvent, SolidityUnitTestingEvent, SolidityStaticAnalyzerEvent, DesktopDownloadEvent, XTERMEvent, SolidityScriptEvent, RemixGuideEvent, TemplateSelectionEvent, ScriptExecutorEvent, GridViewEvent, SolidityUMLGenEvent, ScriptRunnerPluginEvent, CircuitCompilerEvent, NoirCompilerEvent, ContractVerificationEvent, LearnethEvent, TemplateExplorerModalEvent, QuickDappV2Event } from './events/tools-events';
@@ -65,6 +65,7 @@ export type MatomoEvent = (
   | WorkspaceEvent
   | StorageEvent
   | BackupEvent
+  | WorkspaceStorageEvent
 
   // Blockchain & Contract events
   | BlockchainEvent
