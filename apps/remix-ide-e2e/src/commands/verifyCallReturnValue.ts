@@ -15,8 +15,14 @@ class VerifyCallReturnValue extends EventEmitter {
 }
 
 function verifyCallReturnValue (browser: NightwatchBrowser, address: string, checks: string[] | callbackCheckVerifyCallReturnValue, done: VoidFunction) {
-  browser.execute(function (address: string) {
-    const nodes = document.querySelectorAll('#instance' + address + ' [data-id="udapp_value"]') as NodeListOf<HTMLElement>
+  browser
+    .waitForElementVisible({
+      locateStrategy: 'css selector',
+      selector: '#instance' + address + ' [data-id="udapp_tree_value"]',
+      timeout: 240000
+    })
+    .execute(function (address: string) {
+    const nodes = document.querySelectorAll('#instance' + address + ' [data-id="udapp_tree_value"]') as NodeListOf<HTMLElement>
     const ret = []
     for (let k = 0; k < nodes.length; k++) {
       const text = nodes[k].innerText ? nodes[k].innerText : nodes[k].textContent

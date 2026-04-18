@@ -1,19 +1,21 @@
-import React, {useRef, useEffect, useState} from 'react' // eslint-disable-line
-import {useIntl} from 'react-intl'
-import {action, FileExplorerContextMenuProps} from '../types'
+import React, {useRef, useEffect, useState, useContext} from 'react' // eslint-disable-line
+import { useIntl } from 'react-intl'
+import { action, FileExplorerContextMenuProps } from '../types'
 
 import '../css/file-explorer-context-menu.css'
-import {customAction} from '@remixproject/plugin-api'
+import { customAction } from '@remixproject/plugin-api'
 import UploadFile from './upload-file'
-
-declare global {
-  interface Window {
-    _paq: any
-  }
-}
-const _paq = (window._paq = window._paq || []) //eslint-disable-line
+import { appPlatformTypes, platformContext, AppContext } from '@remix-ui/app'
+import { TrackingContext } from '@remix-ide/tracking'
+import { FileExplorerEvent, MatomoEvent } from '@remix-api'
 
 export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => {
+  const platform = useContext(platformContext)
+  const appContext = useContext(AppContext)
+  const { trackMatomoEvent: baseTrackEvent } = useContext(TrackingContext)
+  const trackMatomoEvent = <T extends MatomoEvent = FileExplorerEvent>(event: T) => {
+    baseTrackEvent?.<T>(event)
+  }
   const {
     actions,
     createNewFile,
@@ -26,6 +28,7 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
     publishFolderToGist,
     copy,
     copyFileName,
+    copyShareURL,
     copyPath,
     paste,
     runScript,
@@ -37,6 +40,8 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
     focus,
     downloadPath,
     uploadFile,
+    publishManyFilesToGist,
+    signTypedData,
     ...otherProps
   } = props
   const contextMenuRef = useRef(null)
@@ -67,7 +72,7 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
       return !(el.key === '' && el.type === 'folder')
     })
 
-    if (focus[0].key === 'contextMenu') {
+    if (focus?.length && focus[0].key === 'contextMenu') {
       return true
     }
 
@@ -82,10 +87,11 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
   }
 
   const itemMatchesCondition = (item: action, itemType: string, itemPath: string) => {
-    if (item.type && Array.isArray(item.type) && item.type.findIndex((name) => name === itemType) !== -1) return true
-    else if (item.path && Array.isArray(item.path) && item.path.findIndex((key) => key === itemPath) !== -1) return true
-    else if (item.extension && Array.isArray(item.extension) && item.extension.findIndex((ext) => itemPath.endsWith(ext)) !== -1) return true
-    else if (item.pattern && Array.isArray(item.pattern) && item.pattern.filter((value) => itemPath.match(new RegExp(value))).length > 0) return true
+    if ( platform === appPlatformTypes.desktop && item.platform && item.platform === appPlatformTypes.web) return false
+    else if (item.type && Array.isArray(item.type) && (item.type.findIndex(name => name === itemType) !== -1)) return true
+    else if (item.path && Array.isArray(item.path) && (item.path.findIndex(key => key === itemPath) !== -1)) return true
+    else if (item.extension && Array.isArray(item.extension) && (item.extension.findIndex(ext => itemPath.endsWith(ext)) !== -1)) return true
+    else if (item.pattern && Array.isArray(item.pattern) && (item.pattern.filter(value => itemPath.match(new RegExp(value))).length > 0)) return true
     else return false
   }
 
@@ -111,16 +117,17 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
     return groupedActions.map((groupItem, groupIndex) =>
       groupItem.map((item, index) => {
         key++
-        const className = `remixui_liitem ${group !== item.group ? 'border-top' : ''}`
+        const className = `px-3 remixui_liitem ${group !== item.group ? 'border-top' : ''}`
         group = item.group
         if (item.name === 'Upload File') {
           return (
             <li
               id={`menuitem${item.name.toLowerCase()}`}
+              data-id={`contextMenuItem${item.id}`}
               key={key}
               className={className}
               onClick={() => {
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'uploadFile'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'uploadFile', isClick: true })
                 setShowFileExplorer(true)
               }}
             >
@@ -136,10 +143,11 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
           return (
             <li
               id={`menuitem${item.name.toLowerCase()}`}
+              data-id={`contextMenuItem${item.id}`}
               key={key}
               className={className}
               onClick={() => {
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'uploadFile'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'uploadFile', isClick: true })
                 setShowFileExplorer(true)
               }}
             >
@@ -153,6 +161,7 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
         return (
           <li
             id={`menuitem${item.name.toLowerCase()}`}
+            data-id={`contextMenuItem${item.id}`}
             key={key}
             className={className}
             onClick={(e) => {
@@ -160,67 +169,79 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
               switch (item.name) {
               case 'New File':
                 createNewFile(path)
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'newFile'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'newFile', isClick: true })
                 break
               case 'New Folder':
                 createNewFolder(path)
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'newFolder'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'newFolder', isClick: true })
                 break
               case 'Rename':
                 renamePath(path, type)
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'rename'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'rename', isClick: true })
                 break
               case 'Delete':
                 deletePath(getPath())
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'delete'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'delete', isClick: true })
                 break
               case 'Download':
                 downloadPath(path)
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'download'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'download', isClick: true })
                 break
               case 'Push changes to gist':
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'pushToChangesoGist'])
-                pushChangesToGist(path, type)
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'pushToChangesoGist', isClick: true })
+                pushChangesToGist(path)
                 break
               case 'Publish folder to gist':
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'publishFolderToGist'])
-                publishFolderToGist(path, type)
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'publishFolderToGist', isClick: true })
+                publishFolderToGist(path)
                 break
               case 'Publish file to gist':
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'publishFileToGist'])
-                publishFileToGist(path, type)
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'publishFileToGist', isClick: true })
+                publishFileToGist(path)
+                break
+              case 'Publish files to gist':
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'publishFilesToGist', isClick: true })
+                publishManyFilesToGist()
                 break
               case 'Run':
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'runScript'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'runScript', isClick: true })
                 runScript(path)
                 break
               case 'Copy':
                 copy(path, type)
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'copy'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'copy', isClick: true })
                 break
               case 'Copy name':
                 copyFileName(path, type)
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'copy'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'copyName', isClick: true })
                 break
               case 'Copy path':
                 copyPath(path, type)
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'copy'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'copyPath', isClick: true })
+                break
+              case 'Copy share URL':
+                copyShareURL(path, type)
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'copyShareURL', isClick: true })
                 break
               case 'Paste':
                 paste(path, type)
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'paste'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'paste', isClick: true })
                 break
               case 'Delete All':
                 deletePath(getPath())
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'deleteAll'])
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'deleteAll', isClick: true })
                 break
               case 'Publish Workspace to Gist':
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', 'publishWorkspace'])
-                publishFolderToGist(path, type)
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'publishWorkspace', isClick: true })
+                publishFolderToGist(path)
+                break
+              case 'Sign Typed Data':
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: 'signTypedData', isClick: true })
+                signTypedData(path)
                 break
               default:
-                _paq.push(['trackEvent', 'fileExplorer', 'contextMenu', `${item.id}/${item.name}`])
-                emit && emit({...item, path: [path]} as customAction)
+                trackMatomoEvent({ category: 'fileExplorer', action: 'contextMenu', name: `${item.id}/${item.name}`, isClick: true })
+                emit && emit({ ...item, path: [path]} as customAction)
                 break
               }
               hideContextMenu()
@@ -240,7 +261,7 @@ export const FileExplorerContextMenu = (props: FileExplorerContextMenuProps) => 
     <div
       id="menuItemsContainer"
       className="p-1 remixui_contextContainer bg-light shadow border"
-      style={{left: pageX, top: pageY}}
+      style={{ left: pageX, top: pageY }}
       ref={contextMenuRef}
       onBlur={hideContextMenu}
       tabIndex={500}

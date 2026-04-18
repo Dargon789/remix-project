@@ -4,25 +4,35 @@
   position: fixed;
   border-radius: 2px;
   z-index: 1000;
-  box-shadow: 0 0 4px var(--dark);
+  box-shadow: 0 0 4px var(--bs-dark);
 }
 .remixui_contextContainer:focus {
     outline: none;
 }
 .remixui_liitem
 {
-  padding: 2px;
-  padding-left: 6px;
   cursor: pointer;
-  color: var(--text-dark);
-  background-color: var(--light);
+  color: var(--bs-dark);
+  background-color: var(--bs-light);
 }
 .remixui_liitem:hover
 {
-  background-color:  var(--secondary);
+  background-color:  var(--custom-onsurface-layer-2);
 }
 #remixui_menuitems
 {
   list-style: none;
   margin: 0px;
+}
+
+.remixui_liitem {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.remixui_liitem:hover {
+  background-color:  var(--custom-onsurface-layer-2);
 }

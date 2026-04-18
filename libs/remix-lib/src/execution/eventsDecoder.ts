@@ -1,5 +1,5 @@
 'use strict'
-import { ethers } from 'ethers'
+import { EventFragment, Interface } from 'ethers'
 import { visitContracts } from './txHelper'
 
 /**
@@ -21,7 +21,7 @@ export class EventsDecoder {
   * @param {Function} cb - callback
   */
   parseLogs (tx, contractName, compiledContracts, cb) {
-    if (tx.isCall) return cb(null, { decoded: [], raw: [] })
+    if (tx.isCall) return cb(null, { decoded: [], raw: []})
     this.resolveReceipt(tx, (error, receipt) => {
       if (error) return cb(error)
       this._decodeLogs(tx, receipt, contractName, compiledContracts, cb)
@@ -33,17 +33,18 @@ export class EventsDecoder {
       return cb('cannot decode logs - contract or receipt not resolved ')
     }
     if (!receipt.logs) {
-      return cb(null, { decoded: [], raw: [] })
+      return cb(null, { decoded: [], raw: []})
     }
     this._decodeEvents(tx, receipt.logs, contract, contracts, cb)
   }
 
   _eventABI (contract): Record<string, { event, inputs, object, abi }> {
     const eventABI: Record<string, { event, inputs, object, abi }> = {}
-    const abi = new ethers.utils.Interface(contract.abi)
-    for (const e in abi.events) {
-      const event = abi.getEvent(e)
-      eventABI[abi.getEventTopic(e).replace('0x', '')] = { event: event.name, inputs: event.inputs, object: event, abi: abi }
+    const abi = new Interface(contract.abi)
+    const eventFragments = abi.fragments.filter(f => f.type === "event") as Array<EventFragment>
+    for (const e of eventFragments) {
+      const event = abi.getEvent(e.name)
+      eventABI[e.topicHash.replace('0x', '')] = { event: event.name, inputs: event.inputs, object: event, abi: abi }
     }
     return eventABI
   }

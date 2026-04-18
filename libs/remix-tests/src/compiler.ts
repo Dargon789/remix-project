@@ -25,7 +25,7 @@ export function writeTestAccountsContract (accounts: string[]) {
     body += `return accounts[index];`
   } else {
     body = `return address(0);`
-  }  
+  }
   return testAccountContract.replace('>accounts<', body)
 }
 
@@ -41,7 +41,7 @@ function isRemixTestFile (path: string) {
 /**
  * @dev Process file to prepare sources object to be passed in solc compiler input
  *
- * See: https://solidity.readthedocs.io/en/latest/using-the-compiler.html#input-description
+ * See: https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
  *
  * @param filePath path of file to process
  * @param sources existing 'sources' object in which keys are the "global" names of the source files and
@@ -91,7 +91,7 @@ export function compileFileOrFiles (filename: string, isDirectory: boolean, opts
   const filepath: string = (isDirectory ? filename : path.dirname(filename))
   const importsCallback = (url, cb) => {
     try {
-      if(fs.existsSync(url)) cb(null, fs.readFileSync(url, 'utf-8'))
+      if (fs.existsSync(url)) cb(null, fs.readFileSync(url, 'utf-8'))
       else {
         const urlResolver = new RemixURLResolver()
         urlResolver.resolve(url).then((result) => cb(null, result.content)).catch((error) => cb(error.message))

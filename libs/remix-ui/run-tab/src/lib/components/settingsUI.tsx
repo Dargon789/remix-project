@@ -1,33 +1,48 @@
 // eslint-disable-next-line no-use-before-define
-import React from 'react'
-import {SettingsProps} from '../types'
-import {EnvironmentUI} from './environment'
-import {NetworkUI} from './network'
-import {AccountUI} from './account'
-import {GasPriceUI} from './gasPrice'
-import {ValueUI} from './value'
+import React, { useEffect } from 'react'
+import { SettingsProps } from '../types'
+import { EnvironmentUI } from './environment'
+import { NetworkUI } from './network'
+import { AccountUI } from './account'
+import { GasLimitUI } from './gasLimit'
+import { ValueUI } from './value'
 
 export function SettingsUI(props: SettingsProps) {
   //   this._deps.config.events.on('settings/personal-mode_changed', this.onPersonalChange.bind(this))
 
   return (
     <div className="udapp_settings">
-      <EnvironmentUI selectedEnv={props.selectExEnv} providers={props.providers} setExecutionContext={props.setExecutionContext} />
+      <EnvironmentUI
+        runTabPlugin={props.runTabPlugin}
+        selectedEnv={props.selectExEnv}
+        providers={props.providers}
+        setExecutionContext={props.setExecutionContext}
+        checkSelectionCorrectness={props.EvaluateEnvironmentSelection}
+        modal={props.modal}
+        config={props.runTabPlugin.config}
+        udappState={props.udappState}
+        envLabel={props.envLabel}
+      />
       <NetworkUI networkName={props.networkName} />
       <AccountUI
+        runTabPlugin={props.runTabPlugin}
+        addFile={props.addFile}
         personalMode={props.personalMode}
         selectExEnv={props.selectExEnv}
         accounts={props.accounts}
         setAccount={props.setAccount}
         createNewBlockchainAccount={props.createNewBlockchainAccount}
+        createNewSmartAccount={props.createNewSmartAccount}
+        delegationAuthorization={props.delegationAuthorization}
         setPassphrase={props.setPassphrase}
         setMatchPassphrase={props.setMatchPassphrase}
         tooltip={props.tooltip}
         modal={props.modal}
         signMessageWithAddress={props.signMessageWithAddress}
         passphrase={props.passphrase}
+        networkName={props.networkName}
       />
-      <GasPriceUI gasLimit={props.gasLimit} setGasFee={props.setGasFee} />
+      <GasLimitUI gasLimit={props.gasLimit} setGasFee={props.setGasFee} />
       <ValueUI setUnit={props.setUnit} sendValue={props.sendValue} sendUnit={props.sendUnit} setSendValue={props.setSendValue} />
     </div>
   )

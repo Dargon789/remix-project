@@ -6,7 +6,9 @@
       "resolveJsonModule": true,
       "target": "es2015",
       "module": "commonjs",
+      "importHelpers": false
     },
-    "include": ["**/*.ts", "**/*.js"]
+    "include": ["**/*.ts", "**/*.js"],
+    "exclude": ["src/extensions"],
 }
   

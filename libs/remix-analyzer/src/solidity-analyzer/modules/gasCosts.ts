@@ -78,7 +78,8 @@ export default class gasCosts implements AnalyzerModule {
       } else {
         const gas: string = contract.evm.gasEstimates.external[methodSignature]
         const gasString: string = gas === null ? 'unknown or not constant' : 'is ' + gas
-        if (gas === null || parseInt(gas) >= 3000000 || gas === 'infinite') {
+        // Updated threshold to 6M based on EIP-7935 (60M block gas limit)
+        if (gas === null || parseInt(gas) >= 6000000 || gas === 'infinite') {
           return {
             isInfinite: true,
             isFallback: false,

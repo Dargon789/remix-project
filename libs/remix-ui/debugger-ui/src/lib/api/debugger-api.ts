@@ -1,28 +1,31 @@
-import Web3 from 'web3'
-import { init , traceHelper, TransactionDebugger as Debugger } from '@remix-project/remix-debug'
+import { init , traceHelper, TransactionDebugger as Debugger, OffsetToLineColumnConverterFn } from '@remix-project/remix-debug'
 import { CompilerAbstract } from '@remix-project/remix-solidity'
 import { lineText } from '@remix-ui/editor'
 import { util } from '@remix-project/remix-lib'
+import { BrowserProvider, ethers } from 'ethers'
 const { toHexPaddedString } = util
 
 export const DebuggerApiMixin = (Base) => class extends Base {
 
-  initialWeb3
-  debuggerBackend
+  offsetToLineColumnConverter: OffsetToLineColumnConverterFn
+  initialWeb3: BrowserProvider
+  debuggerBackend: Debugger
+  web3Provider: any
+  currentSourceLocation: any
 
   initDebuggerApi () {
     const self = this
     this.web3Provider = {
-      sendAsync (payload, callback) {
-        self.call('web3Provider', 'sendAsync', payload)
-          .then(result => callback(null, result))
-          .catch(e => callback(e))
+      async request (payload) {
+        const ret = await self.call('web3Provider', 'sendAsync', payload)
+        return ret.result
       }
+
     }
-    this._web3 = new Web3(this.web3Provider)
+    this._web3 = new ethers.BrowserProvider(this.web3Provider)
     // this._web3 can be overwritten and reset to initial value in 'debug' method
     this.initialWeb3 = this._web3
-    init.extendWeb3(this._web3)
+    init.extendProvider(this._web3)
 
     this.offsetToLineColumnConverter = {
       async offsetToLineColumn (rawLocation, file, sources, asts) {
@@ -45,15 +48,31 @@ export const DebuggerApiMixin = (Base) => class extends Base {
     await this.call('editor', 'discardLineTexts' as any)
   }
 
-  async highlight (lineColumnPos, path, rawLocation, stepDetail, lineGasCost) {
-    await this.call('editor', 'highlight', lineColumnPos, path, '', { focus: true })
+  getCurrentSourceLocation () {
+    return this.currentSourceLocation
+  }
+
+  getStackAt (vmtraceIndex: number) {
+    return this.debuggerBackend.debugger.traceManager.getStackAt(vmtraceIndex)
+  }
+
+  async highlight (lineColumnPos, path, rawLocation, stepDetail, lineGasCost, origin?, step?) {
+    // Pass the main contract being debugged as the origin for proper resolution
+    await this.call('editor', 'highlight', lineColumnPos, path, '', { focus: true, origin })
+
+    // Get current step index from debugger backend if not provided
+    let currentStep = step
+    if (currentStep === undefined && this.debuggerBackend && this.debuggerBackend.step_manager) {
+      currentStep = this.debuggerBackend.step_manager.currentStepIndex
+    }
+
     const label = `${stepDetail.op} costs ${stepDetail.gasCost} gas - this line costs ${lineGasCost} gas - ${stepDetail.gas} gas left`
     const linetext: lineText = {
       content: label,
       position: lineColumnPos,
       hide: false,
       className: 'text-muted small',
-      afterContentClassName: 'text-muted small fas fa-gas-pump pl-4',
+      afterContentClassName: 'text-muted small fas fa-gas-pump ps-4',
       from: 'debugger',
       hoverMessage: [{
         value: label,
@@ -61,6 +80,14 @@ export const DebuggerApiMixin = (Base) => class extends Base {
       ],
     }
     await this.call('editor', 'addLineText' as any, linetext, path)
+    this.currentSourceLocation = {
+      line: lineColumnPos.start.line + 1,
+      path,
+      stepDetail,
+      lineGasCost,
+      origin,
+      step: currentStep
+    }
   }
 
   async getFile (path) {
@@ -95,39 +122,48 @@ export const DebuggerApiMixin = (Base) => class extends Base {
     this.onRemoveHighlightsListener = listener
   }
 
+  setCache (key: string, value: any) {
+    const ttlMs = 1 * 24 * 60 * 60 * 1000 // 1 day
+    return this.call('indexedDbCache', 'setWithTTL', key, value, ttlMs, 'debugger')
+  }
+
+  getCache (key: string) {
+    return this.call('indexedDbCache', 'get', key, 'debugger')
+  }
+
   async fetchContractAndCompile (address, receipt) {
     const target = (address && traceHelper.isContractCreation(address)) ? receipt.contractAddress : address
     const targetAddress = target || receipt.contractAddress || receipt.to
-    const codeAtAddress = await this._web3.eth.getCode(targetAddress)
+    const codeAtAddress = await this._web3.getCode(targetAddress)
     const output = await this.call('fetchAndCompile', 'resolve', targetAddress, codeAtAddress, '.debug')
     if (output) {
-      return new CompilerAbstract(output.languageversion, output.data, output.source)
+      return new CompilerAbstract(output.languageversion, output.data, output.source, null, this as any)
     }
     return null
   }
 
-  async getDebugWeb3 () {
+  async getDebugProvider () {
     let web3
     let network
     try {
-      network = await this.call('network', 'detectNetwork')    
+      network = await this.call('network', 'detectNetwork')
     } catch (e) {
       web3 = this.web3()
     }
     if (!web3) {
-      const webDebugNode = init.web3DebugNode(network.name)
+      const webDebugNode = init.web3DebugNode(network.id)
       web3 = !webDebugNode ? this.web3() : webDebugNode
     }
-    init.extendWeb3(web3)
+    init.extendProvider(web3)
     return web3
   }
 
   async getTrace (hash) {
     if (!hash) return
-    const web3 = await this.getDebugWeb3()
-    const currentReceipt = await web3.eth.getTransactionReceipt(hash)
+    const provider = await this.getDebugProvider()
+    const currentReceipt = await provider.getTransactionReceipt(hash)
     const debug = new Debugger({
-      web3,
+      web3: provider,
       offsetToLineColumnConverter: this.offsetToLineColumnConverter,
       compilationResult: async (address) => {
         try {
@@ -153,17 +189,17 @@ export const DebuggerApiMixin = (Base) => class extends Base {
     return trace
   }
 
-  debug (hash, web3?) {
+  debug (hash, provider?: BrowserProvider) {
     try {
       this.call('fetchAndCompile', 'clearCache')
     } catch (e) {
       console.error(e)
     }
-    if (web3) this._web3 = web3
+    if (provider) this._web3 = provider
     else this._web3 = this.initialWeb3
-    init.extendWeb3(this._web3)
+    init.extendProvider(this._web3)
     if (this.onDebugRequestedListener) {
-      this.onDebugRequestedListener(hash, web3).then((debuggerBackend) => {
+      this.onDebugRequestedListener(hash, this._web3).then((debuggerBackend: Debugger) => {
         this.debuggerBackend = debuggerBackend
       })
     }
@@ -172,8 +208,9 @@ export const DebuggerApiMixin = (Base) => class extends Base {
   onActivation () {
     this.on('editor', 'breakpointCleared', (fileName, row) => { if (this.onBreakpointClearedListener) this.onBreakpointClearedListener(fileName, row) })
     this.on('editor', 'breakpointAdded', (fileName, row) => { if (this.onBreakpointAddedListener) this.onBreakpointAddedListener(fileName, row) })
-    this.on('editor', 'contentChanged', () => { if (this.onEditorContentChangedListener) this.onEditorContentChangedListener() })  
+    this.on('editor', 'contentChanged', () => { if (this.onEditorContentChangedListener) this.onEditorContentChangedListener() })
     this.on('network', 'providerChanged', (provider) => { if (this.onEnvChangedListener) this.onEnvChangedListener(provider) })
+    this.currentSourceLocation = null
   }
 
   onDeactivation () {
@@ -181,18 +218,33 @@ export const DebuggerApiMixin = (Base) => class extends Base {
     this.off('editor', 'breakpointCleared')
     this.off('editor', 'breakpointAdded')
     this.off('editor', 'contentChanged')
+    this.currentSourceLocation = null
   }
 
   showMessage (title: string, message: string) {}
 
-  onStartDebugging (debuggerBackend: any) {
-    this.call('layout', 'maximiseSidePanel')
+  async onStartDebugging (debuggerBackend: any) {
+    this.currentSourceLocation = null
+    const pinnedPlugin = await this.call('rightSidePanel', 'currentFocus')
+
+    if (pinnedPlugin === 'debugger') {
+      this.call('layout', 'maximiseRightSidePanel')
+    } else {
+      this.call('layout', 'maximiseSidePanel')
+    }
     this.emit('startDebugging')
     this.debuggerBackend = debuggerBackend
   }
 
-  onStopDebugging () {
-    this.call('layout', 'resetSidePanel')
+  async onStopDebugging () {
+    this.currentSourceLocation = null
+    const pinnedPlugin = await this.call('rightSidePanel', 'currentFocus')
+
+    if (pinnedPlugin === 'debugger') {
+      this.call('layout', 'resetRightSidePanel')
+    } else {
+      this.call('layout', 'resetSidePanel')
+    }
     this.emit('stopDebugging')
     this.debuggerBackend = null
   }

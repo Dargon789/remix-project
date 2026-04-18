@@ -33,16 +33,22 @@ export default class CodeParserGasService {
 
   }
 
-
   async showGasEstimates() {
     const showGasConfig = await this.plugin.call('config', 'getAppParameter', 'show-gas')
-    if(!showGasConfig) {
+    if (!showGasConfig) {
       await this.plugin.call('editor', 'discardLineTexts')
       return
     }
     this.plugin.currentFile = await this.plugin.call('fileManager', 'file')
+    if (!this.plugin.currentFile || !this.plugin.currentFile.endsWith('.sol')) {
+      await this.plugin.call('editor', 'discardLineTexts')
+      return
+    }
     // cast from the remix-plugin interface to the solidity one. Should be fixed when remix-plugin move to the remix-project repository
-    this.plugin.nodeIndex.nodesPerFile[this.plugin.currentFile] = await this.plugin._extractFileNodes(this.plugin.currentFile, this.plugin.compilerAbstract as unknown as lastCompilationResult)
+    const extractedFiledNodes = await this.plugin._extractFileNodes(this.plugin.currentFile, this.plugin.compilerAbstract as unknown as lastCompilationResult)
+    if (extractedFiledNodes) {
+      this.plugin.nodeIndex.nodesPerFile[this.plugin.currentFile] = extractedFiledNodes
+    }
 
     const gasEstimates = await this.getGasEstimates(this.plugin.currentFile)
 
@@ -59,7 +65,7 @@ export default class CodeParserGasService {
           position: estimate.range,
           hide: false,
           className: 'text-muted small',
-          afterContentClassName: 'text-muted small fas fa-gas-pump pl-4',
+          afterContentClassName: 'text-muted small fas fa-gas-pump ps-4',
           from: 'codeParser',
           hoverMessage: [{
             value: `${Object.entries(estimate.node.gasEstimate).map(([key, value]) => `${friendlyNames[key]}: ${value} gas`).join(' ')}`,
@@ -69,10 +75,8 @@ export default class CodeParserGasService {
 
         this.plugin.call('editor', 'addLineText', linetext, estimate.range.fileName)
 
-
       }
     }
   }
-
 
 }

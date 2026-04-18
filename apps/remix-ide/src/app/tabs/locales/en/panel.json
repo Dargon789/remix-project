@@ -2,5 +2,21 @@
   "panel.author": "Author",
   "panel.maintainedBy": "Maintained By",
   "panel.documentation": "Documentation",
-  "panel.description": "Description"
+  "panel.description": "Description",
+  "panel.maintainedByRemix": "Maintained by Remix",
+  "panel.pinnedMsg": "Move plugin to the Right Side Panel",
+  "panel.unPinnedMsg": "Move plugin to the Left Side Panel",
+  "panel.maintainedExternally": "Not maintained by Remix",
+  "panel.pluginInfo": "Plugin info",
+  "panel.linkToDoc": "Link to documentation",
+  "panel.makeAnissue": "Make an issue",
+  "panel.pluginDetails": "Plugin details",
+  "panel.maintainedByLabel": "Maintained by",
+  "panel.fileExplorerTitle": "File Explorer",
+  "panel.fileExplorerDescription": "Create and manage your files.",
+  "panel.remixAiTitle": "RemixAI Assistant",
+  "panel.remixAiDescription": "AI code assistant for Remix IDE.",
+  "panel.minimizePanel": "Minimize Panel",
+  "panel.maximizePanel": "Maximize Panel",
+  "panel.hidePanel": "Hide Panel"
 }

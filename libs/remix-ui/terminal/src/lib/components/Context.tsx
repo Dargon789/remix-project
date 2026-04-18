@@ -1,22 +1,23 @@
 import React from 'react' // eslint-disable-line
-import {shortenHexData} from '@remix-ui/helper'
-import {execution} from '@remix-project/remix-lib'
+import { shortenHexData } from '@remix-ui/helper'
+import { execution } from '@remix-project/remix-lib'
 const typeConversion = execution.typeConversion
 
-const Context = ({opts, provider}: {opts; provider: string}) => {
+const Context = ({ opts, provider }: {opts; provider: string}) => {
   const data = opts.tx || ''
   const from = opts.from ? shortenHexData(opts.from) : ''
   let to = opts.to
   if (data.to) to = to + ' ' + shortenHexData(data.to)
   const val = data.value
   let hash = data.hash ? shortenHexData(data.hash) : ''
-  const input = data.input ? shortenHexData(data.input) : ''
-  const logs = opts.logs && opts.logs.decoded && opts.logs.decoded.length ? opts.logs.decoded.length : 0
+  const input = data.input ? shortenHexData(data.input) : (data.data ? shortenHexData(data.data) : '')
+  const logs = opts.logs && opts.logs.raw && opts.logs.raw.length ? opts.logs.raw.length : 0
   const block = data.receipt ? data.receipt.blockNumber : data.blockNumber || ''
-  const i = data.receipt ? data.transactionIndex : data.transactionIndex
+  let txIndex
+  if (data.index == 0) txIndex = 0
+  else txIndex = data.index ? data.index.toString() : '-'
   const value = val ? typeConversion.toInt(val) : 0
-
-  if (provider.startsWith('vm')) {
+  if (provider && provider.startsWith('vm')) {
     return (
       <div>
         <span>
@@ -47,7 +48,7 @@ const Context = ({opts, provider}: {opts; provider: string}) => {
       <div>
         <span>
           <span className="remix_ui_terminal_tx">
-            [block:{block} txIndex:{i}]
+            [block:{block.toString()} txIndex:{txIndex}]
           </span>
           <div className="remix_ui_terminal_txItem">
             <span className="remix_ui_terminal_txItemTitle">from:</span> {from}
@@ -76,7 +77,7 @@ const Context = ({opts, provider}: {opts; provider: string}) => {
       <div>
         <span>
           <span className="remix_ui_terminal_tx">
-            [block:{block} txIndex:{i}]
+            [block:{block.toString()} txIndex:{txIndex}]
           </span>
           <div className="remix_ui_terminal_txItem">
             <span className="remix_ui_terminal_txItemTitle">from:</span> {from}

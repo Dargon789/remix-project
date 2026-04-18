@@ -18,11 +18,15 @@ export const modalReducer = (state: ModalState = ModalInitialState, action: Moda
       cancelLabel: action.payload.cancelLabel,
       cancelFn: action.payload.cancelFn,
       modalType: action.payload.modalType,
+      modalParentClass: action.payload.modalParentClass,
       defaultValue: action.payload.defaultValue,
       hideFn: action.payload.hideFn,
       resolve: action.payload.resolve,
       next: action.payload.next,
-      data: action.payload.data
+      data: action.payload.data,
+      showCancelIcon: action.payload.showCancelIcon,
+      preventBlur: action.payload.preventBlur,
+      placeholderText: action.payload.placeholderText
     }
 
     const modalList: AppModal[] = state.modals.slice()
@@ -76,7 +80,27 @@ export const modalReducer = (state: ModalState = ModalInitialState, action: Moda
       const toaster = toasterList[0]
       return { ...state, toasters: toasterList, focusToaster: toaster }
     } else {
-      return { ...state, toasters: [] }
+      return { ...state, toasters: []}
+    }
+  }
+
+  case modalActionTypes.setTemplateExplorer: {
+    return { ...state, focusTemplateExplorer: action.payload }
+  }
+
+  case modalActionTypes.setActionNotification: {
+    const notification = {
+      ...action.payload,
+      timestamp: action.payload.timestamp || Date.now(),
+      hide: false
+    }
+    return { ...state, actionNotifications: [...state.actionNotifications, notification]}
+  }
+
+  case modalActionTypes.hideActionNotification: {
+    return {
+      ...state,
+      actionNotifications: state.actionNotifications.filter(n => n.id !== action.payload.id)
     }
   }
   }

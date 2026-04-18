@@ -1,0 +1,22 @@
+.remix-settings-main {
+  padding-right: 1rem !important;
+}
+
+/* Stack sidebar above content only on very narrow panels */
+@media (max-width: 600px) {
+  .d-flex.align-items-stretch.flex-fill {
+    flex-direction: column !important;
+  }
+
+  .remix-settings-sidebar {
+    flex: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+.no-outline:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}

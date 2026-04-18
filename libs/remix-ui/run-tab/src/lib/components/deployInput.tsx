@@ -1,11 +1,11 @@
-import {CustomTooltip} from '@remix-ui/helper'
+import { CustomTooltip } from '@remix-ui/helper'
 import React from 'react'
-import {DeployInputProps} from '../types'
-import {DeployButton} from './deployButton'
+import { DeployInputProps } from '../types'
+import { DeployButton } from './deployButton'
 
 export function DeployInput(props: DeployInputProps) {
   return (
-    <div className="udapp_contractActionsContainerSingle" style={{display: 'flex'}}>
+    <div className="udapp_contractActionsContainerSingle" style={{ display: 'flex' }}>
       <DeployButton
         buttonOptions={props.buttonOptions}
         selectedIndex={props.selectedIndex}
@@ -20,7 +20,7 @@ export function DeployInput(props: DeployInputProps) {
         tooltipText={props.funcABI.type === 'fallback' || props.funcABI.type === 'receive' ? `'(${props.funcABI.type}')` : props.inputs}
       >
         <input
-          className="form-control"
+          className="form-control border"
           data-id={props.funcABI.type === 'fallback' || props.funcABI.type === 'receive' ? `'(${props.funcABI.type}')` : 'multiParamManagerBasicInputField'}
           placeholder={props.inputs}
           onChange={props.handleBasicInput}

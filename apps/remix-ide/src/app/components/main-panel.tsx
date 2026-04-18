@@ -1,8 +1,8 @@
 import React from 'react' // eslint-disable-line
-import {AbstractPanel} from './panel'
-import {RemixPluginPanel} from '@remix-ui/panel'
+import { AbstractPanel } from './panel'
+import { RemixPluginPanel } from '@remix-ui/panel'
 import packageJson from '../../../../../package.json'
-import {PluginViewWrapper} from '@remix-ui/helper'
+import { PluginViewWrapper } from '@remix-ui/helper'
 
 const profile = {
   name: 'mainPanel',
@@ -15,7 +15,7 @@ const profile = {
 export class MainPanel extends AbstractPanel {
   element: HTMLDivElement
   dispatch: React.Dispatch<any> = () => {}
-  constructor(config) {
+  constructor(config = null) {
     super(profile)
     this.element = document.createElement('div')
     this.element.setAttribute('data-id', 'mainPanelPluginsContainer')
@@ -31,23 +31,23 @@ export class MainPanel extends AbstractPanel {
     this.renderComponent()
   }
 
-  focus(name) {
+  focus(name: string) {
     this.emit('focusChanged', name)
     super.focus(name)
     this.renderComponent()
   }
 
-  addView(profile, view) {
+  addView(profile: any, view: any) {
     super.addView(profile, view)
     this.renderComponent()
   }
 
-  removeView(profile) {
+  removeView(profile: any) {
     super.removeView(profile)
     this.renderComponent()
   }
 
-  async showContent(name) {
+  async showContent(name: any) {
     super.showContent(name)
     this.renderComponent()
   }
@@ -60,13 +60,13 @@ export class MainPanel extends AbstractPanel {
 
   render() {
     return (
-      <div style={{height: '100%', width: '100%'}} data-id="mainPanelPluginsContainer">
+      <div style={{ height: '100%', width: '100%' }} data-id="mainPanelPluginsContainer">
         <PluginViewWrapper plugin={this} />
       </div>
     )
   }
 
   updateComponent(state: any) {
-    return <RemixPluginPanel header={<></>} plugins={state.plugins} />
+    return <RemixPluginPanel sourcePlugin={this} header={<></>} plugins={state.plugins} />
   }
 }

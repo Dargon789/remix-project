@@ -46,7 +46,6 @@ export class RemixHoverProvider implements monacoTypes.languages.HoverProvider {
       return await this.props.plugin.call('codeParser', 'getVariableDeclaration', node)
     }
 
-
     const getParamaters = async (node: any) => {
       return await this.props.plugin.call('codeParser', 'getFunctionParamaters', node)
     }
@@ -54,7 +53,6 @@ export class RemixHoverProvider implements monacoTypes.languages.HoverProvider {
     const getReturnParameters = async (node: any) => {
       return await this.props.plugin.call('codeParser', 'getFunctionReturnParameters', node)
     }
-
 
     const getOverrides = async (node: any) => {
       if (node.overrides) {
@@ -85,15 +83,14 @@ export class RemixHoverProvider implements monacoTypes.languages.HoverProvider {
 
     if (nodeAtPosition) {
       if (nodeAtPosition.absolutePath) {
-        const target = await this.props.plugin.call('fileManager', 'getPathFromUrl', nodeAtPosition.absolutePath)
-        if (target.file !== nodeAtPosition.absolutePath) {
-          contents.push({
-            value: `${target.file}`
-          })
-        }
-        contents.push({
-          value: `${nodeAtPosition.absolutePath}`
-        })
+        try {
+          const currentFile = await this.props.plugin.call('fileManager', 'file')
+          const resolved = await this.props.plugin.call('resolutionIndex', 'resolvePath', currentFile, nodeAtPosition.absolutePath)
+          if (resolved && resolved !== nodeAtPosition.absolutePath) {
+            contents.push({ value: `${resolved}` })
+          }
+        } catch (_) { /* ignore */ }
+        contents.push({ value: `${nodeAtPosition.absolutePath}` })
       }
       if (nodeAtPosition.nodeType === 'VariableDeclaration') {
         contents.push({
@@ -179,7 +176,7 @@ export class RemixHoverProvider implements monacoTypes.languages.HoverProvider {
 
       try {
         const decodedVar = await this.props.plugin.call('debugger', 'decodeStateVariable', nodeAtPosition.id)
-        if (decodedVar !== null  && decodedVar.type) {
+        if (decodedVar !== null && decodedVar.type) {
           contents.push({
             value: `STATE VARIABLE ${nodeAtPosition.name}:  ${typeof(decodedVar.value) === 'string' ? decodedVar.value : JSON.stringify(decodedVar.value, null, '\t')}`
           })

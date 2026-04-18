@@ -7,12 +7,12 @@ tape('TraceManager', function (t) {
   let traceManager
 
   t.test('TraceManager.init', function (st) {
-    traceManager = new TraceManager({web3: web3Test})
+    traceManager = new TraceManager({ web3: web3Test })
     st.end()
   })
 
   t.test('TraceManager.resolveTrace', function (st) {
-    const tx = web3Test.eth.getTransaction('0x20ef65b8b186ca942fcccd634f37074dde49b541c27994fc7596740ef44cfd51')
+    const tx = web3Test.getTransaction('0x20ef65b8b186ca942fcccd634f37074dde49b541c27994fc7596740ef44cfd51')
     traceManager.resolveTrace(tx).then(() => {
       st.end()
     }).catch(() => {
@@ -86,7 +86,7 @@ tape('TraceManager', function (t) {
       const result = traceManager.getStackAt(28)
       console.log(result)
       st.ok(result.length === 4)
-      st.ok(result[3] === '0x60fe47b1')
+      st.ok(result[0] === '0x60fe47b1')
     } catch (error) {
       st.fail(error)
     }

@@ -1,25 +1,31 @@
 // eslint-disable-next-line no-use-before-define
 import React from 'react'
-import {render} from 'react-dom'
 import './index.css'
-import {ThemeModule} from './app/tabs/theme-module'
-import {Preload} from './app/components/preload'
-import Config from './config'
-import Registry from './app/state/registry'
-import {Storage} from '@remix-project/remix-lib'
-;(async function () {
-  try {
-    const configStorage = new Storage('config-v0.8:')
-    const config = new Config(configStorage)
-    Registry.getInstance().put({api: config, name: 'config'})
-  } catch (e) {}
-  const theme = new ThemeModule()
-  theme.initTheme()
+import { MatomoManager } from './app/matomo/MatomoManager'
+import { autoInitializeMatomo } from './app/matomo/MatomoAutoInit'
+import { createMatomoConfig } from './app/matomo/MatomoConfig'
+import { createTrackingFunction } from './app/utils/TrackingFunction'
+import { setupThemeAndLocale } from './app/utils/AppSetup'
+import { renderApp } from './app/utils/AppRenderer'
 
-  render(
-    <React.StrictMode>
-      <Preload></Preload>
-    </React.StrictMode>,
-    document.getElementById('root')
-  )
+; (async function () {
+  // Create Matomo configuration
+  const matomoConfig = createMatomoConfig();
+  const matomoManager = new MatomoManager(matomoConfig);
+  window._matomoManagerInstance = matomoManager;
+
+  // Setup config and auto-initialize Matomo if we have existing settings
+  await autoInitializeMatomo({
+    matomoManager,
+    debug: true
+  });
+
+  // Setup theme and locale
+  setupThemeAndLocale();
+
+  // Create tracking function
+  const trackingFunction = createTrackingFunction(matomoManager);
+
+  // Render the app
+  renderApp({ trackingFunction });
 })()

@@ -1,10 +1,10 @@
-import {useDialogDispatchers} from '@remix-ui/app'
-import React, {useContext, useEffect, useRef, useState} from 'react'
-import {FormattedMessage} from 'react-intl'
-import {SearchContext} from '../../context/context'
-import {SearchResult, SearchResultLine} from '../../types'
-import {ResultFileName} from './ResultFileName'
-import {ResultSummary} from './ResultSummary'
+import { useDialogDispatchers } from '@remix-ui/app'
+import React, { useContext, useEffect, useRef, useState } from 'react'
+import { FormattedMessage, useIntl } from 'react-intl'
+import { SearchContext } from '../../context/context'
+import { SearchResult, SearchResultLine } from '../../types'
+import { ResultFileName } from './ResultFileName'
+import { ResultSummary } from './ResultSummary'
 
 interface ResultItemProps {
   file: SearchResult
@@ -12,14 +12,15 @@ interface ResultItemProps {
 }
 
 export const ResultItem = (props: ResultItemProps) => {
-  const {state, findText, disableForceReload, updateCount, replaceAllInFile} = useContext(SearchContext)
+  const intl = useIntl()
+  const { state, findText, disableForceReload, updateCount, replaceAllInFile } = useContext(SearchContext)
   const [loading, setLoading] = useState<boolean>(false)
   const [lines, setLines] = useState<SearchResultLine[]>([])
   const [toggleExpander, setToggleExpander] = useState<boolean>(false)
   const reloadTimeOut = useRef(null)
   const loadTimeout = useRef(null)
   const subscribed = useRef(true)
-  const {modal} = useDialogDispatchers()
+  const { modal } = useDialogDispatchers()
 
   useEffect(() => {
     reload()
@@ -27,7 +28,6 @@ export const ResultItem = (props: ResultItemProps) => {
 
   useEffect(() => {
     if (props.file.forceReload) {
-      console.log('force reload')
       clearTimeout(reloadTimeOut.current)
       clearTimeout(loadTimeout.current)
       subscribed.current = true
@@ -72,11 +72,18 @@ export const ResultItem = (props: ResultItemProps) => {
     } else {
       modal({
         id: 'confirmreplace',
-        title: 'Replace',
-        message: `Are you sure you want to replace '${state.find}' by '${state.replace}' in ${props.file.filename}?`,
-        okLabel: 'Yes',
+        title: intl.formatMessage({ id: 'search.replace' }),
+        message: intl.formatMessage(
+          { id: 'search.confirmreplaceMsg' },
+          {
+            find: state.find,
+            replace: state.replace,
+            filename: props.file.filename
+          }
+        ),
+        okLabel: intl.formatMessage({ id: 'search.yes' }),
         okFn: confirmReplace,
-        cancelLabel: 'No',
+        cancelLabel: intl.formatMessage({ id: 'search.no' }),
         cancelFn: () => {},
         data: null
       })
@@ -119,10 +126,15 @@ export const ResultItem = (props: ResultItemProps) => {
             </button>{' '}
             <ResultFileName file={props.file} />
             <div className="search_plugin_result_count">
-              <div className="search_plugin_result_count_number badge badge-pill badge-secondary">{props.file.count}</div>
+              <div className="search_plugin_result_count_number badge rounded-pill text-bg-secondary">{props.file.count}</div>
             </div>
           </div>
-          {loading ? <div className="loading">Loading...</div> : null}
+          {loading ? (
+            <div className="loading">
+              <FormattedMessage id="search.loading" />
+              ...
+            </div>
+          ) : null}
           {!toggleExpander && !loading ? (
             <div className="search_plugin_wrap_summary">
               {state.replaceEnabled ? (

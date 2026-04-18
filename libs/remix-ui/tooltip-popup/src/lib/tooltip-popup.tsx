@@ -1,14 +1,14 @@
-import React, {useState} from 'react'
-import {OverlayTrigger, Popover} from 'react-bootstrap'
-import {TooltipPopupProps} from '../types'
+import React, { useState } from 'react'
+import { OverlayTrigger, Popover } from 'react-bootstrap'
+import { TooltipPopupProps } from '../types'
 import './tooltip-popup.module.css'
 
 const popover = (title?: string, content?: string | React.ReactNode) => (
   <Popover id="popover-basic" className="bg-danger border-danger">
-    <Popover.Title as="h3" className="bg-warning border-0">
+    <Popover.Header as="h3" className="bg-warning border-0">
       {title || 'Tooltip'}
-    </Popover.Title>
-    <Popover.Content className="bg-danger border-info">{content}</Popover.Content>
+    </Popover.Header>
+    <Popover.Body className="bg-danger border-info">{content}</Popover.Body>
   </Popover>
 )
 
@@ -25,7 +25,7 @@ export function TooltipPopup(props: TooltipPopupProps) {
         setShow(nextShow)
       }}
     >
-      <i className={`${props.icon} remixui_menuicon pr-0 mr-2`}></i>
+      <i className={`${props.icon} remixui_menuicon pe-0 me-2`}></i>
     </OverlayTrigger>
   )
 }

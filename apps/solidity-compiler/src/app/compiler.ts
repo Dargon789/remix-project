@@ -9,36 +9,35 @@ import { CompileTabLogic } from '@remix-ui/solidity-compiler'
 const defaultCompilerParameters = {
   runs: '200',
   optimize: false,
-  version: 'soljson-v0.8.18+commit.87f61d96',
+  version: 'soljson-v0.8.24+commit.e11b9ed9',
   evmVersion: null, // compiler default
   language: 'Solidity',
   useFileConfiguration: false,
-  configFilePath: "compiler_config.json"
 }
 export class CompilerClientApi extends CompilerApiMixin(PluginClient) implements ICompilerApi {
   constructor () {
     super()
     createClient(this as any)
-    this.compileTabLogic = new CompileTabLogic(this, this.contentImport)
+    // Use default (legacy) Compiler in the plugin app; DependencyResolvingCompiler is only wired in main app
+    this.compileTabLogic = new CompileTabLogic(this)
     this.compiler = this.compileTabLogic.compiler
     this.compileTabLogic.init()
-    this.initCompilerApi()    
+    this.initCompilerApi()
   }
 
-  getCompilerParameters () {
+  getCompilerQueryParameters () {
     const params = {
       runs: localStorage.getItem('runs') || defaultCompilerParameters.runs,
       optimize: localStorage.getItem('optimize') === 'true',
       version: localStorage.getItem('version') || defaultCompilerParameters.version,
       evmVersion: localStorage.getItem('evmVersion') || defaultCompilerParameters.evmVersion, // default
       language: localStorage.getItem('language') || defaultCompilerParameters.language,
-      useFileConfiguration: localStorage.getItem('useFileConfiguration') === 'true',
-      configFilePath: localStorage.getItem('configFilePath') || defaultCompilerParameters.configFilePath
+      useFileConfiguration: localStorage.getItem('useFileConfiguration') === 'true'
     }
     return params
   }
 
-  setCompilerParameters (params) {
+  setCompilerQueryParameters (params) {
     for (const key of Object.keys(params)) {
       localStorage.setItem(key, params[key])
     }
@@ -54,5 +53,9 @@ export class CompilerClientApi extends CompilerApiMixin(PluginClient) implements
 
   getFileManagerMode () {
     return 'browser'
+  }
+
+  isDesktop() {
+    return false
   }
 }

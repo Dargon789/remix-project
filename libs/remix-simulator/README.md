@@ -2,10 +2,10 @@
 [![npm version](https://badge.fury.io/js/%40remix-project%2Fremix-simulator.svg)](https://www.npmjs.com/package/@remix-project/remix-simulator)
 [![npm](https://img.shields.io/npm/dt/@remix-project/remix-simulator.svg?label=Total%20Downloads)](https://www.npmjs.com/package/@remix-project/remix-simulator)
 [![npm](https://img.shields.io/npm/dw/@remix-project/remix-simulator.svg)](https://www.npmjs.com/package/@remix-project/remix-simulator)
-[![GitHub](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/ethereum/remix-project/tree/master/libs/remix-simulator)
-[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/ethereum/remix-project/issues)
+[![GitHub](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/remix-project-org/remix-project/tree/master/libs/remix-simulator)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/remix-project-org/remix-project/issues)
 
-`@remix-project/remix-simulator` is a web3 wrapper for different kind of providers. It is used in `remix-tests` library and in Remix IDE codebase.
+`@remix-project/remix-simulator` is a web3 wrapper for different kinds of providers. It is used in `remix-tests` library and in Remix IDE codebase.
 
 ### Installation
 `@remix-project/remix-simulator` is an NPM package and can be installed using NPM as:
@@ -39,7 +39,7 @@
 * [X] eth_getCode
 * [~] eth_sign
 * [X] eth_sendTransaction
-* [_] eth_sendRawTransaction
+* [x] eth_sendRawTransaction
 * [X] eth_call
 * [~] eth_estimateGas
 * [X] eth_getBlockByHash
@@ -86,7 +86,7 @@
 
 Please feel free to open an issue or a pull request. 
 
-In case you want to add some code, do have a look at our contribution guidelines [here](https://github.com/ethereum/remix-project/blob/master/CONTRIBUTING.md). Reach us on [Gitter](https://gitter.im/ethereum/remix) in case of any queries.
+If you'd like to add some code, please take a look at our contribution guidelines [here](https://github.com/remix-project-org/remix-project/blob/master/CONTRIBUTING.md). You can reach us on [Discord](https://discord.gg/MzhfCGstNA) with any questions.
 
 ### License
 MIT © 2018-21 Remix Team

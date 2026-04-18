@@ -10,7 +10,6 @@
       "outputs": [
         "{options.outputPath}"
       ],
-      "dependsOn": ["install"],
       "defaultConfiguration": "development",
       "options": {
         "compiler": "babel",
@@ -40,11 +39,20 @@
     },
     "install": {
       "executor": "nx:run-commands",
+      "cache": false,
       "options": {
         "commands": [
           "cd apps/solhint && yarn"
         ],
         "parallel": false
+      }
+    },
+    "lint": {
+      "executor": "@nrwl/linter:eslint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["apps/solhint/**/*.ts"],
+        "eslintConfig": "apps/solhint/.eslintrc"
       }
     },
     "serve": {

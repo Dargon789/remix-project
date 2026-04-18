@@ -19,12 +19,24 @@ export function isCallInstruction (step) {
   return ['CALL', 'STATICCALL', 'CALLCODE', 'CREATE', 'DELEGATECALL', 'CREATE2'].includes(step.op)
 }
 
+export function isStaticCallInstruction (step) {
+  return ['STATICCALL'].includes(step.op)
+}
+
 export function isCreateInstruction (step) {
   return step.op === 'CREATE' || step.op === 'CREATE2'
 }
 
 export function isReturnInstruction (step) {
   return step.op === 'RETURN'
+}
+
+export function isReturnDataSizeInstruction (step) {
+  return step.op === 'RETURNDATASIZE'
+}
+
+export function isReturnDataCopyInstruction (step) {
+  return step.op === 'RETURNDATACOPY'
 }
 
 export function isJumpDestInstruction (step) {
@@ -44,7 +56,7 @@ export function isSSTOREInstruction (step) {
 }
 
 export function isSHA3Instruction (step) {
-  return step.op === 'SHA3'
+  return step.op === 'SHA3' || step.op === 'KECCAK256'
 }
 
 export function newContextStorage (step) {

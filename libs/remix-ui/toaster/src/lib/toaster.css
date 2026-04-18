@@ -1,43 +1,320 @@
-.remixui_tooltip {
-    z-index: 1001;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    position: fixed;
-    min-height: 50px;
-    padding: 16px 24px 12px;
-    border-radius: 3px;
-    left: 40%;
-    font-size: 14px;
-    text-align: center;
-    bottom: -0px;
-    flex-direction: row;
+/* Sonner toast styling */
+.remixui_sonner_toast {
+  border-radius: 8px;
+  padding: 5px 5px 5px 5px;
+  font-weight: 500 !important;
+  font-size: 19px !important;
+  min-width: 350px;
+  max-width: 600px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
 }
-@-webkit-keyframes remixui_animatebottom  {
-  0% {bottom: -300px}
-  100% {bottom: 0px}
+
+.remixui_custom_toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-@keyframes remixui_animatebottom  {
-  0% {bottom: -300px}
-  100% {bottom: 0px}
+
+/* Keyframe animations for toast entrance */
+@keyframes slideInRight {
+  0% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
-@-webkit-keyframes remixui_animatetop  {
-  0% {bottom: 0px}
-  100% {bottom: -300px}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
 }
-@keyframes remixui_animatetop  {
-  0% {bottom: 0px}
-  100% {bottom: -300px}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
 }
-.remixui_animateTop {
-  -webkit-animation-name: remixui_animatetop;
-  -webkit-animation-duration: 2s;
-  animation-name: remixui_animatetop;
-  animation-duration: 2s;
+
+@keyframes attentionShake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-3px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(3px);
+  }
 }
-.remixui_animateBottom {
-  -webkit-animation-name: remixui_animatebottom;
-  -webkit-animation-duration: 2s;
-  animation-name: remixui_animatebottom;
-  animation-duration: 2s;    
+
+/* Override Sonner default styles to match Remix theme */
+[data-sonner-toaster] {
+  z-index: 1001 !important;
+  display: flex;
+  flex-direction: column;
+  --normal-bg: transparent !important;
+  --normal-border: transparent !important;
+  /* Disable Sonner's default slide animation */
+  --y: 0px !important;
+  --offset: 0px !important;
+  /* Configure exit animation direction */
+  --swipe-direction: right !important;
+}
+
+[data-sonner-toaster]:hover [data-sonner-toast] {
+  transform: scale(1.02) !important;
+  transition: transform 0.2s ease !important;
+}
+
+[data-sonner-toaster][data-y-position="top"] {
+  top: 16px;
+}
+
+[data-sonner-toaster][data-x-position="right"] {
+  right: 16px;
+}
+
+[data-sonner-toast] {
+  color: var(--bs-dark, #212529) !important;
+  border: 0px solid var(--bs-dark, #6c757d) !important;
+  font-weight: 500 !important;
+  font-size: 19px !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  width: 100%;
+  /* Override Sonner's default animation with custom right slide */
+  animation: slideInRight 0.3s ease-out !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  /* Ensure no vertical offset from Sonner */
+  --y: 0px !important;
+}
+
+[data-sonner-toast]:hover {
+  transform: scale(1.03) translateY(-3px) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.2s ease !important;
+  animation: none !important;
+}
+
+[data-sonner-toast][data-expanded="true"] {
+  scale: 1 !important;
+}
+
+[data-sonner-toast][data-expanded="false"] {
+  scale: 1 !important;
+}
+
+[data-sonner-toast][data-front="true"] {
+  scale: 1 !important;
+  z-index: 10 !important;
+}
+
+[data-sonner-toast][data-front="false"] {
+  scale: 0.98 !important;
+  opacity: 0.95 !important;
+}
+
+[data-sonner-toast][data-index]:not([data-index="0"]) {
+  scale: 0.98 !important;
+  opacity: 0.95 !important;
+}
+
+/* Exit animation - slide out to right */
+[data-sonner-toast][data-removed="true"] {
+  animation: slideOutRight 0.3s ease-in forwards !important;
+}
+
+[data-sonner-toast][data-swiping="true"] {
+  transition: transform 0.2s ease-out !important;
+}
+
+[data-sonner-toast][data-styled="true"] {
+  padding: 20px 28px !important;
+  gap: 12px !important;
+  font-weight: 700 !important;
+}
+
+/* Dark theme support */
+[data-sonner-toast][data-theme="dark"],
+.dark [data-sonner-toast] {
+  background: var(--bs-dark, #212529) !important;
+  color: var(--bs-light, #f8f9fa) !important;
+  border: 0px solid var(--bs-secondary, #6c757d) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  animation: slideInRight 0.3s ease-out !important;
+  /* Ensure no vertical offset from Sonner */
+  --y: 0px !important;
+}
+
+[data-sonner-toast][data-theme="dark"]:hover,
+.dark [data-sonner-toast]:hover {
+  transform: scale(1.03) translateY(-3px) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+  animation: none !important;
+}
+
+/* Close button styling */
+[data-sonner-toast] [data-close-button] {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent !important;
+  border: none;
+  color: var(--bs-dark, #212529) !important;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  z-index: 1;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-sonner-toast] [data-close-button] svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Dark theme close button */
+[data-sonner-toast][data-theme="dark"] [data-close-button],
+.dark [data-sonner-toast] [data-close-button] {
+  color: var(--bs-light, #f8f9fa) !important;
+}
+
+[data-sonner-toast][data-theme="dark"] [data-close-button]:hover,
+.dark [data-sonner-toast] [data-close-button]:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Custom codicon close button styling */
+[data-sonner-toast] .codicon-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent !important;
+  border: none;
+  color: var(--bs-dark, #212529) !important;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  z-index: 1;
+}
+
+[data-sonner-toast] .codicon-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Dark theme codicon close button */
+[data-sonner-toast][data-theme="dark"] .codicon-close,
+.dark [data-sonner-toast] .codicon-close {
+  color: var(--bs-light, #f8f9fa) !important;
+}
+
+[data-sonner-toast][data-theme="dark"] .codicon-close:hover,
+.dark [data-sonner-toast] .codicon-close:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-sonner-toast][data-expanded=false][data-front=false] {
+  height: auto !important;
+}
+
+[data-sonner-toast][data-mounted=true][data-expanded=true] {
+  height: auto !important;
+}
+
+/* Bootstrap toast content animations */
+.toast {
+  transition: all 0.2s ease;
+}
+
+.toast-header {
+  animation: fadeInDown 0.4s ease-out;
+}
+
+.toast-body {
+  animation: fadeInUp 0.4s ease-out 0.1s both;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced spinner visibility */
+.toast-header .spinner-border {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Button hover effects */
+.toast .btn-close {
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.toast .btn-close:hover {
+  transform: scale(1.3);
+}
+
+.toast .btn-close:active {
+  transform: scale(0.9);
 }

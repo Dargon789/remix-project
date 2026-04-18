@@ -3,7 +3,7 @@ import { ViewPlugin } from '@remixproject/engine-web'
 import { EventEmitter } from 'events'
 import {RemixUiStaticAnalyser} from '@remix-ui/static-analyser' // eslint-disable-line
 import * as packageJson from '../../../../../package.json'
-import Registry from '../state/registry'
+import {Registry} from '@remix-project/remix-lib'
 import { PluginViewWrapper } from '@remix-ui/helper'
 
 var EventManager = require('../../lib/events')
@@ -11,7 +11,7 @@ var EventManager = require('../../lib/events')
 const profile = {
   name: 'solidityStaticAnalysis',
   displayName: 'Solidity Analyzers',
-  methods: [],
+  methods: ['analyze'],
   events: [],
   icon: 'assets/img/staticAnalysis.webp',
   description: 'Analyze your code using Remix, Solhint and Slither.',
@@ -22,7 +22,7 @@ const profile = {
   maintainedBy: 'Remix'
 }
 
-class AnalysisTab extends ViewPlugin {
+export default class AnalysisTab extends ViewPlugin {
   constructor () {
     super(profile)
     this.event = new EventManager()
@@ -68,6 +68,10 @@ class AnalysisTab extends ViewPlugin {
         this.emit('statusChanged', { key: 'none' })
       }
     })
+  }
+
+  analyze () {
+    this.emit('analyze')
   }
 
   setDispatch (dispatch) {

@@ -41,17 +41,35 @@ module.exports = {
           console.log('Test Signature address', address)
           const inputs = `"${hash.value}","${signature.value}"`
           console.log('Test Signature Input', inputs)
-          browser.clickFunction('ecrecovery - call', { types: 'bytes32 hash, bytes sig', values: inputs })
-            .pause(5000)
-            .verifyCallReturnValue(
-              address,
-              ['0:address: 0xCA35b7d915458EF540aDe6068dFe2F44E8fa733c'])
+          browser.testConstantFunction(0, 0, [hash.value, signature.value], '0:\naddress: 0xCA35b7d915458EF540aDe6068dFe2F44E8fa733c')
             .perform(() => {
               done()
             })
         })
       })
-      .end()
+  },
+
+  'Test EIP 712 Signature': function (browser: NightwatchBrowser) {
+    browser.waitForElementVisible('.selected-account-balance-container', 30000)
+      .moveToElement('.selected-account-balance-container', 10, 10)
+      .pause(500)
+      .waitForElementVisible('*[data-id="selected-account-kebab-menu"]')
+      .click('*[data-id="selected-account-kebab-menu"]')
+      .waitForElementVisible('*[data-id="signUsingAccount"]')
+      .click('*[data-id="signUsingAccount"]')
+      .waitForElementVisible('*[data-id="signMessageTextarea"]', 120000)
+      .click('*[data-id="sign-eip-712"]')
+      .waitForElementVisible('*[data-id="eip712MessageSigning-modal-footer-ok-react"]')
+      .modalFooterOKClick('eip712MessageSigning')
+      .pause(1000)
+      .getEditorValue((content) => {
+        browser.assert.ok(content.indexOf('"primaryType": "AuthRequest",') !== -1, 'EIP 712 data file must be opened')
+      })
+      .clickLaunchIcon('filePanel')
+      .rightClick('li[data-id="treeViewLitreeViewItemEIP-712-data.json"]')
+      .click('*[data-id="contextMenuItemsignTypedData"]')
+      .pause(1000)
+      .journalChildIncludes('0x8be3a81e17b7e4a40006864a4ff6bfa3fb1e18b292b6f47edec95cd8feaa53275b90f56ca02669d461a297e6bf94ab0ee4b7c89aede3228ed5aedb59c7e007501c')
   }
 }
 

@@ -1,7 +1,7 @@
 'use strict'
 import tape from 'tape'
 import { compile } from 'solc'
-import * as astHelper from '../../src/solidity-decoder/astHelper'
+import * as astHelper from '../../src/solidity-decoder/helpers/astHelper'
 import * as decodeInfo from '../../src/solidity-decoder/decodeInfo'
 import * as stateDecoder from '../../src/solidity-decoder/stateDecoder'
 const contracts = require('./contracts/miscContracts')
@@ -47,7 +47,7 @@ tape('solidity', function (t) {
     state = astHelper.extractStateDefinitions('test.sol:contractEnum', output.sources, null)
     stateDef = state.stateDefinitions
     parsedType = decodeInfo.parseType(stateDef[1].typeDescriptions.typeString, states, 'contractEnum', null)
-    checkDecodeInfo(st, parsedType, 1, 2, 'enum')
+    checkDecodeInfo(st, parsedType, 1, 1, 'enum')
 
     state = astHelper.extractStateDefinitions('test.sol:contractSmallVariable', output.sources, null)
     stateDef = state.stateDefinitions

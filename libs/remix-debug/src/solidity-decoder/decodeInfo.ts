@@ -229,7 +229,7 @@ function getEnum (type, stateDefinitions, contractName) {
 }
 
 /**
-  * retrieve memebers declared in the given @arg tye
+  * retrieve members declared in the given @arg type
   *
   * @param {String} typeName - name of the struct type (e.g struct <name>)
   * @param {Object} stateDefinitions  - all state definition given by the AST (including struct and enum type declaration) for all contracts
@@ -264,7 +264,7 @@ function getStructMembers (type, stateDefinitions, contractName, location) {
   * parse the full type
   *
   * @param {String} fullType - type given by the AST (ex: uint[2] storage ref[2])
-  * @return {String} returns the token type (used to instanciate the right decoder) (uint[2] storage ref[2] will return 'array', uint256 will return uintX)
+  * @return {String} returns the token type (used to instantiate the right decoder) (uint[2] storage ref[2] will return 'array', uint256 will return uintX)
   */
 function typeClass (fullType) {
   fullType = removeLocation(fullType)
@@ -304,7 +304,8 @@ function parseType (type, stateDefinitions, contractName, location) {
     int: int,
     uint: uint,
     mapping: mapping,
-    function: functionType
+    function: functionType,
+    ShortString: fixedByteArray
   }
   const currentType = typeClass(type)
   if (currentType === null) {
@@ -337,8 +338,10 @@ function computeOffsets (types, stateDefinitions, contractName, location) {
     const variable = types[i]
     const type = parseType(variable.typeDescriptions.typeString, stateDefinitions, contractName, location)
     if (!type) {
-      console.log('unable to retrieve decode info of ' + variable.typeDescriptions.typeString)
-      return null
+      console.warn('[computeOffsets] Unable to retrieve decode info for variable "' + variable.name + '" of type "' + variable.typeDescriptions.typeString + '", skipping this variable')
+      // Skip this variable instead of failing completely
+      // This allows other state variables to be decoded even if some types are unsupported
+      continue
     }
     const immutable = variable.mutability === 'immutable'
     const hasStorageSlots = !immutable && !variable.constant

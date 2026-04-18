@@ -1,30 +1,25 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, {useEffect, useState, useReducer, useRef, Fragment} from 'react' // eslint-disable-line
+import React, {useEffect, useState, useReducer, useRef, Fragment, useContext} from 'react' // eslint-disable-line
 import Button from './Button/StaticAnalyserButton' // eslint-disable-line
-import {util} from '@remix-project/remix-lib'
+import { util } from '@remix-project/remix-lib'
 import _ from 'lodash'
 import * as semver from 'semver'
 import {TreeView, TreeViewItem} from '@remix-ui/tree-view' // eslint-disable-line
 import {RemixUiCheckbox} from '@remix-ui/checkbox' // eslint-disable-line
 import ErrorRenderer from './ErrorRenderer' // eslint-disable-line
-import {compilation} from './actions/staticAnalysisActions'
-import {initialState, analysisReducer} from './reducers/staticAnalysisReducer'
-import {CodeAnalysis} from '@remix-project/remix-analyzer'
+import { compilation } from './actions/staticAnalysisActions'
+import { initialState, analysisReducer } from './reducers/staticAnalysisReducer'
+import { CodeAnalysis } from '@remix-project/remix-analyzer'
 import Tab from 'react-bootstrap/Tab'
 import Tabs from 'react-bootstrap/Tabs'
-import {AnalysisTab, SolHintReport} from '../staticanalyser'
-import {run} from './actions/staticAnalysisActions'
-import {BasicTitle, calculateWarningStateEntries} from './components/BasicTitle'
-import {Nav, TabContainer} from 'react-bootstrap'
-import {CustomTooltip} from '@remix-ui/helper'
-
-declare global {
-  interface Window {
-    _paq: any
-  }
-}
-const _paq = (window._paq = window._paq || []) //eslint-disable-line
+import { AnalysisTab, SolHintReport } from '../staticanalyser'
+import { run } from './actions/staticAnalysisActions'
+import { BasicTitle, calculateWarningStateEntries } from './components/BasicTitle'
+import { Nav, TabContainer } from 'react-bootstrap'
+import { CustomTooltip } from '@remix-ui/helper'
+import { appPlatformTypes, platformContext, AppContext } from '@remix-ui/app'
+import { TrackingContext } from '@remix-ide/tracking'
 
 /* eslint-disable-next-line */
 export interface RemixUiStaticAnalyserProps {
@@ -37,6 +32,9 @@ type tabSelectionType = 'remix' | 'solhint' | 'slither' | 'none'
 
 export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
   const [runner] = useState(new CodeAnalysis())
+  const platform = useContext(platformContext)
+  const appContext = useContext(AppContext)
+  const { trackMatomoEvent } = useContext(TrackingContext)
 
   const preProcessModules = (arr: any) => {
     return arr.map((Item, i) => {
@@ -130,7 +128,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
 
   useEffect(() => {
     const checkRemixdActive = async () => {
-      const remixdActive = await props.analysisModule.call('manager', 'isActive', 'remixd')
+      const remixdActive = await props.analysisModule.call('manager', 'isActive', 'remixd') || platform === appPlatformTypes.desktop
       if (remixdActive) {
         setSlitherEnabled(true)
         setShowSlither(true)
@@ -147,12 +145,12 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
       // Reset badge
 
       // Reset state
-      dispatch({type: '', payload: initialState})
+      dispatch({ type: '', payload: initialState })
       setHints([])
       setSlitherWarnings([])
       setSsaWarnings([])
       // Show 'Enable Slither Analysis' checkbox
-      if (currentWorkspace && currentWorkspace.isLocalhost === true) {
+      if ((currentWorkspace && currentWorkspace.isLocalhost === true) || platform === appPlatformTypes.desktop) {
         setShowSlither(true)
         setSlitherEnabled(true)
       } else {
@@ -175,7 +173,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
         // Reset badge
         props.event.trigger('staticAnalysisWarning', [-1])
         // Reset state
-        dispatch({type: '', payload: initialState})
+        dispatch({ type: '', payload: initialState })
         setShowSlither(false)
       }
     })
@@ -196,7 +194,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
   const message = (name: string, warning: any, more?: string, fileName?: string, locationString?: string): string => {
     return `
       <span className='d-flex flex-column'>
-      <span className='h6 font-weight-bold'>${name}</span>
+      <span className='h6 fw-bold'>${name}</span>
       ${warning}
       ${
   more ? (
@@ -209,7 +207,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
     <span> </span>
   )
 }
-      <span className="" title={Position in ${fileName}}>Pos: ${locationString}</span>
+      <span className="">Pos: ${locationString}</span>
       </span>`
   }
 
@@ -319,8 +317,8 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
               label={
                 <label
                   htmlFor={`heading${categoryId}`}
-                  style={{cursor: 'pointer'}}
-                  className="pl-3 card-header h6 d-flex justify-content-between font-weight-bold px-1 py-2 w-100"
+                  style={{ cursor: 'pointer' }}
+                  className="ps-3 card-header h6 d-flex justify-content-between fw-bold px-1 py-2 w-100"
                   data-bs-toggle="collapse"
                   data-bs-expanded="false"
                   data-bs-controls={`heading${categoryId}`}
@@ -523,7 +521,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
                             },
                             state.file,
                             '',
-                            {focus: true}
+                            { focus: true }
                           )
                         }}
                       >
@@ -563,7 +561,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
                               },
                               state.file,
                               '',
-                              {focus: true}
+                              { focus: true }
                             )
                           }}
                         >
@@ -602,7 +600,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
                               },
                               state.file,
                               '',
-                              {focus: true}
+                              { focus: true }
                             )
                           }}
                         >
@@ -627,7 +625,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
               </div>
             </div>
           ) : state.data && state.file.length > 0 && state.source && startAnalysis && hints.length > 0 ? (
-            <span className="ml-4 spinner-grow-sm d-flex justify-content-center">Loading...</span>
+            <span className="ms-4 spinner-grow-sm d-flex justify-content-center">Loading...</span>
           ) : (
             <span className="display-6 text-center"></span>
           )}
@@ -638,11 +636,11 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
           Solhint
           {hints.length > 0 ? (
             hideWarnings ? (
-              <i className={`badge ${hints.filter((x) => x.type === 'error').length > 0 ? `badge-danger` : 'badge-warning'} badge-pill mx-1 ml-1 text-center`}>
+              <i className={`badge ${hints.filter((x) => x.type === 'error').length > 0 ? `bg-danger` : 'bg-warning'} rounded-pill mx-1 ms-1 text-center`}>
                 {hintErrors.length}
               </i>
             ) : (
-              <span className={`badge ${hints.filter((x) => x.type === 'error').length > 0 ? `badge-danger` : 'badge-warning'} badge-pill ml-1 text-center`}>{hints.length}</span>
+              <span className={`badge ${hints.filter((x) => x.type === 'error').length > 0 ? `bg-danger` : 'bg-warning'} rounded-pill ms-1 text-center`}>{hints.length}</span>
             )
           ) : null}
         </span>
@@ -706,7 +704,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
               </div>
             </div>
           ) : state.data && state.file.length > 0 && state.source && startAnalysis && Object.entries(warningState).length > 0 ? (
-            <span className="ml-4 spinner-grow-sm d-flex justify-content-center">Loading...</span>
+            <span className="ms-4 spinner-grow-sm d-flex justify-content-center">Loading...</span>
           ) : (
             <span className="display-6 text-center"></span>
           )}
@@ -721,11 +719,11 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
           Slither
           {slitherWarnings.length > 0 ? (
             hideWarnings ? (
-              <span className="badge badge-warning badge-pill mx-1 ml-1">{slitherErrors.length}</span>
+              <span data-id='slitherErrors' className="badge text-bg-warning rounded-pill mx-1 ms-1">{slitherErrors.length}</span>
             ) : showLibsWarning && !hideWarnings ? (
-              <span className={`badge ${slitherErrors.length > 0 ? `badge-danger` : 'badge-warning'} badge-pill mx-1 ml-1 text-center`}>{slitherWarnings.length}</span>
+              <span data-id='slitherWarnings' className={`badge ${slitherErrors.length > 0 ? `bg-danger` : 'bg-warning'} rounded-pill mx-1 ms-1 text-center`}>{slitherWarnings.length}</span>
             ) : (
-              <span className={`badge ${slitherErrors.length > 0 ? `badge-danger` : 'badge-warning'} badge-pill mx-1 ml-1 text-center`}>{noLibSlitherWarnings.length}</span>
+              <span data-id='nolibslitherwarnings' className={`badge ${slitherErrors.length > 0 ? `bg-danger` : 'bg-warning'} rounded-pill mx-1 ms-1 text-center`}>{noLibSlitherWarnings.length}</span>
             )
           ) : null}
         </span>
@@ -780,7 +778,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
               </div>
             </div>
           ) : state.data && state.file.length > 0 && state.source && startAnalysis && slitherWarnings.length > 0 ? (
-            <span className="ml-4 spinner-grow-sm d-flex justify-content-center">Loading...</span>
+            <span className="ms-4 spinner-grow-sm d-flex justify-content-center">Loading...</span>
           ) : (
             <span className="display-6 text-center"></span>
           )}
@@ -799,6 +797,50 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
       .flat()
       .every((el) => categoryIndex.includes(el))
   }
+
+  useEffect(() => {
+    const analyzeHandler = () => {
+      run(
+        state.data,
+        state.source,
+        state.file,
+        state,
+        props,
+        isSupportedVersion,
+        showSlither,
+        categoryIndex,
+        groupedModules,
+        runner,
+        trackMatomoEvent,
+        message,
+        showWarnings,
+        allWarnings,
+        warningContainer,
+        calculateWarningStateEntries,
+        warningState,
+        setHints,
+        hints,
+        setSlitherWarnings,
+        setSsaWarnings,
+        slitherEnabled,
+        setStartAnalysis,
+        solhintEnabled,
+        basicEnabled
+      )
+    }
+
+    props.analysisModule.on('solidityStaticAnalysis', 'analyze', analyzeHandler)
+
+    return () => {
+      try {
+        props.analysisModule.off('solidityStaticAnalysis', 'analyze')
+      } catch (error) {
+        // Plugin may already be deactivated, ignore the error
+        console.debug('Could not remove event listener from solidityStaticAnalysis:', error.message)
+      }
+    }
+  }, [state.data, state.source, state.file, state, props])
+
   return (
     <div className="analysis_3ECCBV px-3 pb-1">
       <div className="my-2 d-flex flex-column align-items-left">
@@ -826,7 +868,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
               }}
               onChange={() => {}}
               tooltipPlacement={'bottom-start'}
-              optionalClassName="mr-3"
+              optionalClassName="me-3"
             />
 
             <RemixUiCheckbox
@@ -838,7 +880,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
               label="Solhint"
               onChange={() => {}}
               tooltipPlacement={'bottom-start'}
-              optionalClassName="mr-3"
+              optionalClassName="me-3"
             />
 
             <RemixUiCheckbox
@@ -850,7 +892,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
               tooltipPlacement="bottom-start"
               label="Slither"
               onChange={() => {}}
-              optionalClassName="mr-3"
+              optionalClassName="me-3"
               title={slitherEnabled ? 'Slither runs Slither static analysis' : 'To run Slither analysis, Remix IDE must be connected to your local filesystem with Remixd'}
             />
           </div>
@@ -870,7 +912,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
                   categoryIndex,
                   groupedModules,
                   runner,
-                  _paq,
+                  trackMatomoEvent,
                   message,
                   showWarnings,
                   allWarnings,
@@ -906,7 +948,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
                   categoryIndex,
                   groupedModules,
                   runner,
-                  _paq,
+                  trackMatomoEvent,
                   message,
                   showWarnings,
                   allWarnings,
@@ -931,7 +973,7 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
               {slitherWarnings.length > 0 || hints.length > 0 || ssaWarnings.length > 0 ? (
                 <div className={`mt-4 p-2 d-flex ${slitherWarnings.length > 0 || hints.length > 0 || ssaWarnings.length > 0 ? 'border-top' : ''} flex-column`}>
                   <span>Last results for:</span>
-                  <span className="text-break break-word word-break font-weight-bold" id="staticAnalysisCurrentFile">
+                  <span className="text-break break-word word-break fw-bold" id="staticAnalysisCurrentFile">
                     {state.file}
                   </span>
                 </div>
@@ -968,21 +1010,21 @@ export const RemixUiStaticAnalyser = (props: RemixUiStaticAnalyserProps) => {
                 <Nav variant="tabs">
                   {checkBasicStatus() ? (
                     <Nav.Item>
-                      <Nav.Link className="text-decoration-none font-weight-bold px-2" eventKey={tabKeys[1].tabKey}>
+                      <Nav.Link className="text-decoration-none fw-bold px-2" eventKey={tabKeys[1].tabKey}>
                         {tabKeys[1].title}
                       </Nav.Link>
                     </Nav.Item>
                   ) : null}
                   {solhintEnabled ? (
                     <Nav.Item>
-                      <Nav.Link className="text-decoration-none font-weight-bold px-2" eventKey={tabKeys[0].tabKey}>
+                      <Nav.Link className="text-decoration-none fw-bold px-2" eventKey={tabKeys[0].tabKey}>
                         {tabKeys[0].title}
                       </Nav.Link>
                     </Nav.Item>
                   ) : null}
                   {slitherEnabled && showSlither ? (
                     <Nav.Item>
-                      <Nav.Link className="text-decoration-none font-weight-bold px-2" eventKey={tabKeys[2].tabKey}>
+                      <Nav.Link className="text-decoration-none fw-bold px-2" eventKey={tabKeys[2].tabKey}>
                         {tabKeys[2].title}
                       </Nav.Link>
                     </Nav.Item>

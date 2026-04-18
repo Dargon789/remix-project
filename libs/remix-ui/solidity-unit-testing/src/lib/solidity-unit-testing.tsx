@@ -1,16 +1,16 @@
-import React, {useState, useRef, useEffect, ReactElement} from 'react' // eslint-disable-line
-import {FormattedMessage, useIntl} from 'react-intl'
+import React, { useState, useRef, useEffect, ReactElement, useContext } from 'react' // eslint-disable-line
+import { FormattedMessage, useIntl } from 'react-intl'
 import * as semver from 'semver'
-import {eachOfSeries} from 'async' // eslint-disable-line
-import type Web3 from 'web3'
-import {canUseWorker, urlFromVersion} from '@remix-project/remix-solidity'
-import {Renderer} from '@remix-ui/renderer' // eslint-disable-line
-import {Toaster} from '@remix-ui/toaster' // eslint-disable-line
-import {format} from 'util'
+import { eachOfSeries } from 'async' // eslint-disable-line
+import { canUseWorker, urlFromVersion } from '@remix-project/remix-solidity'
+import { Renderer } from '@remix-ui/renderer' // eslint-disable-line
+import { Toaster } from '@remix-ui/toaster' // eslint-disable-line
+import { format } from 'util'
 import './css/style.css'
-import {CustomTooltip} from '@remix-ui/helper'
-
-const _paq = ((window as any)._paq = (window as any)._paq || []) // eslint-disable-line @typescript-eslint/no-explicit-any
+import { CustomTooltip } from '@remix-ui/helper'
+import { appPlatformTypes, platformContext } from '@remix-ui/app'
+import { TrackingContext } from '@remix-ide/tracking'
+import { MatomoEvent, SolidityUnitTestingEvent } from '@remix-api'
 
 interface TestObject {
   fileName: string
@@ -29,7 +29,7 @@ interface TestResultInterface {
   expected?: string | number
   location?: string
   hhLogs?: []
-  web3?: Web3
+  provider?: any
   debugTxHash?: string
   rendered?: boolean
 }
@@ -43,20 +43,24 @@ interface FinalResult {
 
 export const SolidityUnitTesting = (props: Record<string, any>) => {
   // eslint-disable-line @typescript-eslint/no-explicit-any
-
-  const {helper, testTab, initialPath} = props
-  const {testTabLogic} = testTab
+  const platform = useContext(platformContext)
+  const { trackMatomoEvent: baseTrackEvent } = useContext(TrackingContext)
+  const trackMatomoEvent = <T extends MatomoEvent = SolidityUnitTestingEvent>(event: T) => {
+    baseTrackEvent?.<T>(event)
+  }
+  const { helper, testTab, initialPath } = props
+  const { testTabLogic } = testTab
 
   const intl = useIntl()
 
   const [toasterMsg, setToasterMsg] = useState<string>('')
 
-  const [disableCreateButton, setDisableCreateButton] = useState<boolean>(true)
+  const [disableCreateButton, setDisableCreateButton] = useState<boolean>(false)
   const [disableGenerateButton, setDisableGenerateButton] = useState<boolean>(false)
   const [disableStopButton, setDisableStopButton] = useState<boolean>(true)
   const [disableRunButton, setDisableRunButton] = useState<boolean>(false)
-  const [runButtonTitle, setRunButtonTitle] = useState<string>(intl.formatMessage({id: 'solidityUnitTesting.runButtonTitle1'}))
-  const [stopButtonLabel, setStopButtonLabel] = useState<string>(intl.formatMessage({id: 'solidityUnitTesting.stopButtonLabel1'}))
+  const [runButtonTitle, setRunButtonTitle] = useState<string>(intl.formatMessage({ id: 'solidityUnitTesting.runButtonTitle1' }))
+  const [stopButtonLabel, setStopButtonLabel] = useState<string>(intl.formatMessage({ id: 'solidityUnitTesting.stopButtonLabel1' }))
 
   const [checkSelectAll, setCheckSelectAll] = useState<boolean>(true)
   const [testsOutput, setTestsOutput] = useState<ReactElement[]>([])
@@ -172,26 +176,30 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
       return tmp ? tmp[1] : version
     }
 
-    testTab.fileManager.events.on('noFileSelected', async () => {
+    testTab.on('fileManager', 'noFileSelected', async () => {
       await updateForNewCurrent()
     })
-    testTab.fileManager.events.on('currentFileChanged', async (file: string) => {
+    testTab.on('fileManager', 'currentFileChanged', async (file: string) => {
       await updateForNewCurrent(file)
     })
     testTab.on('solidity', 'compilerLoaded', async (version: string, license: string) => {
-      const {currentVersion} = testTab.compileTab.getCurrentCompilerConfig()
+      const { currentVersion } = await testTab.compileTab.getCurrentCompilerConfig()
 
       if (!semver.gt(truncateVersion(currentVersion), '0.4.12')) {
         setDisableRunButton(true)
-        setRunButtonTitle(intl.formatMessage({id: 'solidityUnitTesting.runButtonTitle2'}))
+        setRunButtonTitle(intl.formatMessage({ id: 'solidityUnitTesting.runButtonTitle2' }))
       }
     })
   }, []) // eslint-disable-line
 
   const updateDirList = (path: string) => {
-    testTabLogic.dirList(path).then((options: string[]) => {
-      setPathOptions(options)
-    })
+    try {
+      testTabLogic.dirList(path).then((options: string[]) => {
+        setPathOptions(options)
+      })
+    } catch {
+      console.log("No test directory has been found in the workspace.")
+    }
   }
 
   const handleTestDirInput = async (e: any) => {
@@ -203,14 +211,14 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
       if (testDirInput.endsWith('/') && testDirInput !== '/') {
         testDirInput = helper.removeTrailingSlashes(testDirInput)
         if (testTabLogic.currentPath === testDirInput.substr(0, testDirInput.length - 1)) {
-          setDisableCreateButton(true)
+          setDisableCreateButton(false)
           setDisableGenerateButton(true)
         }
         updateDirList(testDirInput)
       } else {
         // If there is no matching folder in the workspace with entered text, enable Create button
         if (await testTabLogic.pathExists(testDirInput)) {
-          setDisableCreateButton(true)
+          setDisableCreateButton(false)
           setDisableGenerateButton(false)
         } else {
           // Enable Create button
@@ -234,7 +242,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
     if (inputPath === '') inputPath = defaultPath
     setInputPathValue(path)
     await testTabLogic.generateTestFolder(inputPath)
-    setToasterMsg('Folder created successfully')
+    setToasterMsg(intl.formatMessage({ id: 'solidityUnitTesting.toasterMsg' }))
     setDisableCreateButton(true)
     setDisableGenerateButton(false)
     testTabLogic.setCurrentPath(inputPath)
@@ -248,11 +256,11 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
     return fileName ? fileName.replace(/\//g, '_').replace(/\./g, '_') + testSuite : fileName
   }
 
-  const startDebug = async (txHash: string, web3: Web3) => {
+  const startDebug = async (txHash: string, provider: any) => {
     isDebugging.current = true
     if (!(await testTab.appManager.isActive('debugger'))) await testTab.appManager.activatePlugin('debugger')
     testTab.call('menuicons', 'select', 'debugger')
-    testTab.call('debugger', 'debug', txHash, web3)
+    testTab.call('debugger', 'debug', txHash, provider)
   }
 
   const printHHLogs = (logsArr: Record<string, any>[], testName: string) => {
@@ -271,8 +279,8 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
       }
       finalLogs = finalLogs + '&emsp;' + formattedLog + '\n'
     }
-    _paq.push(['trackEvent', 'solidityUnitTesting', 'hardhat', 'console.log'])
-    testTab.call('terminal', 'logHtml', {type: 'log', value: finalLogs})
+    trackMatomoEvent({ category: 'solidityUnitTesting', action: 'hardhat', name: 'console.log', isClick: true })
+    testTab.call('terminal', 'logHtml', { type: 'log', value: finalLogs })
   }
 
   const discardHighlight = async () => {
@@ -285,11 +293,11 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
       const file = split[2]
       const parsedLocation = {
         start: parseInt(split[0]),
-        length: parseInt(split[1])
+        length: parseInt(split[1]),
       }
       const locationToHighlight = testTab.offsetToLineColumnConverter.offsetToLineColumnWithContent(parsedLocation, parseInt(file), filesContent[fileName].content)
       await testTab.call('editor', 'discardHighlight')
-      await testTab.call('editor', 'highlight', locationToHighlight, fileName, '', {focus: true})
+      await testTab.call('editor', 'highlight', locationToHighlight, fileName, '', { focus: true })
     }
   }
 
@@ -297,7 +305,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
     if (withoutLabel) {
       const contractCard: ReactElement = (
         <div id={runningTestFileName} data-id="testTabSolidityUnitTestsOutputheader" className="pt-1">
-          <span className="font-weight-bold">
+          <span className="fw-bold">
             {contract ? contract : ''} ({filename})
           </span>
         </div>
@@ -307,17 +315,21 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
     }
     let label
     if (index > -1) {
-      const className = 'alert-danger d-inline-block mb-1 mr-1 p-1 failed_' + runningTestFileName
+      const className = 'alert-danger d-inline-block mb-1 me-1 p-1 failed_' + runningTestFileName
       label = (
-        <CustomTooltip placement={'right'} tooltipClasses="text-nowrap" tooltipId="info-recorder" tooltipText="At least one contract test failed">
-          <div className={className}>FAIL</div>
+        <CustomTooltip placement={'right'} tooltipClasses="text-nowrap" tooltipId="info-recorder" tooltipText={<FormattedMessage id="solidityUnitTesting.tooltipText1" />}>
+          <div className={className}>
+            <FormattedMessage id="solidityUnitTesting.fail" />
+          </div>
         </CustomTooltip>
       )
     } else {
-      const className = 'alert-success d-inline-block mb-1 mr-1 p-1 passed_' + runningTestFileName
+      const className = 'alert-success d-inline-block mb-1 me-1 p-1 passed_' + runningTestFileName
       label = (
-        <CustomTooltip placement={'top-end'} tooltipClasses="text-nowrap" tooltipId="info-recorder" tooltipText="All contract tests passed">
-          <div className={className}>PASS</div>
+        <CustomTooltip placement={'top-end'} tooltipClasses="text-nowrap" tooltipId="info-recorder" tooltipText={<FormattedMessage id="solidityUnitTesting.tooltipText2" />}>
+          <div className={className}>
+            <FormattedMessage id="solidityUnitTesting.pass" />
+          </div>
         </CustomTooltip>
       )
     }
@@ -325,7 +337,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
     const ContractCard: ReactElement = (
       <div id={runningTestFileName} data-id="testTabSolidityUnitTestsOutputheader" className="pt-1">
         {label}
-        <span className="font-weight-bold">
+        <span className="fw-bold">
           {contract} ({filename})
         </span>
       </div>
@@ -346,10 +358,15 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
       if (!test.rendered) {
         let debugBtn
         if (test.debugTxHash) {
-          const {web3, debugTxHash} = test
+          const { provider, debugTxHash } = test
           debugBtn = (
-            <div id={test.value.replaceAll(' ', '_')} className="btn border btn btn-sm ml-1" style={{cursor: 'pointer'}} onClick={() => startDebug(debugTxHash, web3)}>
-              <CustomTooltip placement={'top-start'} tooltipClasses="text-nowrap" tooltipId="info-recorder" tooltipText="Start debugging">
+            <div id={test.value.replaceAll(' ', '_')} className="btn border btn btn-sm ms-1" style={{ cursor: 'pointer' }} onClick={() => startDebug(debugTxHash, provider)}>
+              <CustomTooltip
+                placement={'top-start'}
+                tooltipClasses="text-nowrap"
+                tooltipId="info-recorder"
+                tooltipText={<FormattedMessage id="solidityUnitTesting.tooltipText3" />}
+              >
                 <i className="fas fa-bug"></i>
               </CustomTooltip>
             </div>
@@ -387,7 +404,9 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
                   <span> ✘ {test.value}</span>
                   {debugBtn}
                 </div>
-                <span className="text-dark">Error Message:</span>
+                <span className="text-dark">
+                  <FormattedMessage id="solidityUnitTesting.errorMessage" />:
+                </span>
                 <span className="pb-2 text-break">"{test.errMsg}"</span>
               </div>
             )
@@ -419,7 +438,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
                   <span>
                     <FormattedMessage id="solidityUnitTesting.expectedValueShouldBe" />
                   </span>
-                  <div className="mx-1 font-weight-bold">{method}</div>
+                  <div className="mx-1 fw-bold">{method}</div>
                   <div>
                     {preposition} {expected}
                   </div>
@@ -465,17 +484,17 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
           if (errors && errors.errors) {
             errors.errors.forEach((err: any) => {
               // eslint-disable-line @typescript-eslint/no-explicit-any
-              const errorCard: ReactElement = <Renderer message={err.formattedMessage || err.message} plugin={testTab} opt={{type: err.severity, errorType: err.type}} />
+              const errorCard: ReactElement = <Renderer message={err.formattedMessage || err.message} plugin={testTab} opt={{ type: err.severity, errorType: err.type }} />
               setTestsOutput((prevCards) => [...prevCards, errorCard])
             })
           } else if (errors && Array.isArray(errors) && (errors[0].message || errors[0].formattedMessage)) {
             errors.forEach((err) => {
-              const errorCard: ReactElement = <Renderer message={err.formattedMessage || err.message} plugin={testTab} opt={{type: err.severity, errorType: err.type}} />
+              const errorCard: ReactElement = <Renderer message={err.formattedMessage || err.message} plugin={testTab} opt={{ type: err.severity, errorType: err.type }} />
               setTestsOutput((prevCards) => [...prevCards, errorCard])
             })
           } else if (errors && !errors.errors && !Array.isArray(errors)) {
             // To track error like this: https://github.com/ethereum/remix/pull/1438
-            const errorCard: ReactElement = <Renderer message={errors.formattedMessage || errors.message} plugin={testTab} opt={{type: 'error'}} />
+            const errorCard: ReactElement = <Renderer message={errors.formattedMessage || errors.message} plugin={testTab} opt={{ type: 'error' }} />
             setTestsOutput((prevCards) => [...prevCards, errorCard])
           }
         }
@@ -485,7 +504,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
       if (testSummary && testSummary.filename && !testSummary.rendered) {
         const summaryCard: ReactElement = (
           <div className="d-flex alert-secondary mb-3 p-3 flex-column">
-            <span className="font-weight-bold">
+            <span className="fw-bold">
               <FormattedMessage id="solidityUnitTesting.resultFor" /> {testSummary.filename}
             </span>
             <span className="text-success">
@@ -549,7 +568,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
         passed: result.totalPassing,
         failed: result.totalFailing,
         timeTaken: totalTime,
-        rendered: false
+        rendered: false,
       }
       testsResultByFilename[filename]['summary'] = testsSummary
       showTestsResult()
@@ -569,7 +588,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
     if (_errors || hasBeenStopped.current || readyTestsNumber === runningTestsNumber) {
       // All tests are ready or the operation has been canceled or there was a compilation error in one of the test files.
       setDisableStopButton(true)
-      setStopButtonLabel(intl.formatMessage({id: 'solidityUnitTesting.stopButtonLabel1'}))
+      setStopButtonLabel(intl.formatMessage({ id: 'solidityUnitTesting.stopButtonLabel1' }))
       if (selectedTests.current?.length !== 0) {
         setDisableRunButton(false)
       }
@@ -588,16 +607,16 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
       .readFile(testFilePath)
       .then(async (content: string) => {
         const runningTests: Record<string, Record<string, string>> = {}
-        runningTests[testFilePath] = {content}
-        filesContent[testFilePath] = {content}
-        const {currentVersion, evmVersion, optimize, runs, isUrl} = testTab.compileTab.getCurrentCompilerConfig()
+        runningTests[testFilePath] = { content }
+        filesContent[testFilePath] = { content }
+        const { currentVersion, evmVersion, optimize, runs, isUrl } = await testTab.compileTab.getCurrentCompilerConfig()
         const currentCompilerUrl = isUrl ? currentVersion : urlFromVersion(currentVersion)
         const compilerConfig = {
           currentCompilerUrl,
           evmVersion,
           optimize,
-          usingWorker: canUseWorker(currentVersion),
-          runs
+          usingWorker: canUseWorker(currentVersion) || platform === appPlatformTypes.desktop,
+          runs,
         }
         const deployCb = async (file: string, contractAddress: string) => {
           const compilerData = await testTab.call('compilerArtefacts', 'getCompilerAbstract', file)
@@ -624,7 +643,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
               .then((result: any) => cb(null, result))
               .catch((error: Error) => cb(error.message)) // eslint-disable-line @typescript-eslint/no-explicit-any
           },
-          {testFilePath: testFilePath}
+          { testFilePath: testFilePath }
         )
       })
       .catch((error: Error) => {
@@ -646,7 +665,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
     const tests: string[] = selectedTests.current
     if (!tests || !tests.length) return
     else setProgressBarHidden(false)
-    _paq.push(['trackEvent', 'solidityUnitTesting', 'runTests', 'nbTestsRunning' + tests.length])
+    trackMatomoEvent({ category: 'solidityUnitTesting', action: 'runTests', name: 'nbTestsRunning' + tests.length, isClick: true })
     eachOfSeries(tests, (value: string, key: string, callback: any) => {
       // eslint-disable-line @typescript-eslint/no-explicit-any
       if (hasBeenStopped.current) return
@@ -660,16 +679,16 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
     if (!isSolidityActive || !selectedTests.current.length) {
       setDisableRunButton(true)
       if (!currentFile || (currentFile && currentFile.split('.').pop().toLowerCase() !== 'sol')) {
-        setRunButtonTitle(intl.formatMessage({id: 'solidityUnitTesting.runButtonTitle3'}))
+        setRunButtonTitle(intl.formatMessage({ id: 'solidityUnitTesting.runButtonTitle3' }))
       } else {
-        setRunButtonTitle(intl.formatMessage({id: 'solidityUnitTesting.runButtonTitle4'}))
+        setRunButtonTitle(intl.formatMessage({ id: 'solidityUnitTesting.runButtonTitle4' }))
       }
     } else setDisableRunButton(false)
   }
 
   const stopTests = () => {
     hasBeenStopped.current = true
-    setStopButtonLabel(intl.formatMessage({id: 'solidityUnitTesting.stopButtonLabel2'}))
+    setStopButtonLabel(intl.formatMessage({ id: 'solidityUnitTesting.stopButtonLabel2' }))
     setDisableStopButton(true)
     setDisableRunButton(true)
   }
@@ -687,12 +706,12 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
       setCheckSelectAll(true)
       setDisableRunButton(false)
       if ((readyTestsNumber === runningTestsNumber || hasBeenStopped.current) && stopButtonLabel.trim() === 'Stop') {
-        setRunButtonTitle(intl.formatMessage({id: 'solidityUnitTesting.runButtonTitle1'}))
+        setRunButtonTitle(intl.formatMessage({ id: 'solidityUnitTesting.runButtonTitle1' }))
       }
     } else if (!selectedTests.current.length) {
       setCheckSelectAll(false)
       setDisableRunButton(true)
-      setRunButtonTitle(intl.formatMessage({id: 'solidityUnitTesting.runButtonTitle5'}))
+      setRunButtonTitle(intl.formatMessage({ id: 'solidityUnitTesting.runButtonTitle5' }))
     } else setCheckSelectAll(false)
   }
 
@@ -713,7 +732,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
   const updateTestFileList = () => {
     if (allTests.current?.length) {
       testFiles = allTests.current.map((testFile: string) => {
-        return {fileName: testFile, checked: true}
+        return { fileName: testFile, checked: true }
       })
       setCheckSelectAll(true)
     } else testFiles = []
@@ -750,12 +769,12 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
             >
               <input
                 list="utPathList"
-                className="inputFolder custom-select"
+                className="inputFolder form-select"
                 id="utPath"
                 data-id="uiPathInput"
                 name="utPath"
                 value={inputPathValue}
-                style={{backgroundImage: 'var(--primary)'}}
+                style={{ backgroundImage: 'var(--bs-primary)' }}
                 onKeyDown={() => {
                   if (inputPathValue === '/') setInputPathValue('')
                 }}
@@ -771,7 +790,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
               tooltipId="uiPathInputButtontooltip"
               tooltipText={<FormattedMessage id="solidityUnitTesting.uiPathInputButtonTooltip" />}
             >
-              <button className="btn border ml-2" data-id="testTabGenerateTestFolder" disabled={disableCreateButton} onClick={handleCreateFolder}>
+              <button className="btn border ms-2" data-id="testTabGenerateTestFolder" disabled={disableCreateButton} onClick={handleCreateFolder}>
                 <FormattedMessage id="solidityUnitTesting.create" />
               </button>
             </CustomTooltip>
@@ -806,8 +825,8 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
             tooltipText={<FormattedMessage id="solidityUnitTesting.generateTestsLinkTooltip" />}
             placement={'top'}
           >
-            <a className="btn border text-decoration-none pr-0 d-flex w-50 ml-2" target="__blank" href="https://remix-ide.readthedocs.io/en/latest/unittesting.html#test-directory">
-              <label className="btn p-1 ml-2 m-0">
+            <a className="btn border text-decoration-none pe-0 d-flex w-50 ms-2" target="__blank" href="https://remix-ide.readthedocs.io/en/latest/unittesting.html#test-directory">
+              <label className="btn p-1 m-0">
                 <FormattedMessage id="solidityUnitTesting.howToUse" />
               </label>
             </a>
@@ -816,8 +835,8 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
         <div className="d-flex p-2">
           <CustomTooltip placement={'top'} tooltipClasses="text-nowrap" tooltipId="info-recorder" tooltipText={runButtonTitle}>
             <button id="runTestsTabRunAction" data-id="testTabRunTestsTabRunAction" className="w-50 btn btn-primary" disabled={disableRunButton} onClick={runTests}>
-              <span className="fas fa-play ml-2"></span>
-              <span className="labelOnBtn p-1 ml-2 m-0">
+              <span className="fas fa-play ms-2"></span>
+              <span className="labelOnBtn p-1 ms-2 m-0">
                 <FormattedMessage id="solidityUnitTesting.run" />
               </span>
             </button>
@@ -828,45 +847,55 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
             tooltipId="info-recorder"
             tooltipText={<FormattedMessage id="solidityUnitTesting.runTestsTabStopActionTooltip" />}
           >
-            <button id="runTestsTabStopAction" data-id="testTabRunTestsTabStopAction" className="w-50 pl-2 ml-2 btn btn-secondary" disabled={disableStopButton} onClick={stopTests}>
+            <button id="runTestsTabStopAction" data-id="testTabRunTestsTabStopAction" className="w-50 ps-2 ms-2 btn btn-secondary" disabled={disableStopButton} onClick={stopTests}>
               <span>
-                <span className="fas fa-stop ml-2"></span>
-                <span className="labelOnBtn p-1 ml-2 m-0" id="runTestsTabStopActionLabel">
+                <span className="fas fa-stop ms-2"></span>
+                <span className="labelOnBtn p-1 ms-2 m-0" id="runTestsTabStopActionLabel">
                   {stopButtonLabel}
                 </span>
               </span>
             </button>
           </CustomTooltip>
         </div>
-        <div className="d-flex align-items-center mx-3 pb-2 mt-2 border-bottom">
+        <div className="d-flex align-items-center ms-2 me-3 pb-2 mt-2 border-bottom form-check">
           <input
             id="checkAllTests"
+            className="form-check-input"
             type="checkbox"
-            data-id="testTabCheckAllTests"
             onClick={checkAll}
             checked={checkSelectAll}
             onChange={() => {}} // eslint-disable-line
           />
-          <label className="text-nowrap pl-2 mb-0" htmlFor="checkAllTests">
+          <label
+            data-id="testTabCheckAllTests"
+            htmlFor="checkAllTests"
+            className="form-check-label mb-0 ms-1 text-nowrap"
+            style={{ paddingTop: '0.125rem' }}
+          >
             {' '}
             <FormattedMessage id="solidityUnitTesting.selectAll" />{' '}
           </label>
         </div>
-        <div className="testList py-2 mt-0 border-bottom">
+        <div className="testList ms-2 pe-2 mt-0 border-bottom py-2">
           {testFiles.length
             ? testFiles.map((testFileObj: TestObject, index) => {
               const elemId = `singleTest${testFileObj.fileName}`
               return (
-                <div className="d-flex align-items-center py-1" key={index}>
+                <div className="d-flex align-items-center form-check" key={index}>
                   <input
-                    data-id="singleTest"
-                    className="singleTest"
+                    className="singleTest form-check-input"
                     id={elemId}
                     onChange={(e) => toggleCheckbox(e.target.checked, index)}
                     type="checkbox"
                     checked={testFileObj.checked}
                   />
-                  <label className="singleTestLabel text-nowrap pl-2 mb-0" htmlFor={elemId}>
+                  <label
+                    data-id="singleTest"
+                    id={"id" + elemId}
+                    className="singleTestLabel text-nowrap mb-0 form-check-label ms-1 text-nowrap"
+                    htmlFor={elemId}
+                    style={{ paddingTop: '0.125rem' }}
+                  >
                     {testFileObj.fileName}
                   </label>
                 </div>
@@ -876,7 +905,7 @@ export const SolidityUnitTesting = (props: Record<string, any>) => {
         </div>
         <div className="align-items-start flex-column mt-2 mx-3 mb-0">
           <span className="text-info h6" hidden={progressBarHidden}>
-            <FormattedMessage id="solidityUnitTesting.progress" values={{readyTestsNumber, runningTestsNumber}} />
+            <FormattedMessage id="solidityUnitTesting.progress" values={{ readyTestsNumber, runningTestsNumber }} />
           </span>
           <label className="text-warning h6" data-id="testTabTestsExecutionStopped" hidden={testsExecutionStoppedHidden}>
             <FormattedMessage id="solidityUnitTesting.testTabTestsExecutionStopped" />

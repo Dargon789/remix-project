@@ -34,10 +34,12 @@ module.exports = {
   'run analysis and filter results': function (browser: NightwatchBrowser) {
     browser
       .clickLaunchIcon('filePanel')
-      .click('*[data-id="treeViewLitreeViewItemcontracts"]')
+      .waitForElementVisible('*[data-id="treeViewLitreeViewItemcontracts"]')
+      .openFile('contracts')
       .click('*[data-id="treeViewLitreeViewItemcontracts/2_Owner.sol"]')
       .clickLaunchIcon('solidity')
       .click('*[id="compileBtn"]')
+      .saveScreenshot('./reports/screenshots/compile2_Owner.png')
       .pause(10000)
       .clickLaunchIcon('solidityStaticAnalysis')
       .useXpath()
@@ -46,18 +48,24 @@ module.exports = {
       .waitForElementPresent('//*[@id="staticanalysisresult"]', 5000)
       .useCss()
       // Check warning count
-      .click('*[data-rb-event-key="remix"]')
-      .assert.containsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount"]', '1')
+
+      .waitForElementVisible('span#ssaRemixtab')
+      .click('span#ssaRemixtab')
+      .assert.containsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount"]', '3')
       .verify.elementPresent('input[name="showLibWarnings"]')
       .verify.not.elementPresent('input[name="showLibWarnings"]:checked')
       .verify.elementPresent('label[id="headingshowLibWarnings"]')
       .click('label[id="headingshowLibWarnings"]')
       .pause(1000)
-      .click('*[data-rb-event-key="remix"]')
-      .assert.containsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount', '386')
+      .waitForElementVisible('span#ssaRemixtab')
+    
+      .click('span#ssaRemixtab')
+      .waitForElementContainsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount', '388')
+
       .click('label[id="headingshowLibWarnings"]')
-      .pause(1000)
-      .assert.containsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount', '1')
+
+      .waitForElementContainsText('span#ssaRemixtab > *[data-id="RemixStaticAnalysisErrorCount', '3')
+
       .end()
   }
 }
@@ -75,8 +83,8 @@ function runTests (browser: NightwatchBrowser) {
         'Fallback function of contract TooMuchGas requires too much gas',
         'TooMuchGas.() : Variables have very similar names "test" and "test1".',
         'TooMuchGas.() : Variables have very similar names "test" and "test1".'],
-        '#staticanalysisresult .warning',
-        browser
+      '#staticanalysisresult .warning',
+      browser
       )
     })
 }

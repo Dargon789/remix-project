@@ -1,9 +1,9 @@
 // eslint-disable-next-line no-use-before-define
 import React from 'react'
-import {AbstractPanel} from './panel'
+import { AbstractPanel } from './panel'
 import * as packageJson from '../../../../../package.json'
-import {RemixPluginPanel} from '@remix-ui/panel'
-import {PluginViewWrapper} from '@remix-ui/helper'
+import { RemixPluginPanel } from '@remix-ui/panel'
+import { PluginViewWrapper } from '@remix-ui/helper'
 
 const profile = {
   name: 'hiddenPanel',
@@ -24,7 +24,13 @@ export class HiddenPanel extends AbstractPanel {
 
   addView(profile: any, view: any): void {
     super.removeView(profile)
+    this.renderComponent()
     super.addView(profile, view)
+    this.renderComponent()
+  }
+
+  removeView(profile: any): void {
+    super.removeView(profile)
     this.renderComponent()
   }
 

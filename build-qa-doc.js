@@ -2,12 +2,12 @@ const fs = require('fs')
 
 let value = fs.readFileSync('./done.json')
 value = JSON.parse(value)
-const inDone = value.data.search.edges[0].node.project.columns.edges[0].node.cards.edges
+const inDone = value.data.repository.projectV2.items.edges
 let data = ''
-console.log(inDone.length, 'issues/Prs\n')
-data = inDone.length + ' issues/Prs\n'
+console.log(inDone.length, 'PRs\n')
+data = inDone.length + ' PRs\n'
 for (let card of inDone) {
-  if (card.node.content.url && card.node.content.merged !== false) {
+  if (card.node.content.url && card.node.content.merged && card.node.content.merged !== false) {
     data += `${card.node.content.title} - ${card.node.content.url}\n`
   }
 }
@@ -16,7 +16,7 @@ fs.writeFileSync('./done.txt', data)
 console.log('done.txt updated')
 
 /*
- - go to https://docs.github.com/en/graphql/overview/explorer
+ - Login to Github CLI: gh auth login
  - set the correct project id
  - run the query (be careful, this only returns the first 100 elements)
  - save the JSON content as done.json
@@ -24,55 +24,28 @@ console.log('done.txt updated')
  - get the result in the file done.txt
 /*
 
-{
-  search(type: REPOSITORY, query: "remix-project", first: 1) {
-    edges {
-      node {
-        __typename
-        ... on Repository {
-          owner {
-            id
-          }
-          name
-          project(number: 31) {
-            number
-            name
-            columns(last: 1) {
-              edges {
-                node {
-                  name
-                  cards(first: 100) {
-                    edges {
-                      cursor
-                      node {
-                        id
-                        note
-                        state
-                        content {
-                          ... on Issue {
-                            url
-                            id
-                            number
-                            title
-                          }
-                          ... on PullRequest {
+ gh api graphql -f query='{
+  repository(owner: "ethereum", name: "remix-project") {
+    name
+    projectV2(number: 11) {
+      url
+      items(first: 100) {
+        totalCount
+        edges {
+          node {
+            content {
+              ... on PullRequest {
                             url
                             id
                             number
                             title
                             merged
                           }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
             }
           }
         }
       }
     }
   }
-}
+}'
 */

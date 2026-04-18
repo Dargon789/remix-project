@@ -10,7 +10,7 @@ const profile = {
   methods: [],
   events: [],
   description: 'Remix Home',
-  icon: 'assets/img/home.webp',
+  icon: 'assets/img/remix-logo-blue.png',
   location: 'mainPanel',
   version: packageJson.version
 }
@@ -30,7 +30,7 @@ export class LandingPage extends ViewPlugin {
   }
 
   render () {
-    return <div id='landingPageHomeContainer' className='remixui_homeContainer justify-content-between bg-light d-flex' data-id='landingPageHomeContainer'>
+    return <div id='landingPageHomeContainer' className='remixui_homeContainer justify-content-between bg-light d-flex overflow-y-hidden' data-id='landingPageHomeContainer'>
       <RemixUiHomeTab plugin={this} />
     </div>
   }

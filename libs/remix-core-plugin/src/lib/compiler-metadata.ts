@@ -16,17 +16,17 @@ export class CompilerMetadata extends Plugin {
   buildInfoNames: Record<string, string>
   constructor () {
     super(profile)
-    this.networks = ['VM:-', 'main:1', 'ropsten:3', 'rinkeby:4', 'kovan:42', 'goerli:5', 'Custom']
+    this.networks = ['VM:-', 'main:1', 'sepolia:11155111', 'Custom']
     this.innerPath = 'artifacts'
     this.buildInfoNames = {}
   }
 
   _JSONFileName (path, contractName) {
-    return this.joinPath(path, this.innerPath, contractName + '.json')
+    return this.joinPath(this.innerPath, contractName + '.json')
   }
 
   _MetadataFileName (path, contractName) {
-    return this.joinPath(path, this.innerPath, contractName + '_metadata.json')
+    return this.joinPath(this.innerPath, contractName + '_metadata.json')
   }
 
   onActivation () {
@@ -53,11 +53,12 @@ export class CompilerMetadata extends Plugin {
   // Access each file in build-info, check the input sources
   // If they are all same as in current compiled file and sources includes the path of compiled file, remove old build file
   async removeStoredBuildInfo (currentInput, path, filePath) {
-    const buildDir = this.joinPath(path, this.innerPath, 'build-info/')
+    const buildDir = this.joinPath(this.innerPath, 'build-info/')
     if (await this.call('fileManager', 'exists', buildDir)) {
       const allBuildFiles = await this.call('fileManager', 'fileList', buildDir)
       const currentInputFileNames = Object.keys(currentInput.sources)
       for (const fileName of allBuildFiles) {
+        if (!await this.call('fileManager', 'exists', fileName)) continue
         let fileContent = await this.call('fileManager', 'readFile', fileName)
         fileContent = JSON.parse(fileContent)
         const inputFiles = Object.keys(fileContent.input.sources)
@@ -78,19 +79,20 @@ export class CompilerMetadata extends Plugin {
       solcLongVersion,
       input
     })
-    const id =  createHash('md5').update(Buffer.from(json)).digest().toString('hex')
-    const buildFilename = this.joinPath(path, this.innerPath, 'build-info/' +  id + '.json')
+    const id = createHash('md5').update(Buffer.from(json)).digest().toString('hex')
+    const buildFilename = this.joinPath(this.innerPath, 'build-info/' + id + '.json')
     // If there are no file in buildInfoNames,it means compilation is running first time after loading Remix
     if (!this.buildInfoNames[filePath]) {
       // Check the existing build-info and delete all the previous build files for compiled file
       await this.removeStoredBuildInfo(input, path, filePath)
       this.buildInfoNames[filePath] = buildFilename
-      const buildData = {id, _format: format, solcVersion, solcLongVersion, input, output}
+      const buildData = { id, _format: format, solcVersion, solcLongVersion, input, output }
       await this.call('fileManager', 'writeFile', buildFilename, JSON.stringify(buildData, null, '\t'))
     } else if (this.buildInfoNames[filePath] && this.buildInfoNames[filePath] !== buildFilename) {
-      await this.call('fileManager', 'remove', this.buildInfoNames[filePath])
+      if (await this.call('fileManager', 'exists', this.buildInfoNames[filePath]))
+        await this.call('fileManager', 'remove', this.buildInfoNames[filePath])
       this.buildInfoNames[filePath] = buildFilename
-      const buildData = {id, _format: format, solcVersion, solcLongVersion, input, output}
+      const buildData = { id, _format: format, solcVersion, solcLongVersion, input, output }
       await this.call('fileManager', 'writeFile', buildFilename, JSON.stringify(buildData, null, '\t'))
     }
   }
@@ -120,7 +122,8 @@ export class CompilerMetadata extends Plugin {
 
     let parsedMetadata
     try {
-      parsedMetadata = contract.object && contract.object.metadata ? JSON.parse(contract.object.metadata) : null
+      parsedMetadata = contract.object && contract.object.metadata && typeof(contract.object.metadata) === 'string' ? JSON.parse(contract.object.metadata) : null
+      if (!parsedMetadata) parsedMetadata = contract.object.metadata
     } catch (e) {
       console.log(e)
     }
@@ -136,7 +139,7 @@ export class CompilerMetadata extends Plugin {
       },
       abi: contract.object.abi
     }
-    await this.call('fileManager', 'writeFile', fileName, JSON.stringify(data, null, '\t'))    
+    await this.call('fileManager', 'writeFile', fileName, JSON.stringify(data, null, '\t'))
     this.emit('artefactsUpdated', fileName, contract)
   }
 

@@ -1,19 +1,24 @@
 'use strict'
 
 const EventManager = require('events')
-const FileProvider = require('./fileProvider')
+import FileProvider from "./fileProvider"
 
-class WorkspaceFileProvider extends FileProvider {
+export default class WorkspaceFileProvider extends FileProvider {
   constructor () {
     super('')
     this.workspacesPath = '.workspaces'
     this.workspace = null
     this.event = new EventManager()
+
+    // Cleanup is now handled by the workspace initialization logic in remix-ui/workspace
+    // No need to run it here in the constructor to avoid slowing down startup
   }
 
   setWorkspace (workspace) {
-    if (!workspace) return
-    workspace = workspace.replace(/^\/|\/$/g, '') // remove first and last slash
+    const workspaceName = (workspace || {}).name ? workspace.name : workspace
+  
+    if (!workspaceName) return
+    workspace = workspaceName.replace(/^\/|\/$/g, '') // remove first and last slash
     this.workspace = workspace
   }
 

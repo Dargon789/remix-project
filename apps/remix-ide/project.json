@@ -3,11 +3,28 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "apps/remix-ide/src",
   "projectType": "application",
-  "implicitDependencies": ["doc-gen", "doc-viewer", "etherscan", "vyper", "solhint", "walletconnect", "circuit-compiler"],
+  "implicitDependencies": [
+    "doc-gen", 
+    "doc-viewer", 
+    "contract-verification", 
+    "vyper", 
+    "solhint", 
+    "circuit-compiler", 
+    "learneth", 
+    "quick-dapp", 
+    "remix-dapp", 
+    "noir-compiler"
+  ],
   "targets": {
     "build": {
       "executor": "@nrwl/webpack:webpack",
+      "dependsOn": ["^build"],
       "outputs": ["{options.outputPath}"],
+      "inputs": [
+        "default",
+        "^default",
+        "!{projectRoot}/src/assets/version.json"
+      ],
       "defaultConfiguration": "development",
       "options": {
         "compiler": "babel",
@@ -21,7 +38,9 @@
           "apps/remix-ide/src/assets",
           "apps/remix-ide/src/index.html",
           "apps/remix-ide/src/404.html",
-          "apps/remix-ide/src/favicon.ico"
+          "apps/remix-ide/src/favicon.ico",
+          "apps/remix-ide/src/robots.txt",
+          "apps/remix-ide/src/sitemap.xml"
         ],
         "styles": [],
         "scripts": [],
@@ -38,7 +57,16 @@
           "optimization": true,
           "generateIndexHtml": true,
           "extractCss": false,
-          "vendorChunk": false
+          "sourceMap": false,
+          "vendorChunk": false,
+          "verbose": true
+        },
+        "desktop": {
+          "optimization": false,
+          "generateIndexHtml": true,
+          "extractCss": false,
+          "vendorChunk": false,
+          "baseHref": "./"
         }
       }
     },
@@ -53,12 +81,15 @@
         "development": {
           "buildTarget": "remix-ide:build:development",
           "host": "0.0.0.0",
-          "port": 8080
+          "port": 8080,
+          "hmr": false,
+          "buildLibsFromSource": true
         },
         "hot":{
           "buildTarget": "remix-ide:build:development",
           "port": 8080,
-          "hmr": true
+          "hmr": true,
+          "buildLibsFromSource": true
         },
         "production": {
           "buildTarget": "remix-ide:build:production",

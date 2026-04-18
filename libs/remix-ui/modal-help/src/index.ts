@@ -1,0 +1,5 @@
+export { default as BetaWelcomeModal } from './lib/beta-welcome-modal'
+export type { BetaWelcomeModalProps } from './lib/beta-welcome-modal'
+export { default as BetaFeatureReel } from './lib/beta-feature-reel'
+export { HelpPlugin } from './lib/help-plugin'
+export type { HelpTopic } from './lib/help-plugin'

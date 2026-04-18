@@ -11,13 +11,14 @@ export interface ICompilerApi {
     compileTabLogic: any
     configurationSettings: ConfigurationSettings
 
-    getCompilerParameters: () => ConfigurationSettings
-    setCompilerParameters: (ConfigurationSettings?) => void
+    getCompilerQueryParameters: () => ConfigurationSettings
+    setCompilerQueryParameters: (ConfigurationSettings?) => void
 
     getAppParameter: (value: string) => Promise<any>
     setAppParameter: (name: string, value: string | boolean) => void
 
     getFileManagerMode: () => string
+    isDesktop: () => boolean
     setCompilerConfig: (settings: any) => void
 
     getCompilationResult: () => any
@@ -42,10 +43,32 @@ export interface ICompilerApi {
 
     logToTerminal: (log: terminalLog) => void
 
-    compileWithHardhat: (configPath: string) => Promise<string>
-    compileWithTruffle: (configPath: string) => Promise<string>
+    compileWithFoundry: () => Promise<string>
+    compileWithHardhat: () => Promise<string>
+    compileWithTruffle: () => Promise<string>
     statusChanged: (data: { key: string, title?: string, type?: string }) => void,
     emit?: (key: string, ...payload: any) => void
+
+    setSolJsonBinData: (binData: iSolJsonBinData) => void
+    solJsonBinData: iSolJsonBinData
+}
+
+export interface iSolJsonBinDataBuild {
+    path: string,
+    version: string,
+    build: string,
+    prerelease: string,
+    longVersion: string,
+    binURL: string,
+    wasmURL: string,
+    isDownloaded: boolean
+}
+export interface iSolJsonBinData {
+    baseURLWasm: string,
+    baseURLBin: string,
+    wasmList: iSolJsonBinDataBuild[],
+    binList: iSolJsonBinDataBuild[],
+    selectorList: iSolJsonBinDataBuild[]
 }
 
 export type terminalLog = {

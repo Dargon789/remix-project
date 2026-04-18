@@ -1,0 +1,82 @@
+.recentfolder {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.recentfolder_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.recentfolder_content {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.recentfolder_name {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.recentfolder_path {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.recentfolder_actions {
+  display: flex;
+}
+
+.recentfolder_action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Main action buttons styling */
+[data-id="openFolderButton"],
+[data-id="createWorkspaceButton"],
+[data-id="cloneFromGitButton"] {
+  width: 100%;
+}
+
+/* Recent folders label styling */
+.recent-folders-label {
+  display: flex;
+  align-items: center;
+}
+
+/* Recent folders section */
+.recent-folders-section {
+  min-height: 0;
+}
+
+/* Recent folders list styling */
+.recent-folders-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Empty state */
+.recent-folders-empty {
+  text-align: center;
+}
+
+/* Loading state */
+.recent-folders-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

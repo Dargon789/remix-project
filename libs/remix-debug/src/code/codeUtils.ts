@@ -1,10 +1,11 @@
 'use strict'
-import { Common } from '@ethereumjs/common'
-import { getOpcodesForHF, OpcodeList } from '@ethereumjs/evm/dist/opcodes/codes'
+import { util } from '@remix-project/remix-lib'
+import { Common, Mainnet } from '@ethereumjs/common'
+import { getOpcodesForHF, paramsEVM } from '@ethereumjs/evm'
 import getOpcodes from './opcodes'
 
 export function nameOpCodes (raw, hardfork) {
-  const common = new Common({ chain: 'mainnet', hardfork })
+  const common = new Common({ chain: Mainnet, hardfork, params: paramsEVM })
   const opcodes = getOpcodesForHF(common).opcodes
 
   let pushData = ''
@@ -26,8 +27,9 @@ export function nameOpCodes (raw, hardfork) {
       pushData = raw.slice(pc + 1, pc + jumpNum + 1)
       i += jumpNum
     }
-
-    const data = (pushData as any).toString('hex') !== '' ? ' ' + (pushData as any).toString('hex') : ''
+    const hexCode = pushData ? util.bytesToHex((pushData as any)) : ''
+    // @ts-ignore
+    const data = hexCode !== '' ? ' ' + hexCode : ''
 
     code.push(pad(pc, roundLog(raw.length, 10)) + ' ' + curOpCode + data)
     pushData = ''
@@ -46,7 +48,7 @@ type Opcode = {
  * information about the opcode.
  */
 export function parseCode (raw) {
-  const common = new Common({ chain: 'mainnet', hardfork: 'merge' })
+  const common = new Common({ chain: Mainnet, hardfork: 'osaka', params: paramsEVM })
   const opcodes = getOpcodesForHF(common).opcodes
 
   const code = []

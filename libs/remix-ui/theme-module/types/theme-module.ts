@@ -10,7 +10,7 @@ export interface ThemeModule extends Plugin<any, any> {
         config: any;
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    _paq: any
+
     element: HTMLDivElement;
     // eslint-disable-next-line @typescript-eslint/ban-types
     themes: {[key: string]: Theme};
@@ -36,7 +36,7 @@ export interface ThemeModule extends Plugin<any, any> {
      */
     switchTheme(themeName?: string): void;
     /**
-     * fixes the invertion for images since this should be adjusted when we switch between dark/light qualified themes
+     * fixes the inversion for images since this should be adjusted when we switch between dark/light qualified themes
      * @param {element} [image] - the dom element which invert should be fixed to increase visibility
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,16 +1,171 @@
+'use strict'
 import { NightwatchBrowser } from 'nightwatch'
 import EventEmitter from 'events'
 
 class switchEnvironment extends EventEmitter {
-  command (this: NightwatchBrowser, provider: string): NightwatchBrowser {
-    this.api.useCss().waitForElementVisible('[data-id="settingsSelectEnvOptions"]')
-    .click('[data-id="settingsSelectEnvOptions"] button')
-    .waitForElementVisible(`[data-id="dropdown-item-${provider}"]`)
-    .click(`[data-id="dropdown-item-${provider}"]`)
-    .perform((done) => {
-      done()
-      this.emit('complete')
-    })
+  command (this: NightwatchBrowser, provider: string, category?: string, returnWhenInitialized?: boolean): NightwatchBrowser {
+    const submenuLabels = ['Remix VM', 'Browser extension', 'Dev']
+
+    const clickAndMaybeWait = (
+      browser: NightwatchBrowser,
+      cssSelector: string,
+      providerName: string,
+      shouldWait?: boolean
+    ) => {
+      browser
+        .waitForElementVisible(cssSelector, 10000)
+        .click(cssSelector)
+        .perform((done) => {
+          if (shouldWait) {
+            browser
+              .waitForElementVisible(`[data-id="dropdown-item-${providerName}"]`, 15000)
+              .pause(1000)
+              .perform(() => done())
+          } else {
+            done()
+          }
+        })
+    }
+
+    const waitForSelectedOrModal = (
+      browser: NightwatchBrowser,
+      providerName: string,
+      timeoutMs = 10000,
+      cb?: (ok: boolean) => void
+    ) => {
+      const start = Date.now()
+      const poll = () => {
+        browser.isPresent({ selector: `[data-id="selected-provider-${providerName}"]`, suppressNotFoundErrors: true, timeout: 0 }, (selRes) => {
+          if (selRes.value) return cb && cb(true)
+          browser.isPresent({ selector: `*[data-id="${providerName}ModalDialogModalBody-react"]`, suppressNotFoundErrors: true, timeout: 0 }, (modalBody) => {
+            if (modalBody.value) return cb && cb(true)
+            browser.isPresent({ selector: `*[data-id="${providerName}ModalDialogContainer-react"]`, suppressNotFoundErrors: true, timeout: 0 }, (modalContainer) => {
+              if (modalContainer.value) return cb && cb(true)
+              if (Date.now() - start > timeoutMs) return cb && cb(false)
+              browser.pause(200).perform(poll)
+            })
+          })
+        })
+      }
+      poll()
+    }
+
+    const tryOpenSubmenusAndClick = (
+      browser: NightwatchBrowser,
+      labels: string[],
+      providerName: string,
+      shouldWait: boolean,
+      onDone: VoidFunction
+    ) => {
+      const tryOne = (i: number) => {
+        if (i >= labels.length) return onDone()
+        const submenuXPath = `//span[contains(@class,'dropdown-item') and normalize-space()='${labels[i]}']`
+
+        browser
+          .useXpath()
+          .isPresent({
+            selector: submenuXPath,
+            suppressNotFoundErrors: true,
+            timeout: 0
+          }, (present) => {
+            if (!present.value) {
+              browser.useCss()
+              return tryOne(i + 1)
+            }
+            browser
+              .execute(function(xpath) {
+                const element = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue
+                if (element) {
+                  const event = new MouseEvent('mouseover', { 'view': window, 'bubbles': true, 'cancelable': true })
+                  element.dispatchEvent(event)
+                }
+              },
+              [submenuXPath])
+              .useCss()
+              .isPresent({
+                selector: `body .dropdown-menu.show [data-id="dropdown-item-${providerName}"]`,
+                suppressNotFoundErrors: true,
+                timeout: 2000
+              }, (inPortal) => {
+                if (inPortal.value) {
+                  clickAndMaybeWait(browser, `body .dropdown-menu.show [data-id="dropdown-item-${providerName}"]`, providerName, shouldWait)
+                  onDone()
+                } else {
+                  tryOne(i + 1)
+                }
+              })
+          })
+      }
+      tryOne(0)
+    }
+
+    const attemptSelect = (
+      browser: NightwatchBrowser,
+      providerName: string,
+      shouldWait?: boolean,
+      onComplete?: VoidFunction
+    ) => {
+      browser
+        .isPresent({ selector: `[data-id="dropdown-item-${providerName}"]`, suppressNotFoundErrors: true, timeout: 1500 }, (topLevel) => {
+          console.log('attemptSelect result: ', topLevel)
+          if (topLevel.value) {
+            clickAndMaybeWait(browser, `[data-id="dropdown-item-${providerName}"]`, providerName, shouldWait)
+            onComplete && browser.perform(() => onComplete())
+          } else {
+            tryOpenSubmenusAndClick(browser, submenuLabels, providerName, !!shouldWait, () => {
+              onComplete && browser.perform(() => onComplete())
+            })
+          }
+        })
+    }
+
+    this.api
+      .useCss()
+      .waitForElementVisible('[data-id="settingsSelectEnvOptions"]', 10000)
+      .execute(function() {
+        // Use JavaScript to click the button element directly, avoiding any overlapping elements
+        const button = document.querySelector('[data-id="settingsSelectEnvOptions"]') as HTMLElement
+        if (button) {
+          button.click()
+        }
+      }, [])
+      .perform((done) => {
+        this.api.isVisible({ selector: `[data-id="dropdown-item-${provider}"]`, suppressNotFoundErrors: true, timeout: 1000 }, (result) => {
+          console.log('provider result: ', result)
+          if (result.value) {
+            this.api.click(`[data-id="dropdown-item-${provider}"]`)
+            return done()
+          } else {
+            this.api.isVisible({ selector: `[data-id="dropdown-item-${category}"]`, suppressNotFoundErrors: true, timeout: 1000 }, (result) => {
+              console.log('category result: ', result)
+              if (result.value) {
+                this.api
+                  .click(`[data-id="dropdown-item-${category}"]`)
+                  .click('[data-id="settingsSelectEnvOptions"] button')
+                  .waitForElementVisible('body .dropdown-menu.show', 3000)
+                  .perform(() => {
+                    attemptSelect(this.api, provider, returnWhenInitialized, () => {
+                      waitForSelectedOrModal(this.api, provider, 10000, (ok) => {
+                        if (ok) {
+                          return done()
+                        } else {
+                          this.api.assert.fail(`Environment "${provider}" could not be selected or found in the dropdown.`)
+                          return done()
+                        }
+                      })
+                    })
+                  })
+                return done()
+              } {
+                this.api.assert.fail(`Environment "${provider}" could not be selected or found in the dropdown.`)
+                done()
+              }
+            })
+          }
+        })
+      })
+      .perform(() => this.emit('complete'))
+
     return this
   }
 }

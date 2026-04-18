@@ -1,20 +1,28 @@
-import React, {useEffect, useState} from 'react'
-import {RemixPlugin} from './Client'
-import {Logger} from './logger'
-import {filePanelProfile} from '@remixproject/plugin-api'
-import {filSystemProfile} from '@remixproject/plugin-api'
-import {dGitProfile} from '@remixproject/plugin-api'
-import {editorProfile} from '@remixproject/plugin-api'
-import {settingsProfile} from '@remixproject/plugin-api'
-import {networkProfile} from '@remixproject/plugin-api'
-import {udappProfile} from '@remixproject/plugin-api'
-import {compilerProfile} from '@remixproject/plugin-api'
-import {contentImportProfile} from '@remixproject/plugin-api'
-import {windowProfile} from '@remixproject/plugin-api'
-import {pluginManagerProfile} from '@remixproject/plugin-api'
-import {Profile} from '@remixproject/plugin-utils'
-
+import React, { useEffect, useState } from 'react'
+import { RemixPlugin } from './Client'
+import { Logger } from './logger'
+import { filePanelProfile } from '@remixproject/plugin-api'
+import { filSystemProfile } from '@remixproject/plugin-api'
+import { editorProfile } from '@remixproject/plugin-api'
+import { settingsProfile } from '@remixproject/plugin-api'
+import { networkProfile } from '@remixproject/plugin-api'
+import { udappProfile } from '@remixproject/plugin-api'
+import { compilerProfile } from '@remixproject/plugin-api'
+import { contentImportProfile } from '@remixproject/plugin-api'
+import { windowProfile } from '@remixproject/plugin-api'
+import { pluginManagerProfile } from '@remixproject/plugin-api'
+import { LibraryProfile, Profile } from '@remixproject/plugin-utils'
 import './app.css'
+
+export const dGitProfile: LibraryProfile<any> = {
+  name: 'dgitApi',
+  methods: ['status', 'log', 'commit', 'add', 'branches'],
+}
+
+export const topbarProfile: LibraryProfile<any> = {
+  name: 'topbar',
+  methods: ['getWorkspaces'],
+}
 
 const client = new RemixPlugin()
 
@@ -34,19 +42,19 @@ function App() {
     compilerProfile,
     udappProfile,
     contentImportProfile,
-    windowProfile
+    windowProfile,
+    topbarProfile
   ])
 
-  const handleChange = ({target}: any) => {
+  const handleChange = ({ target }: any) => {
     setPayload(target.value)
   }
 
   useEffect(() => {
     client.onload(async () => {
-      const customProfiles = ['menuicons', 'tabs', 'solidityUnitTesting', 'hardhat-provider', 'notification']
+      const customProfiles = ['menuicons', 'tabs', 'solidityUnitTesting', 'hardhat-provider', 'notification', 'topbar']
 
       client.testCommand = async (data: any) => {
-        console.log(data)
         methodLog(data)
       }
 
@@ -117,29 +125,29 @@ function App() {
       <label>events</label>
       <Logger id="events" log={events}></Logger>
       <input className="form-control w-100" type="text" id="payload" placeholder="Enter payload here..." value={payload} onChange={handleChange} data-id="payload-input" />
-      {profiles.map((profile: Profile) => {
-        const methods = profile.methods.map((method: string) => {
+      {profiles.map((profile: Profile, index: number) => {
+        const methods = profile.methods.map((method: string, index: number) => {
           return (
-            <button data-id={`${profile.name}:${method}`} key={method} className="btn btn-primary btn-sm ml-1 mb-1" onClick={async () => await clientMethod(profile, method)}>
+            <button id={`${profile.name}-${method}-${profile.name}`} data-id={`${profile.name}-${method}`} key={index} className="btn btn-primary btn-sm ms-1 mb-1" onClick={async () => await clientMethod(profile, method)}>
               {method}
             </button>
           )
         })
         const events = profile.events
-          ? profile.events.map((event: string) => {
+          ? profile.events.map((event: string, index: number) => {
             return (
-              <label key={event} className="m-1">
+              <label key={index} className="m-1">
                 {event}
               </label>
             )
           })
           : null
         return (
-          <div key={profile.name} className="small border-bottom">
+          <div key={index} className="small border-bottom">
             <label className="text-uppercase">{profile.name}</label>
-            <br></br>
+            <br/>
             {methods}
-            <br></br>
+            <br/>
             {events ? <label>EVENTS:</label> : null}
             {events}
           </div>

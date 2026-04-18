@@ -22,7 +22,7 @@ const profile = {
   maintainedBy: 'Remix'
 }
 
-module.exports = class TestTab extends ViewPlugin {
+export default class TestTab extends ViewPlugin {
   constructor (fileManager, offsetToLineColumnConverter, filePanel, compileTab, appManager, contentImport) {
     super(profile)
     this.compileTab = compileTab
@@ -81,13 +81,14 @@ module.exports = class TestTab extends ViewPlugin {
   onDeactivation () {
     this.off('filePanel', 'newTestFileCreated')
     this.off('filePanel', 'setWorkspace')
+    this.off('filePanel', 'workspaceCreated')
+    this.off('fileManager', 'currentFileChanged')
     // 'currentFileChanged' event is added more than once
-    this.fileManager.events.removeAllListeners('currentFileChanged')
   }
 
   listenToEvents () {
     this.on('filePanel', 'workspaceCreated', async () => {
-      this.createTestLibs()
+      setTimeout(() => this.createTestLibs(), 50)
     })
 
     this.testRunner.event.on('compilationFinished', (success, data, source, input, version) => {
@@ -112,18 +113,19 @@ module.exports = class TestTab extends ViewPlugin {
     const web3 = await this.call('blockchain', 'web3VM')
     await this.testRunner.init(web3)
     await this.createTestLibs()
+    const runningTest = {}
+    runningTest[path] = { content }
+    const { currentVersion, evmVersion, optimize, runs } = await this.compileTab.getCurrentCompilerConfig()
+    const currentCompilerUrl = urlFromVersion(currentVersion)
+    const compilerConfig = {
+      currentCompilerUrl,
+      evmVersion,
+      optimize,
+      usingWorker: canUseWorker(currentVersion),
+      runs
+    }
     return new Promise((resolve, reject) => {
-      const runningTest = {}
-      runningTest[path] = { content }
-      const { currentVersion, evmVersion, optimize, runs } = this.compileTab.getCurrentCompilerConfig()
-      const currentCompilerUrl = urlFromVersion(currentVersion)
-      const compilerConfig = {
-        currentCompilerUrl,
-        evmVersion,
-        optimize,
-        usingWorker: canUseWorker(currentVersion),
-        runs
-      }
+
       this.testRunner.runTestSources(runningTest, compilerConfig, () => { /* Do nothing. */ }, () => { /* Do nothing. */ }, null, (error, result) => {
         if (error) return reject(error)
         resolve(result)

@@ -1,13 +1,19 @@
 import React, {useState} from 'react'
-import {VyperCompilationResult, VyperCompilationOutput, isCompilationError} from '../utils'
-import Tabs from 'react-bootstrap/Tabs'
-import Tab from 'react-bootstrap/Tab'
-import Button from 'react-bootstrap/Button'
-import JSONTree from 'react-json-view'
+import {isCompilationError} from '../utils'
 import {CopyToClipboard} from '@remix-ui/clipboard'
 
 interface VyperResultProps {
-  output?: VyperCompilationOutput
+  output?: any
+  plugin?: any
+}
+
+export type OutputType = {
+  contractName: string
+  abi: any
+  bytecode: any
+  runtimeBytecode: any
+  ir: string
+  methodIdentifiers: any
 }
 
 export type ExampleContract = {
@@ -15,8 +21,14 @@ export type ExampleContract = {
   address: string
 }
 
-function VyperResult({output}: VyperResultProps) {
-  const [active, setActive] = useState<keyof VyperCompilationResult>('abi')
+type TabContentMembers = {
+  tabText: string
+  tabPayload: any
+  tabMemberType: 'abi' | 'bytecode' | 'bytecode_runtime' | 'ir'
+  className: string
+}
+
+function VyperResult({ output, plugin }: VyperResultProps) {
 
   if (!output)
     return (
@@ -27,7 +39,7 @@ function VyperResult({output}: VyperResultProps) {
 
   if (isCompilationError(output)) {
     return (
-      <div id="result" className="error" title={output.message}>
+      <div id="result" className="error">
         <i className="fas fa-exclamation-circle text-danger"></i>
         <pre
           data-id="error-message"
@@ -45,40 +57,36 @@ function VyperResult({output}: VyperResultProps) {
   }
 
   return (
-    <Tabs id="result" activeKey={active} onSelect={(key: any) => setActive(key)}>
-      <Tab eventKey="abi" title="ABI">
-        <CopyToClipboard getContent={() => JSON.stringify(output.abi)}>
-          <Button variant="info" className="copy" data-id="copy-abi">
-            Copy ABI
-          </Button>
-        </CopyToClipboard>
-        <JSONTree src={output.abi} />
-      </Tab>
-      <Tab eventKey="bytecode" title="Bytecode">
-        <CopyToClipboard getContent={() => output.bytecode}>
-          <Button variant="info" className="copy">
-            Copy Bytecode
-          </Button>
-        </CopyToClipboard>
-        <textarea defaultValue={output.bytecode}></textarea>
-      </Tab>
-      <Tab eventKey="bytecode_runtime" title="Runtime Bytecode">
-        <CopyToClipboard getContent={() => output.bytecode_runtime}>
-          <Button variant="info" className="copy">
-            Copy Runtime Bytecode
-          </Button>
-        </CopyToClipboard>
-        <textarea defaultValue={output.bytecode_runtime}></textarea>
-      </Tab>
-      <Tab eventKey="ir" title="LLL">
-        <CopyToClipboard getContent={() => output.ir}>
-          <Button variant="info" className="copy">
-            Copy LLL Code
-          </Button>
-        </CopyToClipboard>
-        <textarea defaultValue={output.ir}></textarea>
-      </Tab>
-    </Tabs>
+    <>
+      <div className="d-flex justify-content-center w-100 mb-3 mt-1 vyper-panel-width flex-column">
+        <button data-id="compilation-details" className="remixui_resultsBtn text-dark border btn d-block btn-block" onClick={async () => {
+          await plugin?.call('vyperCompilationDetails', 'showDetails', output)
+        }}>
+          <span>
+            <i className="fa-regular fa-memo-pad me-2 text-primary"></i>
+            <span>Compilation Details</span>
+          </span>
+        </button>
+        <div className="mt-1">
+          <div className="input-group input-group d-flex flex-row-reverse">
+            <div className="btn-group align-self-start" role="group" aria-label="Copy to Clipboard">
+              <CopyToClipboard tip={'Copy ABI to clipboard'} getContent={() => (Object.values(output)[1] as OutputType)?.abi} direction="bottom" icon="far fa-copy">
+                <span className="btn remixui_copyButton">
+                  <i className="remixui_copyIcon far fa-copy" aria-hidden="true"></i>
+                  <span>ABI</span>
+                </span>
+              </CopyToClipboard>
+              <CopyToClipboard tip={'Copy Bytecode to clipboard'} getContent={() => (Object.values(output)[1] as OutputType)?.bytecode.object} direction="bottom" icon="far fa-copy">
+                <span className="btn remixui_copyButton">
+                  <i className="remixui_copyIcon far fa-copy" aria-hidden="true"></i>
+                  <span>Bytecode</span>
+                </span>
+              </CopyToClipboard>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 

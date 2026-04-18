@@ -5,15 +5,17 @@ import { contractCreationToken } from '../trace/traceHelper'
 import { BreakpointManager } from '../code/breakpointManager'
 import { DebuggerStepManager } from './stepManager'
 import { VmDebuggerLogic } from './VmDebugger'
+import { OffsetToLineColumnConverterFn } from '../types'
+import type { CompilerAbstract } from '@remix-project/remix-solidity'
 
 export class Debugger {
-  event
-  offsetToLineColumnConverter
-  compilationResult
-  debugger
-  breakPointManager
-  step_manager // eslint-disable-line camelcase
-  vmDebuggerLogic
+  event: EventManager
+  offsetToLineColumnConverter: OffsetToLineColumnConverterFn
+  compilationResult: (contractAddress: string) => Promise<CompilerAbstract>
+  debugger: Ethdebugger
+  breakPointManager: BreakpointManager
+  step_manager: DebuggerStepManager // eslint-disable-line camelcase
+  vmDebuggerLogic: VmDebuggerLogic
   currentFile = -1
   currentLine = -1
 
@@ -29,7 +31,9 @@ export class Debugger {
       web3: options.web3,
       debugWithGeneratedSources: options.debugWithGeneratedSources,
       compilationResult: this.compilationResult,
-      offsetToLineColumnConverter: this.offsetToLineColumnConverter
+      offsetToLineColumnConverter: this.offsetToLineColumnConverter,
+      getCache: options.getCache,
+      setCache: options.setCache
     })
 
     const { traceManager, callTree, solidityProxy } = this.debugger
@@ -62,6 +66,14 @@ export class Debugger {
     })
   }
 
+  async getValidSourceLocationVMTraceIndexFromCache (index: number) {
+    const address = this.debugger.traceManager.getCurrentCalledAddressAt(index)
+    const compilationResultForAddress = await this.compilationResult(address)
+    if (!compilationResultForAddress) return null
+    const location = await this.debugger.callTree.getValidSourceLocationFromVMTraceIndexFromCache(address, index, compilationResultForAddress.data.contracts)
+    return location
+  }
+
   async registerAndHighlightCodeItem (index) {
     // register selected code item, highlight the corresponding source location
     // this.debugger.traceManager.getCurrentCalledAddressAt(index, async (error, address) => {
@@ -84,22 +96,22 @@ export class Debugger {
           const generatedSources = this.debugger.callTree.sourceLocationTracker.getGeneratedSourcesFromAddress(address)
 
           const lineColumnPos = rawLocationAndOpcode.lineColumnPos
-          
+
           let lineGasCostObj = null
           try {
-            lineGasCostObj = await this.debugger.callTree.getGasCostPerLine(rawLocation.file, lineColumnPos.start.line)  
+            lineGasCostObj = await this.debugger.callTree.getGasCostPerLine(rawLocation.file, lineColumnPos.start.line, rawLocationAndOpcode.scopeId)
           } catch (e) {
             console.log(e)
           }
-          this.event.trigger('newSourceLocation', [lineColumnPos, rawLocation, generatedSources, address, stepDetail, (lineGasCostObj && lineGasCostObj.gasCost) || -1])
+          this.event.trigger('newSourceLocation', [lineColumnPos, rawLocation, generatedSources, address, stepDetail, (lineGasCostObj && lineGasCostObj.gasCost) || -1, compilationResultForAddress])
           this.vmDebuggerLogic.event.trigger('sourceLocationChanged', [rawLocation])
           if (this.currentFile !== rawLocation.file || this.currentLine !== lineColumnPos.start.line) {
             const instructionIndexes = lineGasCostObj.indexes.map((index) => { // translate from vmtrace index to instruction index
               return this.debugger.codeManager.getInstructionIndex(address, index)
             })
-            this.vmDebuggerLogic.event.trigger('lineGasCostChanged', [instructionIndexes, lineColumnPos.start.line ])
+            this.vmDebuggerLogic.event.trigger('lineGasCostChanged', [instructionIndexes, lineColumnPos.start.line])
             this.currentFile = rawLocation.file
-            this.currentLine = lineColumnPos.start.line       
+            this.currentLine = lineColumnPos.start.line
           }
         } else {
           this.event.trigger('newSourceLocation', [null])
@@ -144,11 +156,10 @@ export class Debugger {
     }
 
     if (txNumber.indexOf('0x') !== -1) {
-      tx = await web3.eth.getTransaction(txNumber)
+      tx = await web3.getTransaction(txNumber)
       if (!tx) throw new Error('cannot find transaction ' + txNumber)
     } else {
-      tx = await web3.eth.getTransactionFromBlock(blockNumber, txNumber)
-      if (!tx) throw new Error('cannot find transaction ' + blockNumber + ' ' + txNumber)
+      throw new Error('only transaction hash is supported currently')
     }
     return await this.debugTx(tx, loadingCb)
   }
@@ -161,7 +172,7 @@ export class Debugger {
 
     this.step_manager.event.register('stepChanged', this, (stepIndex) => {
       if (typeof stepIndex !== 'number' || stepIndex >= this.step_manager.traceLength) {
-        return this.event.trigger('endDebug')
+        return this.event.trigger('endDebug', {})
       }
 
       this.debugger.codeManager.resolveStep(stepIndex, tx)
@@ -177,6 +188,6 @@ export class Debugger {
 
   unload () {
     this.debugger.unLoad()
-    this.event.trigger('debuggerUnloaded')
+    this.event.trigger('debuggerUnloaded', {})
   }
 }
