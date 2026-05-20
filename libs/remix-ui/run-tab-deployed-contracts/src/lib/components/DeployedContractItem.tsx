@@ -10,7 +10,7 @@ import { DeployedContractsAppContext } from '../contexts'
 import { DeployedContract } from '../types'
 import { runTransactions } from '../actions'
 import { ContractKebabMenu } from './ContractKebabMenu'
-import { AIRequestForm } from '@remix-ui/run-tab'
+
 import { TreeView, TreeViewItem } from '@remix-ui/tree-view'
 import BN from 'bn.js'
 import { TrackingContext } from '@remix-ide/tracking'
@@ -378,94 +378,57 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
     }
 
     try {
-      let compilerData = null
+      console.log('[QuickDapp] handleCreateDapp START', { name: contract.name, address: contract.address, timestamp: Date.now() });
 
-      try {
-        compilerData = await plugin.call('compilerArtefacts', 'getArtefactsByContractName', contract.name)
-      } catch (e) {
-        console.warn('[DeployedContractItem] Could not get compiler artefacts:', e)
-      }
-      const descriptionObj: any = await new Promise((resolve, reject) => {
-        let getFormData: () => Promise<any>
-
-        const modalContent = {
-          id: 'generate-website-ai',
-          title: intl.formatMessage({ id: 'udapp.generateDappModalTitle' }),
-          message: <AIRequestForm onMount={(fn) => { getFormData = fn }} />,
-          modalType: 'custom',
-          okLabel: intl.formatMessage({ id: 'udapp.generateDappOkLabel' }),
-          cancelLabel: intl.formatMessage({ id: 'udapp.cancel' }),
-          okFn: async () => {
-            if (getFormData) {
-              const formData = await getFormData()
-              resolve(formData)
-            } else {
-              reject(new Error('Form data not initialized'))
-            }
-          },
-          cancelFn: () => setTimeout(() => reject(new Error('Canceled')), 0),
-          hideFn: () => setTimeout(() => reject(new Error('Hide')), 0)
-        }
-
-        // @ts-ignore
-        plugin.call('notification', 'modal', modalContent)
-      })
-
-      if (isGenerating.current) {
-        await plugin.call('notification', 'toast', intl.formatMessage({ id: 'udapp.aiGenerationInProgress' }))
-        return
-      }
-
-      isGenerating.current = true
-
-      await plugin.call('ai-dapp-generator', 'resetDapp', contract.address)
-
-      const providerObject = await plugin.call('blockchain', 'getProviderObject')
-      const providerName = providerObject?.name || 'vm-unknown'
-      const isVM = providerName.startsWith('vm')
+      // Send contract details to AI Assistant for DApp generation
+      const abi = contract.abi || contract.contractData?.abi || []
+      const abiJson = JSON.stringify(abi)
 
       let chainId: string
-      if (isVM) {
-        chainId = providerName
-      } else {
-        const network = await plugin.call('network', 'detectNetwork')
-        chainId = network?.id?.toString() || providerName
-      }
-
-      let compilerFilePath = ''
-      if (compilerData?.fullyQualifiedName) {
-        const fqn = compilerData.fullyQualifiedName
-        compilerFilePath = fqn.includes(':') ? fqn.split(':')[0] : fqn
-      }
-
-      const resolvedFilePath = contract.filePath
-        || compilerFilePath
-        || contract.contractData?.contract?.file
-        || ''
-
       try {
-        await plugin.call('quick-dapp-v2', 'createDapp', {
-          description: descriptionObj.text,
-          contractName: contract.name,
-          address: contract.address,
-          abi: contract.abi || contract.contractData?.abi,
-          chainId: chainId,
-          compilerData: compilerData,
-          isBaseMiniApp: descriptionObj.isBaseMiniApp,
-          image: descriptionObj.image,
-          figmaUrl: descriptionObj.figmaUrl,
-          figmaToken: descriptionObj.figmaToken,
-          sourceFilePath: resolvedFilePath
-        })
-
-        await plugin.call('tabs', 'focus', 'quick-dapp-v2')
+        const providerObject = await plugin.call('blockchain', 'getProviderObject')
+        const providerName = providerObject?.name || 'vm-unknown'
+        if (providerName.startsWith('vm')) {
+          chainId = providerName
+        } else {
+          const network = await plugin.call('network', 'detectNetwork')
+          chainId = network?.id?.toString() || providerName
+        }
       } catch (e) {
-        console.error('[DeployedContractItem] Quick Dapp V2 call failed:', e)
-        await plugin.call('notification', 'toast', 'Failed to call Quick Dapp V2 plugin.')
+        chainId = 'unknown'
       }
+      console.log('[QuickDapp] chainId resolved:', chainId);
+
+      const prompt = `I want to create a DApp frontend for my deployed contract. Here are the contract details you'll need when calling generate_dapp:
+
+contractName: ${contract.name}
+contractAddress: ${contract.address}
+chainId: ${chainId}
+contractAbi: ${abiJson}
+
+Before generating, please ask me about my design preferences first.`
+
+      console.log('[QuickDapp] prompt assembled, length:', prompt.length);
+
+      // Activate and focus AI Assistant
+      try {
+        await plugin.call('manager', 'activatePlugin', 'remix-ai-assistant')
+      } catch (e) { /* may already be active */ }
+
+      // Open the right side panel (AI Assistant)
+      try {
+        await plugin.call('rightSidePanel', 'focusPanel')
+      } catch (e) { /* best-effort */ }
+
+      // Send prompt to AI Assistant
+      console.log('[QuickDapp] calling chatPipe...');
+      await plugin.call('remixaiassistant' as any, 'chatPipe', prompt)
+      console.log('[QuickDapp] chatPipe returned');
+
+      trackMatomoEvent?.({ category: 'ai', action: 'remixAI', name: 'create_dapp_via_ai', isClick: true })
     } catch (error) {
       if (error.message !== 'Canceled' && error.message !== 'Hide') {
-        console.error('[DeployedContractItem] Error creating dapp:', error)
+        console.error('[QuickDapp] Error creating dapp:', error)
         await plugin.call('terminal', 'log', { type: 'error', value: error.message })
       }
     } finally {
@@ -711,21 +674,21 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
                             className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-between"
                             style={{
                               backgroundColor: 'var(--custom-onsurface-layer-3)',
-                              border: '1px solid var(--custom-onsurface-layer-4)',
+                              border: '1px solid var(--bs-border-color)',
                               color: 'var(--dark/text-secondary, #d5d7e3)',
                               padding: '8px 12px'
                             }}
                             icon="fas fa-caret-down"
                             useDefaultIcon={false}
                           >
-                            <div className="d-flex align-items-center gap-1 flex-fill text-start">
-                              <span style={{ color: 'var(--text-tertiary, #a2a3bd)' }}>Select a function to interact with...</span>
+                            <div className="d-flex align-items-center gap-1" style={{ flex: '1', minWidth: 0 }}>
+                              <span style={{ color: 'var(--text-tertiary, #a2a3bd)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Select a function to interact with...</span>
                             </div>
                           </Dropdown.Toggle>
                           <Dropdown.Menu
                             style={{
                               backgroundColor: 'var(--custom-onsurface-layer-2)',
-                              border: '1px solid var(--custom-onsurface-layer-4)',
+                              border: '1px solid var(--bs-border-color)',
                               maxHeight: '240px',
                               overflowY: 'auto',
                               width: '100%',
@@ -734,7 +697,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
                           >
                             <div style={{
                               padding: '8px',
-                              borderBottom: '1px solid var(--custom-onsurface-layer-4)',
+                              borderBottom: '1px solid var(--bs-border-color)',
                               backgroundColor: 'var(--custom-onsurface-layer-2)'
                             }}>
                               <input
@@ -749,7 +712,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
                                 onClick={(e) => e.stopPropagation()}
                                 style={{
                                   backgroundColor: 'var(--custom-onsurface-layer-3)',
-                                  border: '1px solid var(--custom-onsurface-layer-4)',
+                                  border: '1px solid var(--bs-border-color)',
                                   color: 'var(--dark/text-secondary, #d5d7e3)',
                                   fontSize: '11px'
                                 }}
@@ -953,7 +916,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
                         getContent={() => getEncodedCall(selectedFunctionIndex)}
                       >
                         <button
-                          className="btn btn-sm flex-fill border-0"
+                          className="btn btn-sm flex-fill"
                           style={{ minWidth: '100px', backgroundColor: 'var(--custom-onsurface-layer-3)' }}
                           data-id={`copyCalldata-${selectedFunctionIndex}`}
                         >
@@ -970,7 +933,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
                         getContent={() => getEncodedParams(selectedFunctionIndex)}
                       >
                         <button
-                          className="btn btn-sm flex-fill border-0"
+                          className="btn btn-sm flex-fill"
                           style={{ minWidth: '100px', backgroundColor: 'var(--custom-onsurface-layer-3)' }}
                           data-id={`copyParameters-${selectedFunctionIndex}`}
                         >
@@ -1071,51 +1034,88 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
                       <FormattedMessage id="udapp.gasLimitLabel" />
                     </label>
                     <div className="position-relative flex-fill">
-                      <span
-                        className="badge font-sm"
-                        style={{
-                          position: 'absolute',
-                          left: '0.35rem',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          backgroundColor: '#64C4FF14',
-                          color: '#64c4ff',
-                          cursor: 'pointer',
-                          zIndex: 1
-                        }}
-                        onClick={() => {
-                          const newMode = gasLimit === 0 ? 'custom' : 'auto'
-                          trackMatomoEvent?.({ category: 'udapp', action: 'deployedContractGasLimitToggle', name: newMode, isClick: true })
-                          if (gasLimit === 0) {
-                            setGasLimit(3000000)
-                          } else {
-                            setGasLimit(0)
-                          }
-                        }}
+                      <CustomTooltip
+                        placement="top"
+                        tooltipId="deployedContractGasLimitBadgeTooltip"
+                        tooltipText={gasLimit === 0 ? intl.formatMessage({ id: 'udapp.gasLimitBadgeAutoTooltip', defaultMessage: 'Click to set custom gas limit' }) : intl.formatMessage({ id: 'udapp.gasLimitBadgeCustomTooltip', defaultMessage: 'Click to use auto estimated gas' })}
                       >
-                        {gasLimit === 0 ? 'auto' : 'custom'}
-                      </span>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm border-0"
-                        placeholder="3000000"
-                        value={gasLimit}
-                        onChange={(e) => {
-                          trackMatomoEvent?.({ category: 'udapp', action: 'deployedContractGasLimitInput', name: e.target.value })
-                          setGasLimit(parseInt(e.target.value))
-                        }}
-                        disabled={gasLimit === 0}
-                        style={{
-                          color: 'var(--dark/text-quaternary, #959bad)',
-                          flex: 1,
-                          paddingLeft: '4rem',
-                          textAlign: 'right',
-                          opacity: gasLimit === 0 ? 0.6 : 1,
-                          cursor: gasLimit === 0 ? 'not-allowed' : 'text',
-                          fontSize: '0.7rem',
-                          minHeight: '30px'
-                        }}
-                      />
+                        <span
+                          className="badge font-sm"
+                          style={{
+                            position: 'absolute',
+                            left: '0.35rem',
+                            top: '35%',
+                            transform: 'translateY(-50%)',
+                            backgroundColor: '#64C4FF14',
+                            color: '#64c4ff',
+                            cursor: 'pointer',
+                            zIndex: 1
+                          }}
+                          onClick={() => {
+                            const newMode = gasLimit === 0 ? 'custom' : 'auto'
+                            trackMatomoEvent?.({ category: 'udapp', action: 'deployedContractGasLimitToggle', name: newMode, isClick: true })
+                            if (gasLimit === 0) {
+                              setGasLimit(3000000)
+                            } else {
+                              setGasLimit(0)
+                            }
+                          }}
+                        >
+                          {gasLimit === 0 ? 'auto' : 'custom'}
+                        </span>
+                      </CustomTooltip>
+                      {gasLimit === 0 ? (
+                        <CustomTooltip
+                          placement="top"
+                          tooltipId="deployedContractGasLimitInputTooltip"
+                          tooltipText={intl.formatMessage({ id: 'udapp.gasLimitAutoTooltip', defaultMessage: 'Currently using auto estimated gas. Click on auto to set custom gas limit' })}
+                        >
+                          <input
+                            type="number"
+                            className="form-control form-control-sm border-0"
+                            placeholder="3000000"
+                            value={gasLimit}
+                            onChange={(e) => {
+                              trackMatomoEvent?.({ category: 'udapp', action: 'deployedContractGasLimitInput', name: e.target.value })
+                              setGasLimit(parseInt(e.target.value))
+                            }}
+                            disabled={gasLimit === 0}
+                            style={{
+                              backgroundColor: themeQuality === 'dark' ? 'var(--custom-onsurface-layer-4)' : 'var(--bs-body-bg)',
+                              color: 'var(--dark/text-quaternary, #959bad)',
+                              flex: 1,
+                              paddingLeft: '4rem',
+                              textAlign: 'right',
+                              opacity: gasLimit === 0 ? 0.6 : 1,
+                              cursor: gasLimit === 0 ? 'not-allowed' : 'text',
+                              fontSize: '0.7rem',
+                              minHeight: '30px'
+                            }}
+                          />
+                        </CustomTooltip>
+                      ) : (
+                        <input
+                          type="number"
+                          className="form-control form-control-sm border-0"
+                          placeholder="3000000"
+                          value={gasLimit}
+                          onChange={(e) => {
+                            trackMatomoEvent?.({ category: 'udapp', action: 'deployedContractGasLimitInput', name: e.target.value })
+                            setGasLimit(parseInt(e.target.value))
+                          }}
+                          disabled={gasLimit === 0}
+                          style={{
+                            color: 'var(--dark/text-quaternary, #959bad)',
+                            flex: 1,
+                            paddingLeft: '4rem',
+                            textAlign: 'right',
+                            opacity: gasLimit === 0 ? 0.6 : 1,
+                            cursor: gasLimit === 0 ? 'not-allowed' : 'text',
+                            fontSize: '0.7rem',
+                            minHeight: '30px'
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>

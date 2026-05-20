@@ -4,7 +4,7 @@ import { IParams } from './types';
 export interface AIModel {
   id: string // Unique model ID (e.g., 'gpt-4-turbo')
   name: string // Display name (e.g., 'GPT-4 Turbo')
-  provider: 'openai' | 'mistralai' | 'anthropic' | 'ollama'
+  provider: 'openai' | 'mistralai' | 'anthropic' | 'moonshot' | 'ollama'
   description: string // Short description
   requiresAuth: boolean // Does it require login?
   isDefault: boolean // Is it the base free model?
@@ -17,6 +17,16 @@ export const AVAILABLE_MODELS: AIModel[] = [
   {
     id: 'mistral-medium-latest',
     name: 'Mistral Medium (Free)',
+    provider: 'mistralai',
+    description: 'Fast and efficient for basic tasks',
+    requiresAuth: false,
+    isDefault: false,
+    category: 'general',
+    capabilities: ['chat', 'code']
+  },
+  {
+    id: 'mistral-small-latest',
+    name: 'Mistral Small (Free)',
     provider: 'mistralai',
     description: 'Fast and efficient for basic tasks',
     requiresAuth: false,
@@ -55,6 +65,50 @@ export const AVAILABLE_MODELS: AIModel[] = [
     isDefault: false,
     category: 'coding',
     capabilities: ['code', 'completion']
+  },
+
+  // OpenAI models
+  {
+    id: 'gpt-5.4',
+    name: 'GPT-5.4',
+    provider: 'openai',
+    description: 'Latest OpenAI flagship model',
+    requiresAuth: true,
+    isDefault: false,
+    category: 'coding',
+    capabilities: ['chat', 'code', 'completion']
+  },
+  {
+    id: 'gpt-5.4-mini',
+    name: 'GPT-5.4 Mini',
+    provider: 'openai',
+    description: 'Fast and efficient OpenAI model',
+    requiresAuth: true,
+    isDefault: false,
+    category: 'coding',
+    capabilities: ['chat', 'code', 'completion']
+  },
+
+  // Moonshot/Kimi models
+  {
+    id: 'kimi-k2.6',
+    name: 'Kimi K2.6',
+    provider: 'moonshot',
+    description: 'Moonshot Kimi K2 model',
+    requiresAuth: true,
+    isDefault: false,
+    category: 'coding',
+    capabilities: ['chat', 'code', 'completion']
+  },
+  {
+    id: 'moonshot-v1-128k',
+    name: 'Moonshot v1 (128K)',
+    provider: 'moonshot',
+    description: 'Moonshot v1 with 128K context',
+    requiresAuth: true,
+    isDefault: false,
+    category: 'coding',
+    capabilities: ['chat', 'code', 'completion']
   },
 
   // Special local models entry

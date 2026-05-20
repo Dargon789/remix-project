@@ -453,6 +453,7 @@ export class AuthPlugin extends Plugin {
   async getAppConfig(): Promise<AppConfig> {
     try {
       if (this.cachedAppConfig) {
+        this.log('[AuthPlugin] Returning cached app config', this.cachedAppConfig)
         return this.cachedAppConfig
       }
 
@@ -502,12 +503,117 @@ export class AuthPlugin extends Plugin {
    */
   async getAppConfigValue<T extends string | number | boolean>(key: string, defaultValue: T): Promise<T> {
     const config = await this.getAppConfig()
-    const val = config[key]
-    return (val !== undefined ? val : defaultValue) as T
+    let val: any
+    if (Array.isArray(config)) {
+      const entry = (config as any[]).find((c) => c && c.key === key)
+      val = entry?.value
+    } else if (config && typeof config === 'object') {
+      val = (config as any)[key]
+    }
+    return (val !== undefined && val !== null ? val : defaultValue) as T
+  }
+
+  private isDesktop(): boolean {
+    return typeof window !== 'undefined' && (window as any).electronAPI !== undefined
+  }
+
+  private getPendingDesktopAuthState(): string | null {
+    if (this.isDesktop()) return null
+    const params = new QueryParams().get() as Record<string, string>
+    return params.desktop_auth || null
+  }
+
+  private completeDesktopAuthIfPending(accessToken: string, refreshToken: string, user: any): void {
+    const state = this.getPendingDesktopAuthState()
+    if (!state) return
+
+    try {
+      const userJson = JSON.stringify(user)
+      const userBase64 = btoa(userJson)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+
+      const callbackUrl = `remix://auth/sso-callback?state=${encodeURIComponent(state)}&access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&user=${encodeURIComponent(userBase64)}`
+      window.location.href = callbackUrl
+    } catch (error) {
+      console.error('[AuthPlugin] Failed to complete desktop auth callback:', error)
+    }
+  }
+
+  /**
+   * Desktop login flow: opens the web IDE in the user's browser, user authenticates there,
+   * and tokens are sent back to desktop via the remix:// custom protocol.
+   */
+  private async loginViaDesktopBridge(): Promise<void> {
+    this.log('[AuthPlugin] Initiating desktop login via web bridge')
+
+    // Call the desktop auth handler plugin to open the browser
+    await this.call('desktopAuthHandler' as any, 'login')
+
+    // Listen for the auth result from the desktop auth handler
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cleanup()
+        reject(new Error('Desktop login timed out. Please try again.'))
+      }, 10 * 60 * 1000) // 10 minute timeout
+
+      const handleSuccess = (data: { accessToken: string; refreshToken: string; user: any }) => {
+        cleanup()
+
+        // Store tokens in localStorage
+        localStorage.setItem('remix_access_token', data.accessToken)
+        localStorage.setItem('remix_refresh_token', data.refreshToken)
+        localStorage.setItem('remix_user', JSON.stringify(data.user))
+
+        // Schedule proactive refresh
+        this.scheduleRefresh(data.accessToken)
+
+        // Emit auth state change
+        this.emit('authStateChanged', {
+          isAuthenticated: true,
+          user: data.user,
+          token: data.accessToken
+        })
+
+        // If logged in via GitHub, bridge the provider token
+        if (data.user.provider === 'github') {
+          this.fetchGitHubToken().catch(console.error)
+        }
+
+        // Fetch credits after login
+        this.refreshCredits().catch(console.error)
+
+        this.log('[AuthPlugin] Desktop login successful')
+        resolve()
+      }
+
+      const handleFailure = (data: { error: string }) => {
+        cleanup()
+        reject(new Error(data.error || 'Desktop login failed'))
+      }
+
+      const cleanup = () => {
+        clearTimeout(timeout)
+        this.off('desktopAuthHandler' as any, 'onAuthSuccess')
+        this.off('desktopAuthHandler' as any, 'onAuthFailure')
+      }
+
+      this.on('desktopAuthHandler' as any, 'onAuthSuccess', handleSuccess)
+      this.on('desktopAuthHandler' as any, 'onAuthFailure', handleFailure)
+    })
   }
 
   async login(provider: AuthProviderType): Promise<void> {
     try {
+      this.log('[AuthPlugin] Starting login for:', provider)
+
+      // In Electron (desktop), use the desktop auth handler to open browser
+      if (this.isDesktop()) {
+        await this.loginViaDesktopBridge()
+        return
+      }
+
       this.log('[AuthPlugin] Starting popup-based login for:', provider)
 
       // Get pending invite token to pass through login flow
@@ -649,6 +755,9 @@ export class AuthPlugin extends Plugin {
       localStorage.setItem('remix_refresh_token', result.refreshToken)
       localStorage.setItem('remix_user', JSON.stringify(result.user))
       this.log('[AuthPlugin] Stored user JSON:', localStorage.getItem('remix_user'))
+
+      // If browser login was initiated by desktop, complete the callback now.
+      this.completeDesktopAuthIfPending(result.accessToken, result.refreshToken, result.user)
 
       // Schedule proactive refresh based on access token expiry
       this.scheduleRefresh(result.accessToken)
@@ -902,15 +1011,32 @@ export class AuthPlugin extends Plugin {
 
     // Update API clients with current token
     if (token) {
-      this.apiClient.setToken(token)
-      // Update other API services too
-      this.creditsApi.setToken(token)
-      this.permissionsApi.setToken(token)
-      this.billingApi.setToken(token)
-      this.inviteApi.setToken(token)
+      this.applyAuthTokenToApiClients(token)
+    } else {
+      // Keep in-memory clients in sync with storage so stale Bearer headers
+      // are never sent after logout or manual token removal.
+      this.clearAuthTokenFromApiClients()
     }
 
     return token
+  }
+
+  private applyAuthTokenToApiClients(token: string): void {
+    this.apiClient.setToken(token)
+    this.creditsApi.setToken(token)
+    this.permissionsApi.setToken(token)
+    this.billingApi.setToken(token)
+    this.inviteApi.setToken(token)
+  }
+
+  private clearAuthTokenFromApiClients(): void {
+    this.apiClient.setToken(null)
+    // Api service wrappers expose setToken(string). Empty string clears
+    // Authorization because ApiClient only sends Bearer when token is truthy.
+    this.creditsApi.setToken('')
+    this.permissionsApi.setToken('')
+    this.billingApi.setToken('')
+    this.inviteApi.setToken('')
   }
 
   /**
@@ -1055,8 +1181,51 @@ export class AuthPlugin extends Plugin {
     }
   }
 
+  private desktopAuthListenersRegistered = false
+
+  private registerDesktopAuthListeners(): void {
+    if (this.desktopAuthListenersRegistered) return
+    if (!this.isDesktop()) return
+    this.desktopAuthListenersRegistered = true
+
+    this.log('[AuthPlugin] Registering persistent desktop auth listeners')
+
+    this.on('desktopAuthHandler' as any, 'onAuthSuccess', (data: { accessToken: string; refreshToken: string; user: any }) => {
+      try {
+        this.log('[AuthPlugin] Desktop onAuthSuccess received for', data?.user?.email || data?.user?.sub)
+
+        localStorage.setItem('remix_access_token', data.accessToken)
+        localStorage.setItem('remix_refresh_token', data.refreshToken)
+        localStorage.setItem('remix_user', JSON.stringify(data.user))
+
+        this.scheduleRefresh(data.accessToken)
+
+        this.emit('authStateChanged', {
+          isAuthenticated: true,
+          user: data.user,
+          token: data.accessToken
+        })
+
+        if (data.user?.provider === 'github') {
+          this.fetchGitHubToken().catch(console.error)
+        }
+
+        this.refreshCredits().catch(console.error)
+      } catch (err) {
+        console.error('[AuthPlugin] Failed to handle desktop onAuthSuccess:', err)
+      }
+    })
+
+    this.on('desktopAuthHandler' as any, 'onAuthFailure', (data: { error: string }) => {
+      console.error('[AuthPlugin] Desktop onAuthFailure:', data?.error)
+    })
+  }
+
   async onActivation(): Promise<void> {
     this.log('[AuthPlugin] Activated - using popup + localStorage mode')
+
+    // On desktop, listen for SSO callbacks from the protocol handler.
+    this.registerDesktopAuthListeners()
 
     // Fetch access policy, login mode, and app config early (non-blocking) so UI can adapt immediately
     this.getAccessPolicy().then((accessPolicy) => {
@@ -1076,6 +1245,19 @@ export class AuthPlugin extends Plugin {
     // This ensures AuthContext (which polls for activation) never sees
     // stale/unvalidated tokens in localStorage.
     await this.validateAndRestoreSession()
+
+    // If already authenticated and we were opened by desktop, send auth back immediately.
+    const accessToken = localStorage.getItem('remix_access_token')
+    const refreshToken = localStorage.getItem('remix_refresh_token')
+    const userStr = localStorage.getItem('remix_user')
+    if (!this.isDesktop() && accessToken && refreshToken && userStr) {
+      try {
+        const user = JSON.parse(userStr)
+        this.completeDesktopAuthIfPending(accessToken, refreshToken, user)
+      } catch {
+        // ignore malformed stored user
+      }
+    }
   }
 
   /**
@@ -1088,6 +1270,11 @@ export class AuthPlugin extends Plugin {
    */
   async notifyEmailOtpLogin(user: any, accessToken: string): Promise<void> {
     this.scheduleRefresh(accessToken)
+
+    const refreshToken = localStorage.getItem('remix_refresh_token')
+    if (refreshToken) {
+      this.completeDesktopAuthIfPending(accessToken, refreshToken, user)
+    }
 
     this.emit('authStateChanged', {
       isAuthenticated: true,
@@ -1222,6 +1409,7 @@ export class AuthPlugin extends Plugin {
     localStorage.removeItem('remix_access_token')
     localStorage.removeItem('remix_refresh_token')
     localStorage.removeItem('remix_user')
+    this.clearAuthTokenFromApiClients()
     this.clearRefreshTimer()
   }
 
@@ -1562,6 +1750,13 @@ export class AuthPlugin extends Plugin {
         token: result.token
       })
 
+      // If launched via desktop bridge, send tokens back to the desktop app.
+      this.completeDesktopAuthIfPending(
+        result.token,
+        result.refreshToken || localStorage.getItem('remix_refresh_token') || '',
+        result.user
+      )
+
       // Auto-refresh credits
       this.refreshCredits().catch(console.error)
 
@@ -1695,6 +1890,13 @@ export class AuthPlugin extends Plugin {
         user: result.user,
         token: result.token
       })
+
+      // If launched via desktop bridge, send tokens back to the desktop app.
+      this.completeDesktopAuthIfPending(
+        result.token,
+        result.refreshToken || localStorage.getItem('remix_refresh_token') || '',
+        result.user
+      )
 
       // Auto-refresh credits
       this.refreshCredits().catch(console.error)

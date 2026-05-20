@@ -1,7 +1,7 @@
 'use strict'
 import { EventManager } from '../eventManager'
 import type { Transaction as InternalTransaction, TxResult } from '../index'
-import { BrowserProvider, getAddress, parseUnits, formatUnits } from 'ethers'
+import { BrowserProvider, getAddress, parseUnits, formatUnits, TransactionReceipt, TransactionResponse } from 'ethers'
 import { normalizeHexAddress } from '../helpers/uiHelper'
 import { aaSupportedNetworks, aaLocalStorageKey, getPimlicoBundlerURL, aaDeterminiticProxyAddress } from '../helpers/aaConstants'
 import { randomBytes } from 'crypto'
@@ -111,9 +111,9 @@ export class TxRunnerWeb3 {
     return new Promise(async (resolve, reject) => {
       try {
         const web3 = tx.web3 || await this._api.call('blockchain', 'getWeb3')
-        const receipt = await tryTillReceiptAvailable(resp, web3)
+        const receipt = await tryTillReceiptAvailable(resp, web3, { api: this._api })
         const originTo = tx.to
-        tx = await tryTillTxAvailable(resp, web3)
+        tx = await tryTillTxAvailable(resp, web3, { api: this._api })
         if (isCreation && !receipt.contractAddress) {
           // if it is a isCreation, contractAddress should be defined.
           // if it's not the case look for the event ContractCreated(uint256,address,uint256,bytes32) and extract the address
@@ -407,7 +407,11 @@ export class TxRunnerWeb3 {
   }
 }
 
-async function tryTillReceiptAvailable (txhash: string, provider: BrowserProvider) {
+async function tryTillReceiptAvailable (txhash: string, provider: BrowserProvider, options?: { api?: Plugin, startTime?: number, promptShown?: boolean }): Promise<TransactionReceipt> {
+  const startTime = options?.startTime || Date.now()
+  const api = options?.api
+  const TIMEOUT_THRESHOLD = 60000 // 60 seconds before showing prompt
+
   try {
     const receipt = await provider.getTransactionReceipt(txhash)
     if (receipt) {
@@ -418,16 +422,73 @@ async function tryTillReceiptAvailable (txhash: string, provider: BrowserProvide
         return receipt
     }
   } catch (e) {}
+
+  const elapsed = Date.now() - startTime
+
+  if (api && elapsed > TIMEOUT_THRESHOLD && !options?.promptShown) {
+    return new Promise<TransactionReceipt>((resolve, reject) => {
+      api.call('notification', 'modal', {
+        id: 'transaction-taking-long',
+        title: 'Transaction Taking Too Long',
+        message: `The transaction is taking longer than expected. This could mean the transaction is pending, was replaced, or was cancelled in your wallet. Would you like to continue waiting or cancel?`,
+        okLabel: 'Continue Waiting',
+        cancelLabel: 'Cancel Transaction',
+        okFn: async () => {
+          try {
+            const result = await tryTillReceiptAvailable(txhash, provider, { api, startTime, promptShown: true })
+            resolve(result)
+          } catch (error) {
+            reject(error)
+          }
+        },
+        cancelFn: () => {
+          reject(new Error('Transaction cancelled by user - receipt not available.'))
+        }
+      })
+    })
+  }
+
   await pause()
-  return await tryTillReceiptAvailable(txhash, provider)
+  return await tryTillReceiptAvailable(txhash, provider, { api, startTime, promptShown: options?.promptShown })
 }
 
-async function tryTillTxAvailable (txhash: string, provider: BrowserProvider) {
+async function tryTillTxAvailable (txhash: string, provider: BrowserProvider, options?: { api?: Plugin, startTime?: number, promptShown?: boolean }): Promise<TransactionResponse> {
+  const startTime = options?.startTime || Date.now()
+  const api = options?.api
+  const TIMEOUT_THRESHOLD = 60000 // 60 seconds before showing prompt
+
   try {
     const tx = await provider.getTransaction(txhash)
     if (tx && tx.blockHash) return tx
   } catch (e) {}
-  return await tryTillTxAvailable(txhash, provider)
+
+  const elapsed = Date.now() - startTime
+
+  if (api && elapsed > TIMEOUT_THRESHOLD && !options?.promptShown) {
+    return new Promise<TransactionResponse>((resolve, reject) => {
+      api.call('notification', 'modal', {
+        id: 'transaction-taking-long',
+        title: 'Transaction Taking Too Long',
+        message: `The transaction is taking longer than expected. This could mean the transaction is pending, was replaced, or was cancelled in your wallet. Would you like to continue waiting or cancel?`,
+        okLabel: 'Continue Waiting',
+        cancelLabel: 'Cancel Transaction',
+        okFn: async () => {
+          try {
+            const result = await tryTillTxAvailable(txhash, provider, { api, startTime, promptShown: true })
+            resolve(result)
+          } catch (error) {
+            reject(error)
+          }
+        },
+        cancelFn: () => {
+          reject(new Error('Transaction cancelled by user - transaction data not available.'))
+        }
+      })
+    })
+  }
+
+  await pause()
+  return await tryTillTxAvailable(txhash, provider, { api, startTime, promptShown: options?.promptShown })
 }
 
 async function pause () { return new Promise((resolve, reject) => { setTimeout(resolve, 500) }) }

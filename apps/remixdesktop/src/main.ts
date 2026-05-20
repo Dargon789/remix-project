@@ -185,6 +185,12 @@ function handleRemixUrl(url: string) {
       break;
     }
 
+    case '/auth/sso-callback': {
+      console.log('SSO auth callback received');
+      desktopAuthHandlerPlugin?.handleSSOCallback(searchParams);
+      break;
+    }
+
     default:
       console.warn('Unknown remix:// URL path:', fullPath);
       break;
@@ -268,7 +274,7 @@ import HelpMenu from './menus/help';
 import { execCommand } from './menus/commands';
 import main from './menus/main';
 import { trackEvent } from './utils/matamo';
-import { githubAuthHandlerPlugin } from './engine';
+import { githubAuthHandlerPlugin, desktopAuthHandlerPlugin } from './engine';
 
 const commandKeys: Record<string, string> = {
   'window:new': 'CmdOrCtrl+N',

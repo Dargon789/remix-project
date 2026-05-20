@@ -1,6 +1,6 @@
 import { Registry } from '@remix-project/remix-lib'
 import { SettingsActions, SettingsState } from '../types'
-import { resetOllamaHostOnSettingsChange } from '@remix/remix-ai-core';
+import { resetOllamaHostOnSettingsChange, onDeepAgentApiKeysChanged } from '@remix/remix-ai-core';
 const config = Registry.getInstance().get('config').api
 const settingsConfig = Registry.getInstance().get('settingsConfig').api
 const defaultTheme = config.get('settings/theme') ? settingsConfig.themes.find((theme) => theme.name.toLowerCase() === config.get('settings/theme').toLowerCase()) : settingsConfig.themes[0]
@@ -19,6 +19,11 @@ const etherscanAccessToken = config.get('settings/etherscan-access-token') || ''
 const mcpServersEnable = config.get('settings/mcp/servers/enable') || false
 const mcpServerManagement = config.get('settings/mcp-server-management') || false
 const ollamaEndpoint = config.get('settings/ollama-endpoint') || 'http://localhost:11434'
+const deepagentApiKeysConfig = config.get('settings/deepagent-api-keys-config') || false
+const deepagentAnthropicApiKey = config.get('settings/deepagent-anthropic-api-key') || ''
+const deepagentMistralApiKey = config.get('settings/deepagent-mistral-api-key') || ''
+const deepagentOpenaiApiKey = config.get('settings/deepagent-openai-api-key') || ''
+const deepagentMoonshotApiKey = config.get('settings/deepagent-moonshot-api-key') || ''
 
 let githubConfig = config.get('settings/github-config') || false
 let ipfsConfig = config.get('settings/ipfs-config') || false
@@ -55,6 +60,12 @@ if (!etherscanConfig && etherscanAccessToken) {
 if (!ollamaConfig && ollamaEndpoint !== 'http://localhost:11434') {
   config.set('settings/ollama-config', true)
   ollamaConfig = true
+}
+// Auto-enable deepagent API keys config if any API key is set
+let deepagentApiKeysConfigAuto = deepagentApiKeysConfig
+if (!deepagentApiKeysConfigAuto && (deepagentAnthropicApiKey || deepagentMistralApiKey || deepagentOpenaiApiKey || deepagentMoonshotApiKey)) {
+  config.set('settings/deepagent-api-keys-config', true)
+  deepagentApiKeysConfigAuto = true
 }
 if (typeof generateContractMetadata !== 'boolean') {
   config.set('settings/generate-contract-metadata', true)
@@ -230,6 +241,26 @@ export const initialState: SettingsState = {
     value: ollamaEndpoint,
     isLoading: false
   },
+  'deepagent-api-keys-config': {
+    value: deepagentApiKeysConfigAuto,
+    isLoading: false
+  },
+  'deepagent-anthropic-api-key': {
+    value: deepagentAnthropicApiKey,
+    isLoading: false
+  },
+  'deepagent-mistral-api-key': {
+    value: deepagentMistralApiKey,
+    isLoading: false
+  },
+  'deepagent-openai-api-key': {
+    value: deepagentOpenaiApiKey,
+    isLoading: false
+  },
+  'deepagent-moonshot-api-key': {
+    value: deepagentMoonshotApiKey,
+    isLoading: false
+  },
   toaster: {
     value: '',
     isLoading: false
@@ -239,7 +270,6 @@ export const initialState: SettingsState = {
 export const settingReducer = (state: SettingsState, action: SettingsActions): SettingsState => {
   switch (action.type) {
   case 'SET_VALUE':
-    config.set('settings/' + action.payload.name, action.payload.value)
     // Reset Ollama host cache when endpoint is changed
     if (action.payload.name === 'ollama-endpoint') {
       try {
@@ -249,9 +279,22 @@ export const settingReducer = (state: SettingsState, action: SettingsActions): S
       }
     }
 
-    return { ...state, [action.payload.name]: { ...state[action.payload.name], value: action.payload.value, isLoading: false } }
+    // Reinitialize DeepAgent when API key settings change
+    if (action.payload.name === 'deepagent-api-keys-config' ||
+        action.payload.name === 'deepagent-anthropic-api-key' ||
+        action.payload.name === 'deepagent-mistral-api-key' ||
+        action.payload.name === 'deepagent-openai-api-key' ||
+        action.payload.name === 'deepagent-moonshot-api-key') {
+      try {
+        onDeepAgentApiKeysChanged();
+      } catch (error) {
+        // Ignore errors - DeepAgent functionality is optional
+      }
+    }
+
+    return { ...state, [action.payload.name]: { ...(state as any)[action.payload.name], value: action.payload.value, isLoading: false } }
   case 'SET_LOADING':
-    return { ...state, [action.payload.name]: { ...state[action.payload.name], isLoading: true } }
+    return { ...state, [action.payload.name]: { ...(state as any)[action.payload.name], isLoading: true } }
 
   case 'SET_TOAST_MESSAGE':
     return { ...state, toaster: { ...state.toaster, value: action.payload.value, isLoading: false } }

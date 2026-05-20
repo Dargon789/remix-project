@@ -2,10 +2,12 @@ import React, { useState, useEffect, useContext } from 'react'
 import { useAuth } from '../../../app/src/lib/remix-app/context/auth-context'
 import { AppContext } from '../../../app/src/lib/remix-app/context/context'
 import { LoginModal } from './modals/login-modal'
+import { startSignInFlow } from './start-sign-in'
 import { UserBadge } from './user-badge'
 import { UserMenuCompact } from './user-menu-compact'
 import { UserMenuFull } from './user-menu-full'
 import { AuthProviderType } from '@remix-ui/app'
+import { QueryParams } from '@remix-project/remix-lib'
 
 interface LoginButtonProps {
   className?: string
@@ -30,6 +32,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
   const [themes, setThemes] = useState<Array<{ name: string; quality: string }>>([])
   const [currentTheme, setCurrentTheme] = useState<string>('')
   const signInButtonMode = appContext?.appConfig?.['auth.sign_in_button_mode'] || 'hidden'
+  const isDesktopApp = typeof window !== 'undefined' && (window as any).electronAPI !== undefined
 
   useEffect(() => {
     if (plugin && typeof plugin.call === 'function') {
@@ -49,6 +52,19 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
       })()
     }
   }, [plugin])
+
+  useEffect(() => {
+    if (isDesktopApp || isAuthenticated) return
+
+    const params = new QueryParams().get() as Record<string, string>
+    if (params.desktop_auth) {
+      setShowModal(true)
+    }
+  }, [isDesktopApp, isAuthenticated])
+
+  const handleSignIn = async () => {
+    await startSignInFlow(plugin, () => setShowModal(true), 'Sign In')
+  }
 
   const pollForCurrentTheme = async () => {
     const active = await plugin.call('theme', 'currentTheme')
@@ -132,12 +148,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
         <button
           className={`btn btn-sm btn-primary ${className}`}
           style={{ whiteSpace: 'nowrap' }}
-          onClick={() => {
-            setShowModal(true)
-            if (plugin && typeof plugin.call === 'function') {
-              plugin.call('matomo', 'trackEvent', 'auth', 'openLoginModal', 'Sign In', undefined).catch(() => {})
-            }
-          }}
+          onClick={handleSignIn}
           data-id="login-button"
         >
           <span className="d-inline-flex align-items-center">
@@ -155,7 +166,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
   if (variant === 'badge') {
     return (
       <UserBadge
-        user={user}
+        user={user!}
         credits={credits}
         showCredits={showCredits}
         className={className}
@@ -170,7 +181,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
   if (variant === 'compact') {
     return (
       <UserMenuCompact
-        user={user}
+        user={user!}
         credits={credits}
         showCredits={showCredits}
         className={className}
@@ -191,7 +202,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
 
   return (
     <UserMenuFull
-      user={user}
+      user={user!}
       credits={credits}
       showCredits={showCredits}
       className={className}

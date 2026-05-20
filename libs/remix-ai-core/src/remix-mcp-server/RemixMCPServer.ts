@@ -46,11 +46,16 @@ import { createFileManagementTools } from './handlers/FileManagementHandler';
 import { createDeploymentTools } from './handlers/DeploymentHandler';
 import { createDebuggingTools } from './handlers/DebuggingHandler';
 import { createCodeAnalysisTools } from './handlers/CodeAnalysisHandler';
+import { createContractClassificationTools } from './handlers/ContractClassifierHandler';
+import { createEnhancedAuditTools } from './handlers/EnhancedAuditHandler';
 import { createChartJsTools } from './handlers/ChartJsHandler';
 import { createTutorialsTools } from './handlers/TutorialsHandler';
 import { createAmpTools } from './handlers/AmpHandler';
 import { createMathUtilsTools } from './handlers/MathUtilsHandler';
 import { createFoundryHardhatTools } from './handlers/FoundryHardhatHandler';
+import { createCoordinationTools } from './handlers/CoordinationHandler';
+import { createSkillTools } from './handlers/SkillLoaderHandler';
+import { createDAppGeneratorTools } from './handlers/DAppGeneratorHandler';
 
 // Import resource providers
 import { ProjectResourceProvider } from './providers/ProjectResourceProvider';
@@ -827,9 +832,19 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       const debuggingTools = createDebuggingTools();
       this._tools.registerBatch(debuggingTools);
 
-      // Register debugging tools
+      // Register code analyser tools
       const codeAnalysisTools = createCodeAnalysisTools();
       this._tools.registerBatch(codeAnalysisTools);
+
+      // Register contract classification tools
+      const contractClassificationTools = createContractClassificationTools();
+      this._tools.registerBatch(contractClassificationTools);
+
+      // Register enhanced audit tools
+      /*
+      const enhancedAuditTools = createEnhancedAuditTools();
+      this._tools.registerBatch(enhancedAuditTools);
+      */
 
       // Register tutorial tools
       const tutorialTools = createTutorialsTools();
@@ -845,6 +860,9 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       const mathUtilsTools = createMathUtilsTools();
       this._tools.registerBatch(mathUtilsTools);
 
+      const coordinationTools = createCoordinationTools();
+      this._tools.registerBatch(coordinationTools);
+
       // Register Foundry and Hardhat tools
       if (isElectron()) {
         const foundryHardhatTools = createFoundryHardhatTools();
@@ -856,6 +874,18 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       const chartJsTools = createChartJsTools();
       this._tools.registerBatch(chartJsTools);
       */
+
+      // Register Skill Management tools
+      // skills can be added from the UI and can be dynamic.
+      /*
+      const skillTools = createSkillTools();
+      this._tools.registerBatch(skillTools);
+      */
+
+      // Register DApp Generator tools
+      const dappGeneratorTools = createDAppGeneratorTools();
+      this._tools.registerBatch(dappGeneratorTools);
+
       const totalTools = this._tools.list().length;
 
     } catch (error) {

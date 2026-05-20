@@ -74,12 +74,12 @@ import { HardhatHandle } from './app/files/hardhat-handle'
 import { HardhatHandleDesktop } from './app/plugins/electron/hardhatPlugin'
 import { circomPlugin } from './app/plugins/electron/circomElectronPlugin'
 import { GitHubAuthHandler } from './app/plugins/electron/gitHubAuthHandler'
+import { DesktopAuthHandler as DesktopAuthHandlerPlugin } from './app/plugins/electron/desktopAuthHandler'
 import { GitPlugin } from './app/plugins/git'
 import { Matomo } from './app/plugins/matomo'
 import { DesktopClient } from './app/plugins/desktop-client'
 import { DesktopHost } from './app/plugins/electron/desktopHostPlugin'
 import { WalletConnect } from './app/plugins/walletconnect'
-import { AIDappGenerator } from './app/plugins/ai-dapp-generator'
 import { IndexedDbCachePlugin } from './app/plugins/IndexedDbCache'
 import { NotificationCenterPlugin } from './app/plugins/notification-center'
 import { FeedbackPlugin } from './app/plugins/feedback'
@@ -127,6 +127,8 @@ import Terminal from './app/panels/terminal'
 import TabProxy from './app/panels/tab-proxy.js'
 import BottomBarPanel from './app/components/bottom-bar-panel'
 import { TemplateExplorerModalPlugin } from './app/plugins/template-explorer-modal'
+import { SkillsExplorerModalPlugin } from './app/plugins/skills-explorer-modal'
+import { ChecklistExplorerModalPlugin } from './app/plugins/checklist-explorer-modal'
 import { TxRunnerPlugin } from './app/plugins/txRunnerPlugin'
 
 // Tracking now handled by this.track() method using MatomoManager
@@ -176,6 +178,8 @@ class AppComponent {
   statusBar: StatusBar
   topBar: Topbar
   templateExplorerModal: TemplateExplorerModalPlugin
+  skillExplorerModal: SkillsExplorerModalPlugin
+  checklistExplorerModal: ChecklistExplorerModalPlugin
   remixAiAssistant: RemixAIAssistant
   settings: SettingsTab
   authPlugin: AuthPlugin
@@ -325,6 +329,8 @@ class AppComponent {
     }
 
     this.templateExplorerModal = new TemplateExplorerModalPlugin()
+    this.skillExplorerModal = new SkillsExplorerModalPlugin()
+    this.checklistExplorerModal = new ChecklistExplorerModalPlugin()
     // SERVICES
     // ----------------- gist service ---------------------------------
     this.gistHandler = new GistHandler()
@@ -381,9 +387,6 @@ class AppComponent {
 
     //---- matomo
     const matomo = new Matomo()
-
-    //---- AI DApp Generator
-    const aiDappGenerator = new AIDappGenerator()
 
     //---------------- Solidity UML Generator -------------------------
     const solidityumlgen = new SolidityUmlGen(appManager)
@@ -494,6 +497,8 @@ class AppComponent {
     const templateSelection = new TemplatesSelectionPlugin()
 
     const templateExplorerModal = this.templateExplorerModal
+    const skillExplorerModal = this.skillExplorerModal
+    const checklistExplorerModal = this.checklistExplorerModal
 
     const walletConnect = new WalletConnect()
 
@@ -564,7 +569,6 @@ class AppComponent {
       git,
       pluginStateLogger,
       matomo,
-      aiDappGenerator,
       templateSelection,
       scriptRunnerUI,
       remixAI,
@@ -602,6 +606,8 @@ class AppComponent {
       this.engine.register([desktopHost])
       const githubAuthHandler = new GitHubAuthHandler()
       this.engine.register([githubAuthHandler])
+      const desktopAuthHandler = new DesktopAuthHandlerPlugin()
+      this.engine.register([desktopAuthHandler])
     } else {
       //---- desktop client
       const desktopClient = new DesktopClient(blockchain)
@@ -697,7 +703,7 @@ class AppComponent {
       this.accountPlugin,
       feedbackPlugin
     ])
-    this.engine.register([templateExplorerModal, this.topBar])
+    this.engine.register([templateExplorerModal, skillExplorerModal, checklistExplorerModal, this.topBar])
 
     this.layout.panels = {
       tabs: { plugin: tabProxy, active: true },
@@ -742,12 +748,11 @@ class AppComponent {
       'offsetToLineColumnConverter',
       'pluginStateLogger',
       'matomo',
-      'ai-dapp-generator',
       'indexedDbCache'
     ])
 
     await this.appManager.activatePlugin(['mainPanel', 'menuicons', 'tabs'])
-    await this.appManager.activatePlugin(['topbar', 'templateexplorermodal'])
+    await this.appManager.activatePlugin(['topbar', 'templateexplorermodal', 'skillsexplorermodal', 'checklistexplorermodal'])
     await this.appManager.activatePlugin(['statusBar'])
     // await this.appManager.activatePlugin(['remix-template-explorer-modal'])
     await this.appManager.activatePlugin(['bottomBar'])

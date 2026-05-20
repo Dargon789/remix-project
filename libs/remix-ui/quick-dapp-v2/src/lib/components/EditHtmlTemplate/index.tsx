@@ -4,7 +4,6 @@ import { Button, Row, Col, Card, Modal } from 'react-bootstrap';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { toPng } from 'html-to-image';
 import { AppContext } from '../../contexts';
-import ChatBox from '../ChatBox';
 import DeployPanel from '../DeployPanel';
 // remixClient removed - using plugin from context instead
 import { InBrowserVite } from '../../InBrowserVite';
@@ -63,6 +62,7 @@ function EditHtmlTemplate(): JSX.Element {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [showVmTips, setShowVmTips] = useState(false);
 
   useEffect(() => {
     if (!plugin) return;
@@ -419,45 +419,67 @@ window.addEventListener('unhandledrejection', function(e) {
     setIsBuilding(false);
   }
 
-  const handleChatMessage = async (message: string, imageBase64?: string) => {
+  const handleOpenAIAssistant = async () => {
     if (!activeDapp || !plugin) return;
+    console.log('[QuickDapp] Opening AI Assistant for DApp update:', activeDapp.slug);
 
-    dispatch({
-      type: 'SET_DAPP_PROCESSING',
-      payload: { slug: activeDapp.slug, isProcessing: true }
-    });
+    // Check if AI is currently busy (streaming)
+    const streamingEl = document.querySelector('[data-id="remix-ai-streaming"]');
+    if (streamingEl?.getAttribute('data-streaming') === 'true') {
+      setNotificationModal({
+        show: true,
+        title: 'AI Assistant Busy',
+        message: 'The AI Assistant is currently processing a request. Please wait for it to finish, then try again.',
+        variant: 'warning'
+      });
+      return;
+    }
 
+    // Gather current DApp file list for context
+    let fileList: string[] = [];
     try {
-      const mapFiles = new Map<string, string>();
-      const dappRootPath = '/';
-      await readDappFiles(plugin, dappRootPath, mapFiles, 0);
-
-      const currentFilesObject: Pages = {};
-      for (const [path, content] of mapFiles.entries()) {
-        if (!path.match(/\.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/i)) {
-          currentFilesObject[path] = content;
-        }
+      const srcFiles = await plugin.call('fileManager', 'readdir', 'src');
+      if (srcFiles) {
+        fileList = Object.keys(srcFiles).map(f => f.replace(/^src\//, 'src/'));
       }
+    } catch (e) {
+      console.warn('[QuickDapp] Could not read DApp files:', e);
+    }
 
-      let userPrompt: any = message;
-      if (imageBase64) {
-        userPrompt = [{ type: 'text', text: message }, { type: 'image_url', image_url: { url: imageBase64 } }];
-      }
+    // Build rich context prompt
+    const dappName = activeDapp.config?.title || activeDapp.name || 'Untitled';
+    const contractInfo = activeDapp.contract;
+    const promptParts = [
+      `I have an existing DApp called "${dappName}" in workspace "${activeDapp.workspaceName}".`,
+      ``,
+      `Contract: ${contractInfo?.name || 'Unknown'} at ${contractInfo?.address || 'unknown'}`,
+      `Chain: ${contractInfo?.chainId || 'unknown'}`,
+    ];
 
-      // Call updateDapp through plugin API
-      await plugin.updateDapp(
-        activeDapp.slug,
-        activeDapp.contract.address,
-        userPrompt,
-        currentFilesObject,
-        imageBase64 || null,
-        activeDapp.contract.abi,
-        activeDapp.contract.chainId
-      );
+    if (fileList.length > 0) {
+      promptParts.push(``, `Current DApp files:`, ...fileList.map(f => `- ${f}`));
+    }
 
-    } catch (error: any) {
-      console.error('Update setup failed:', error);
-      dispatch({ type: 'SET_DAPP_PROCESSING', payload: { slug: activeDapp.slug, isProcessing: false } });
+    promptParts.push(
+      ``,
+      `I want to update this DApp. Please list my DApp workspaces, confirm this is the right one, and then ask me what changes I'd like to make.`
+    );
+
+    const prompt = promptParts.join('\n');
+
+    // Activate and focus AI Assistant
+    try {
+      await plugin.call('manager', 'activatePlugin', 'remix-ai-assistant');
+    } catch (e) { /* may already be active */ }
+    try {
+      await plugin.call('rightSidePanel', 'focusPanel');
+    } catch (e) { /* best-effort */ }
+
+    // Send prompt to AI
+    try {
+      await plugin.call('remixaiassistant' as any, 'chatPipe', prompt);
+    } catch (e) {
+      console.warn('[QuickDapp] Could not send prompt to AI Assistant:', e);
     }
   };
 
@@ -623,6 +645,57 @@ window.addEventListener('unhandledrejection', function(e) {
               {activeDapp.workspaceName}
             </span>
           </div>
+          <div className="vr mx-1 text-secondary opacity-50" style={{ height: '1.2rem' }}></div>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <button
+              className="btn btn-link text-muted p-0 text-decoration-none"
+              onClick={() => setShowTips(!showTips)}
+              style={{ fontSize: '0.85rem' }}
+            >
+              <i className="far fa-question-circle me-1"></i>
+              {showTips ? 'Hide Tips' : 'Help & Tips'}
+            </button>
+            {isVM && (
+              <button
+                className="btn btn-link text-warning p-0 text-decoration-none"
+                onClick={() => setShowVmTips(!showVmTips)}
+                style={{ fontSize: '0.85rem' }}
+                title="VM Deployment Information"
+                data-id="vm-deployment-btn"
+              >
+                <i className="fas fa-exclamation-triangle me-1"></i>
+                {showVmTips ? 'Hide VM Info' : 'VM Info'}
+              </button>
+            )}
+            <Button
+              variant="success"
+              size="sm"
+              onClick={handleOpenAIAssistant}
+              disabled={isAiUpdating}
+              data-id="update-with-ai-btn"
+            >
+              <i className="fas fa-robot me-1"></i>
+              Ask AI to Update
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => runBuild(true)}
+              disabled={isBuilding || isAiUpdating}
+              data-id="refresh-preview-btn"
+            >
+              {isBuilding ? <><i className="fas fa-spinner fa-spin me-1"></i> Building...</> : <><i className="fas fa-play me-1"></i> Refresh Preview</>}
+            </Button>
+            <Button
+              variant="outline-danger"
+              size="sm"
+              onClick={() => setShowDeleteModal(true)}
+              disabled={isBuilding || isCapturing}
+              data-id="delete-dapp-editor-btn"
+            >
+              <i className="fas fa-trash me-1"></i> Delete DApp
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -630,46 +703,8 @@ window.addEventListener('unhandledrejection', function(e) {
         <div className="container-fluid pt-3 h-100">
           <Row className="m-0 h-100">
             <Col xs={12} lg={8} className="pe-lg-3 d-flex flex-column qd-main-col">
-              <Row>
-                <div className="flex-grow-1 mb-3" style={{ minHeight: '30px' }}>
-                  <ChatBox onSendMessage={handleChatMessage} isLoading={isAiUpdating}/>
-                </div>
-              </Row>
               <Row className="flex-grow-1 mb-3">
                 <Col xs={12} className="d-flex flex-column h-100">
-                  <div className="d-flex justify-content-between align-items-center mb-2 flex-shrink-0">
-                    <h5 className="mb-0 text-body">
-                      <FormattedMessage id="quickDapp.preview" defaultMessage="Preview" />
-                      <button
-                        className="btn btn-link text-muted p-0 ms-2 text-decoration-none"
-                        onClick={() => setShowTips(!showTips)}
-                        style={{ fontSize: '0.85rem' }}
-                      >
-                        <i className="far fa-question-circle me-1"></i>
-                        {showTips ? 'Hide Tips' : 'Help & Tips'}
-                      </button>
-                    </h5>
-                    <div className="d-flex gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => runBuild(true)}
-                        disabled={isBuilding || isAiUpdating}
-                        data-id="refresh-preview-btn"
-                      >
-                        {isBuilding ? <><i className="fas fa-spinner fa-spin me-1"></i> Building...</> : <><i className="fas fa-play me-1"></i> Refresh Preview</>}
-                      </Button>
-                      <Button
-                        variant="outline-danger"
-                        size="sm"
-                        onClick={() => setShowDeleteModal(true)}
-                        disabled={isBuilding || isCapturing}
-                        data-id="delete-dapp-editor-btn"
-                      >
-                        <i className="fas fa-trash me-1"></i> Delete DApp
-                      </Button>
-                    </div>
-                  </div>
 
                   {showTips && (
                     <div className="alert alert-info py-2 px-3 mb-2 small shadow-sm fade-in border-info bg-opacity-10">
@@ -677,13 +712,13 @@ window.addEventListener('unhandledrejection', function(e) {
                       <ul className="mb-0 ps-3">
                         <li>AI code might not be perfect. If the preview is broken:</li>
                         <li><strong>Option 1:</strong> Edit code manually in the <strong>File Explorer</strong> (left panel), then click <strong>Refresh Preview</strong>.</li>
-                        <li><strong>Option 2:</strong> Ask the AI to fix it in the <strong>Chat Box</strong> above.</li>
+                        <li><strong>Option 2:</strong> Click the <strong>Ask AI to Update</strong> button to ask the AI Assistant to fix it.</li>
                       </ul>
                     </div>
                   )}
 
-                  {isVM && (
-                    <div className={`alert py-2 px-3 mb-2 small shadow-sm d-flex align-items-start ${vmContractStatus === 'not-found' ? 'alert-danger border-danger' : 'alert-warning border-warning'}`} data-id="vm-warning-banner">
+                  {isVM && showVmTips && (
+                    <div className={`alert py-2 px-3 mb-2 small shadow-sm d-flex align-items-start fade-in ${vmContractStatus === 'not-found' ? 'alert-danger border-danger' : 'alert-warning border-warning'}`} data-id="vm-warning-banner">
                       <i className={`fas ${vmContractStatus === 'not-found' ? 'fa-times-circle text-danger' : 'fa-exclamation-triangle text-warning'} me-2 mt-1`}></i>
                       <div>
                         <div className="fw-bold mb-1">Remix VM — Local Only</div>

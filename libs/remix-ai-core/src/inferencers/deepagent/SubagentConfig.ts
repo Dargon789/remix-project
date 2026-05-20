@@ -1,0 +1,191 @@
+import { SubAgent, CompiledSubAgent, createDeepAgent } from 'deepagents'
+import type { DynamicStructuredTool } from '@langchain/core/tools'
+import { BaseChatModel } from '@langchain/core/language_models/chat_models'
+import {
+  CODE_REVIEWER_SUBAGENT_PROMPT,
+  FRONTEND_SPECIALIST_SUBAGENT_PROMPT,
+  ETHERSCAN_SUBAGENT_PROMPT,
+  THEGRAPH_SUBAGENT_PROMPT,
+  ALCHEMY_SUBAGENT_PROMPT,
+  GAS_OPTIMIZER_SUBAGENT_PROMPT,
+  COMPREHENSIVE_AUDITOR_SUBAGENT_PROMPT,
+  WEB3_EDUCATOR_SUBAGENT_PROMPT,
+  CONVERSION_UTILITIES_SUBAGENT_PROMPT,
+  DEBUG_SPECIALIST_SUBAGENT_PROMPT,
+  SOLIDITY_ENGINEER_SUBAGENT_PROMPT,
+  WEB_SEARCH_SUBAGENT_PROMPT,
+  CIRCLE_SUBAGENT_PROMPT,
+  SECURITY_ANALYSIS_PROMPT,
+  QUICKDAPP_SPECIALIST_SUBAGENT_PROMPT
+} from './prompts/system/lightPrompts'
+import {
+  getBasicMcpToolsForSecurityAuditor,
+  getBasicFileToolsForGasOptimizer,
+  getCoordinationToolsForComprehensiveAuditor,
+  getEducationToolsForWeb3Educator,
+  getDebugToolsForDebugSpecialist,
+  getSolidityToolsForSolidityEngineer,
+  getWebSearchToolsForWebSearchSpecialist,
+  getConversionToolsForConversionSpecialist,
+  getEtherscanToolsForEtherscanSpecialist,
+  getAlchemyToolsForAlchemySpecialist,
+  getTheGraphToolsForTheGraphSpecialist,
+  getCircleToolsForCircleSpecialist,
+  getFileOperationTools,
+  getToolForClassifierSpecialist,
+  getQuickDappToolsForQuickDappSpecialist
+} from './helpers/subagentToolFilters'
+
+export interface SubagentConfigItem {
+  name: string
+  systemPrompt: string
+  model: BaseChatModel
+  tools: DynamicStructuredTool[]
+  backend?: any
+  description?: string | undefined
+}
+
+export function buildSubagentConfigs(
+  tools: DynamicStructuredTool[],
+  model: BaseChatModel,
+  filesystemBackend: any
+): any[] {
+  const etherscanTools = getEtherscanToolsForEtherscanSpecialist(tools)
+  const theGraphTools = getTheGraphToolsForTheGraphSpecialist(tools)
+  const alchemyTools = getAlchemyToolsForAlchemySpecialist(tools)
+  const circleTools = getCircleToolsForCircleSpecialist(tools)
+  const basicMcpTools = getBasicMcpToolsForSecurityAuditor(tools)
+  const basicFileTools = getBasicFileToolsForGasOptimizer(tools)
+  const baseCoordinationTools = getCoordinationToolsForComprehensiveAuditor(tools)
+  const fileOperationTools = getFileOperationTools(tools)
+  const coordinationTools = [...baseCoordinationTools, ...fileOperationTools]
+  const educationTools = getEducationToolsForWeb3Educator(tools)
+  const debugTools = getDebugToolsForDebugSpecialist(tools)
+  const solidityTools = getSolidityToolsForSolidityEngineer(tools)
+  const webSearchTools = getWebSearchToolsForWebSearchSpecialist(tools)
+  const conversionTools = getConversionToolsForConversionSpecialist(tools)
+  const classifierTools = getToolForClassifierSpecialist(tools)
+  const quickDappTools = getQuickDappToolsForQuickDappSpecialist(tools)
+
+  const comprehensiveAuditor = createDeepAgent({
+    systemPrompt: COMPREHENSIVE_AUDITOR_SUBAGENT_PROMPT,
+    tools: coordinationTools,
+    subagents: [{
+      name: 'Gas Optimizer',
+      systemPrompt: GAS_OPTIMIZER_SUBAGENT_PROMPT,
+      model,
+      tools: basicFileTools,
+      description: 'Specializes in optimizing gas usage in smart contracts.'
+    },{
+      name: 'Security Analyst',
+      systemPrompt: SECURITY_ANALYSIS_PROMPT,
+      model,
+      tools: basicMcpTools,
+      description: 'Specializes reviewing code for security vulnerabilities.'
+    }]
+  })
+
+  // Cast model to any to handle @langchain/core version mismatch between root and deepagents
+  const modelAny = model as any
+
+  return [
+    {
+      name: 'Contract Classifier',
+      systemPrompt: 'Contract Classifier: Analyze smart contract structure and classify features (proxy patterns, token standards, DeFi protocols, governance mechanisms). Extract contract skeleton and identify architectural patterns, complexity indicators, and risk factors using structured analysis.',
+      model,
+      tools: classifierTools,
+      description: 'Specializes in analyzing and classifying smart contract features and architectural patterns for targeted analysis.'
+    },
+    {
+      name: 'Solidity Engineer',
+      systemPrompt: SOLIDITY_ENGINEER_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: solidityTools,
+      description: 'Expert in Solidity development, code generation, and smart contract architecture. Can write, explain, and optimize Solidity code.'
+    },
+    {
+      name: 'Web Search Specialist',
+      systemPrompt: WEB_SEARCH_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: webSearchTools,
+      description: 'Specializes in searching and retrieving information from web sources.'
+    },
+    {
+      name: 'Code Reviewer',
+      systemPrompt: CODE_REVIEWER_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: [],
+      description: 'Specializes in reviewing and providing feedback on code quality and best practices.'
+    },
+    {
+      name: 'Comprehensive Auditor',
+      systemPrompt: COMPREHENSIVE_AUDITOR_SUBAGENT_PROMPT,
+      model,
+      description: 'Specializes in comprehensive auditing and analysis of smart contracts.',
+      runnable: comprehensiveAuditor
+    },
+    {
+      name: 'Web3 Educator',
+      systemPrompt: WEB3_EDUCATOR_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: educationTools,
+      description: 'Specializes in teaching and explaining Web3 concepts and technologies.'
+    },
+    {
+      name: 'Frontend Specialist',
+      systemPrompt: FRONTEND_SPECIALIST_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: [],
+      description: 'Specializes in frontend development, UI design, and Web3 integration.'
+    },
+    {
+      name: 'QuickDapp Specialist',
+      systemPrompt: QUICKDAPP_SPECIALIST_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: quickDappTools,
+      description: 'Specializes in generating and updating React-based DApp frontends using file_write tools.'
+    },
+    {
+      name: 'Etherscan Specialist',
+      systemPrompt: ETHERSCAN_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: etherscanTools,
+      description: 'Specializes in analyzing and retrieving data from the Etherscan blockchain explorer.'
+    },
+    {
+      name: 'TheGraph Specialist',
+      systemPrompt: THEGRAPH_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: theGraphTools,
+      description: 'Specializes in analyzing and retrieving data from TheGraph decentralized query protocol.'
+    },
+    {
+      name: 'Alchemy Specialist',
+      systemPrompt: ALCHEMY_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: alchemyTools,
+      description: 'Specializes in analyzing and retrieving data from the Alchemy blockchain infrastructure.'
+    },
+    {
+      name: 'Debug Specialist',
+      systemPrompt: DEBUG_SPECIALIST_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: debugTools,
+      description: 'Specializes in debugging and troubleshooting smart contract issues.'
+    },
+    {
+      name: 'Conversion Utilities Specialist',
+      systemPrompt: CONVERSION_UTILITIES_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: conversionTools,
+      description: 'Specializes in providing conversion utilities for various data formats.'
+    },
+    {
+      name: 'Circle Specialist',
+      systemPrompt: CIRCLE_SUBAGENT_PROMPT,
+      model: modelAny,
+      tools: circleTools,
+      description: 'Specializes in Circle product documentation, APIs, and development resources.'
+    }
+  ]
+}

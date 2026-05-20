@@ -19,6 +19,7 @@ import isElectron from 'is-electron'
 import { desktopConnectionType, AppConfig } from '@remix-api'
 import { FloatingChatHistory } from './components/chatHistory/floatingChatHistory'
 import { appActionTypes } from './actions/app'
+import { DesktopRedirectOverlay } from '@remix-ui/login'
 
 interface IRemixAppUi {
   app: any
@@ -96,9 +97,23 @@ const RemixApp = (props: IRemixAppUi) => {
       showAiChatHistory: props.app.rightSidePanel.isMaximized,
       toggleIsAiChatMaximized: props.app.remixAiAssistant.isMaximized,
       closeAiChatHistory: props.app.remixAiAssistant.showHistorySidebar
-    }
+    },
+    showSkillsModal: false,
+    showChecklistModal: false
   })
   const [isAiWorkspaceBeingGenerated, setIsAiWorkspaceBeingGenerated] = useState<boolean>(false)
+
+  useEffect(() => {
+    if (props.app.remixAiAssistant?.setAppStateDispatch) {
+      props.app.remixAiAssistant.setAppStateDispatch(appStateDispatch)
+    }
+    if (props.app.skillExplorerModal?.setAppStateDispatch) {
+      props.app.skillExplorerModal.setAppStateDispatch(appStateDispatch)
+    }
+    if (props.app.checklistExplorerModal?.setAppStateDispatch) {
+      props.app.checklistExplorerModal.setAppStateDispatch(appStateDispatch)
+    }
+  }, [appStateDispatch, props.app.remixAiAssistant])
 
   useEffect(() => {
     if (props.app.params && props.app.params.activate && props.app.params.activate.split(',').includes('desktopClient')) {
@@ -396,6 +411,7 @@ const RemixApp = (props: IRemixAppUi) => {
         <onLineContext.Provider value={online}>
           <AuthProvider plugin={props.app.authPlugin}>
             <AppProvider value={value}>
+              <DesktopRedirectOverlay />
               <MatomoDialog hide={!appReady} managePreferencesFn={() => setShowManagePreferencesDialog(true)}></MatomoDialog>
               {showManagePreferencesDialog && <ManagePreferencesDialog></ManagePreferencesDialog>}
               <div className="d-flex flex-column col-12 vh-100">
@@ -477,8 +493,10 @@ const RemixApp = (props: IRemixAppUi) => {
               </div>
               <AppDialogs></AppDialogs>
               <DialogViewPlugin></DialogViewPlugin>
-              {appState.genericModalState.showModal && props.app.templateExplorerModal.render()
+              {appState.genericModalState?.showModal && props.app.templateExplorerModal.render()
               }
+              {appState.showSkillsModal && props.app.skillExplorerModal.render()}
+              {appState.showChecklistModal && props.app.checklistExplorerModal.render()}
               {props.app.invitationManager.render()}
               {props.app.membershipRequest.render()}
               {showBetaTestRegisterWidget && props.app.betaCornerWidget.render()}
