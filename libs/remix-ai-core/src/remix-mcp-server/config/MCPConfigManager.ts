@@ -279,11 +279,11 @@ export class MCPConfigManager {
   }
 
   private matchPattern(str: string, pattern: string): boolean {
-    // Convert glob pattern to regex safely:
-    // 1) Escape all regex metacharacters (including backslash)
-    // 2) Re-introduce glob wildcards: * => .*, ? => .
-    const regexPattern = pattern
-      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // Convert glob pattern to regex
+    // 1. Escape all regex metacharacters, including backslash.
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 2. Reintroduce glob semantics: '*' -> '.*', '?' -> '.'
+    const regexPattern = escaped
       .replace(/\\\*/g, '.*')
       .replace(/\\\?/g, '.');
 
