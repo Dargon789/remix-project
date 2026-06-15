@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 import { AsyncLocalStorageProviderSingleton } from '@langchain/core/singletons'
 
 export function initializeAsyncLocalStorage(): void {
@@ -39,7 +40,7 @@ export function initializeAsyncLocalStorage(): void {
 
   // Initialize LangChain's global AsyncLocalStorage singleton
   AsyncLocalStorageProviderSingleton.initializeGlobalInstance(browserAsyncLocalStorage)
-  console.log('[DeepAgentInferencer] Initialized AsyncLocalStorage for browser environment')
+  remixAILogger.log('[DeepAgentInferencer] Initialized AsyncLocalStorage for browser environment')
 }
 
 initializeAsyncLocalStorage()

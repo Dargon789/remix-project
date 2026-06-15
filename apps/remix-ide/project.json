@@ -11,8 +11,6 @@
     "solhint", 
     "circuit-compiler", 
     "learneth", 
-    "quick-dapp", 
-    "remix-dapp", 
     "noir-compiler"
   ],
   "targets": {

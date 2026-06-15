@@ -1,3 +1,4 @@
+import { remixAILogger } from '../helpers/logger'
 import { IMCPTool } from "../types/mcp"
 import { SimpleToolSelector } from "./simpleToolSelector"
 
@@ -78,13 +79,13 @@ export class WeightedToolSelector extends SimpleToolSelector {
     chatHistory: IChatMessage[] = [],
     maxTools: number = 15
   ): IMCPTool[] {
-    console.log('[WeightedToolSelector] Analyzing chat history:', chatHistory.length, 'messages');
+    remixAILogger.log('[WeightedToolSelector] Analyzing chat history:', chatHistory.length, 'messages');
 
     const historyAnalysis = this.analyzeChatHistory(chatHistory, allTools);
 
     // Log analysis results
     if (historyAnalysis.usedTools.size > 0) {
-      console.log('[WeightedToolSelector] Previously used tools:',
+      remixAILogger.log('[WeightedToolSelector] Previously used tools:',
         Array.from(historyAnalysis.usedTools.entries())
           .map(([name, count]) => `${name}(${count}x)`)
           .join(', ')
@@ -92,7 +93,7 @@ export class WeightedToolSelector extends SimpleToolSelector {
     }
 
     if (historyAnalysis.mentionedTools.size > 0) {
-      console.log('[WeightedToolSelector] Mentioned tools:',
+      remixAILogger.log('[WeightedToolSelector] Mentioned tools:',
         Array.from(historyAnalysis.mentionedTools.entries())
           .map(([name, count]) => `${name}(${count}x)`)
           .join(', ')
@@ -142,7 +143,7 @@ export class WeightedToolSelector extends SimpleToolSelector {
       ...coreToolResults.map(st => st.tool),
       ...nonCoreResults.slice(0, Math.max(0, remainingSlots)).map(st => st.tool)
     ];
-    console.log(`[WeightedToolSelector] Selected ${result.length} tools (${coreToolResults.length} core + ${result.length - coreToolResults.length} others, max ${maxTools}) with history weighting`);
+    remixAILogger.log(`[WeightedToolSelector] Selected ${result.length} tools (${coreToolResults.length} core + ${result.length - coreToolResults.length} others, max ${maxTools}) with history weighting`);
 
     return result;
   }
@@ -289,7 +290,7 @@ export class WeightedToolSelector extends SimpleToolSelector {
       return this.selectToolsWithHistory(allTools, userPrompt, chatHistory, maxTools);
     }
 
-    console.log('[WeightedToolSelector] No chat history, using keyword-based selection', chatHistory);
+    remixAILogger.log('[WeightedToolSelector] No chat history, using keyword-based selection', chatHistory);
     return super.selectTools(allTools, userPrompt, maxTools);
   }
 

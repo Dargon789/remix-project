@@ -6,12 +6,13 @@ import { Plugin } from '@remixproject/engine'
 import { EventEmitter } from 'events'
 import * as packageJson from '../../../../../package.json'
 import { RemixUiSkillsExplorerModal } from 'libs/remix-ui/skills-explorer-modal/src/lib/remix-ui-skills-explorer-modal'
+import { parseSkillNameFromContent, ensureDirectoryExists } from 'libs/remix-ui/skills-explorer-modal/src/lib/helpers'
 
 const pluginProfile = {
   name: 'skillsexplorermodal',
   displayName: 'Skills Explorer Modal',
   description: 'Skills Explorer Modal',
-  methods: [],
+  methods: ['loadSkill'],
   events: [],
   maintainedBy: 'Remix',
   kind: 'skillsexplorermodal',
@@ -70,6 +71,40 @@ export class SkillsExplorerModalPlugin extends Plugin {
     )
   }
 
+  async loadSkill (skillId: string) {
+    const ethSkillsApi: any = await this.call('auth' as any, 'getEthSkillsApi')
+    if (!ethSkillsApi || typeof ethSkillsApi.getSkill !== 'function') {
+      throw new Error('EthSkills API service is not available')
+    }
+    const response = await ethSkillsApi.getSkill(skillId)
+    if (!response.ok || !response.data) {
+      throw new Error(response.error || `Failed to fetch skill ${skillId} (HTTP ${response.status})`)
+    }
+    const data = response.data
+    if (!data.id || !data.name || !data.content || !data.resources) {
+      throw new Error('Invalid skill data format - missing required fields')
+    }
+    const skillData = {
+      id: data.id,
+      name: data.name,
+      description: data.description || '',
+      content: data.content,
+      resources: data.resources || {}
+    }
+    // Use the name from SKILL.md frontmatter as the directory name per convention.
+    // e.g. "---\nname: my-skill\n---" → skills/my-skill/
+    const dirName = parseSkillNameFromContent(skillData.content)
+    if (!dirName) {
+      throw new Error(`${skillId}: SKILL.md is not in the correct format. Expected YAML frontmatter with a 'name' field (---\nname: skill-name\ndescription: ...\n---)`)
+    }
+    const skillDir = `skills/${dirName}`
+    await ensureDirectoryExists(skillDir, this)
+    await this.call('fileManager', 'writeFile', `${skillDir}/SKILL.md`, skillData.content)
+    for (const [filename, content] of Object.entries(skillData.resources)) {
+      await this.call('fileManager', 'writeFile', `${skillDir}/${filename}`, content)
+    }
+  }
+
   renderComponent() {
     this.dispatch({ ...this, isOpen: true })
   }
@@ -83,6 +118,7 @@ export class SkillsExplorerModalPlugin extends Plugin {
         isOpen={isOpen}
         onClose={() => this.closeModal()}
         plugin={this}
+        loadSkill={(skillId: string) => this.loadSkill(skillId)}
       />
     )
   }

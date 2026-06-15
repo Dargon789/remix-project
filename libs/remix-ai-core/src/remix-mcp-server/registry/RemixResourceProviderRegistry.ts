@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /* eslint-disable no-case-declarations */
 /**
  * Remix Resource Provider Registry Implementation
@@ -47,7 +48,7 @@ export class RemixResourceProviderRegistry implements ResourceProviderRegistry {
    */
   private setupCacheInvalidationListeners(): void {
     if (!this.plugin) {
-      console.warn('[RemixResourceProviderRegistry] No plugin available for event listeners');
+      remixAILogger.warn('[RemixResourceProviderRegistry] No plugin available for event listeners');
       return;
     }
 
@@ -93,7 +94,7 @@ export class RemixResourceProviderRegistry implements ResourceProviderRegistry {
       });
 
     } catch (error) {
-      console.error('[RemixResourceProviderRegistry] Error setting up cache invalidation listeners:', error);
+      remixAILogger.error('[RemixResourceProviderRegistry] Error setting up cache invalidation listeners:', error);
     }
   }
 
@@ -199,7 +200,7 @@ export class RemixResourceProviderRegistry implements ResourceProviderRegistry {
 
         allResources.push(...resources);
       } catch (error) {
-        console.warn(`Failed to get resources from provider ${name}:`, error);
+        remixAILogger.warn(`Failed to get resources from provider ${name}:`, error);
       }
     }
 
@@ -233,7 +234,7 @@ export class RemixResourceProviderRegistry implements ResourceProviderRegistry {
         try {
           return await provider.getResourceContent(uri, this.plugin);
         } catch (error) {
-          console.warn(`Provider ${provider.name} failed to get resource ${uri}:`, error);
+          remixAILogger.warn(`Provider ${provider.name} failed to get resource ${uri}:`, error);
         }
       }
     }
@@ -273,7 +274,7 @@ export class RemixResourceProviderRegistry implements ResourceProviderRegistry {
         const resources = await provider.getResources(this.plugin);
         this.resourceCache.set(name, { resources, timestamp: new Date() });
       } catch (error) {
-        console.warn(`Failed to refresh resources from provider ${name}:`, error);
+        remixAILogger.warn(`Failed to refresh resources from provider ${name}:`, error);
       }
     }
   }
@@ -456,7 +457,7 @@ export class RemixResourceProviderRegistry implements ResourceProviderRegistry {
       try {
         callback(event);
       } catch (error) {
-        console.warn('Resource event subscriber error:', error);
+        remixAILogger.warn('Resource event subscriber error:', error);
       }
     }
   }

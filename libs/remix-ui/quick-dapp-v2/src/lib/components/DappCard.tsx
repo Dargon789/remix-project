@@ -87,12 +87,12 @@ const DappCard: React.FC<DappCardProps> = ({ dapp, isProcessing, generationProgr
             borderBottom: '1px solid #444'
           }}
         >
-          {!dapp.thumbnailPath && dapp.config.logo && (
-            <img src={dapp.config.logo} alt="logo" style={{ width: '50px', height: '50px', borderRadius: '50%' }} />
+          {!dapp.thumbnailPath && dapp?.config?.logo && (
+            <img src={dapp?.config?.logo} alt="logo" style={{ width: '50px', height: '50px', borderRadius: '50%' }} />
           )}
 
           <div className="position-absolute top-0 start-0 m-2 badge bg-primary opacity-75" data-id={`dapp-network-${dapp.slug}`}>
-            {dapp.contract.networkName || 'Remix VM'}
+            {dapp?.contract?.networkName || 'Remix VM'}
           </div>
 
           {!isProcessing && (
@@ -126,7 +126,7 @@ const DappCard: React.FC<DappCardProps> = ({ dapp, isProcessing, generationProgr
           <div>
             <h6 className="card-title fw-bold mb-1 text-truncate text-body" data-id={`dapp-card-name-${dapp.slug}`}>{dapp.name}</h6>
             <small className="text-muted d-block text-truncate" style={{ fontSize: '0.8rem' }}>
-              {dapp.id}
+              {dapp.slug}
             </small>
             {dapp.workspaceName && (
               <small className="text-info d-block text-truncate mb-2" style={{ fontSize: '0.75rem' }}>

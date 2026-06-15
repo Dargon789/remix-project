@@ -6,6 +6,7 @@
 // Core Server
 export { RemixMCPServer } from './RemixMCPServer';
 import { RemixMCPServer } from './RemixMCPServer';
+import { remixAILogger } from '../helpers/logger';
 
 // Configuration
 export { MCPConfigManager } from './config/MCPConfigManager';
@@ -30,7 +31,6 @@ export { createFoundryHardhatTools } from './handlers/FoundryHardhatHandler';
 export { createCoordinationTools } from './handlers/CoordinationHandler';
 export { createDAppGeneratorTools } from './handlers/DAppGeneratorHandler';
 export { createContractClassificationTools } from './handlers/ContractClassifierHandler';
-export { createEnhancedAuditTools } from './handlers/EnhancedAuditHandler';
 
 // Resource Providers
 export { ProjectResourceProvider } from './providers/ProjectResourceProvider';
@@ -85,20 +85,22 @@ export async function createRemixMCPServer(
     validationConfig?: any;
     customTools?: any[];
     customProviders?: any[];
+    debug?: boolean;
   } = {},
 ): Promise<RemixMCPServer> {
   const {
     enableSecurity = true,
     enableValidation = true,
     customTools = [],
-    customProviders = []
+    customProviders = [],
+    debug = false
   } = options;
 
   const serverConfig = {
     name: 'Remix MCP Server',
     version: '1.0.0',
     description: 'In-browser MCP server for Remix IDE providing comprehensive smart contract development tools',
-    debug: false,
+    debug,
     maxConcurrentTools: 10,
     toolTimeout: 60000 * 10, // 10 minutes
     resourceCacheTTL: 5000,
@@ -134,7 +136,7 @@ export async function createRemixMCPServer(
     // }
   }
 
-  console.log("Initializing Remix MCP server")
+  remixAILogger.log('Initializing Remix MCP server')
   await server.initialize();
 
   return server;

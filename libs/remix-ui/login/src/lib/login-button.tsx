@@ -13,6 +13,7 @@ interface LoginButtonProps {
   className?: string
   showCredits?: boolean
   variant?: 'button' | 'badge' | 'compact'
+  signInDataId?: string
   plugin?: any
   cloneGitRepository?: () => void
   publishToGist?: () => void
@@ -22,6 +23,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
   className = '',
   showCredits = true,
   variant = 'button',
+  signInDataId = 'login-button',
   plugin,
   cloneGitRepository,
   publishToGist
@@ -81,23 +83,19 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
   }
 
   const handleManageAccounts = () => {
-    // Open Account overlay
+    // Open the Settings tab on the account section. The legacy `account`
+    // overlay plugin was removed when Plan Manager became the sole billing
+    // surface; profile/credits/connected-accounts still live in Settings.
     if (plugin && typeof plugin.call === 'function') {
       plugin.call('matomo', 'trackEvent', 'userMenu', 'manageAccounts', 'Manage Accounts', undefined).catch(() => {})
       ;(async () => {
         try {
-          await plugin.call('account', 'open')
+          const isActive = await plugin.call('manager', 'isActive', 'settings')
+          if (!isActive) await plugin.call('manager', 'activatePlugin', 'settings')
+          await plugin.call('tabs', 'focus', 'settings')
+          try { await plugin.call('settings', 'showSection', 'account') } catch { /* optional API */ }
         } catch (err) {
-          console.error('[LoginButton] Failed to open Account overlay:', err)
-          // Fallback to settings if account plugin is not available
-          try {
-            //const isActive = await plugin.call('manager', 'isActive', 'settings')
-            //if (!isActive) await plugin.call('manager', 'activatePlugin', 'settings')
-            //await plugin.call('tabs', 'focus', 'settings')
-            //await plugin.call('settings', 'showSection', 'account')
-          } catch (settingsErr) {
-            //console.error('[LoginButton] Failed to open Settings:', settingsErr)
-          }
+          console.error('[LoginButton] Failed to open Settings:', err)
         }
       })()
     }
@@ -149,7 +147,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
           className={`btn btn-sm btn-primary ${className}`}
           style={{ whiteSpace: 'nowrap' }}
           onClick={handleSignIn}
-          data-id="login-button"
+          data-id={signInDataId}
         >
           <span className="d-inline-flex align-items-center">
             <span className="me-1">Sign In</span>

@@ -3,7 +3,7 @@ import { Plugin } from '@remixproject/engine'
 import { util, execution } from '@remix-project/remix-lib'
 import { CompiledContract, CompilerAbstract } from '@remix-project/remix-solidity'
 import { toChecksumAddress } from '@ethereumjs/util'
-import { ContractData } from '../types/contract'
+import { ContractData, FuncABI } from '../types/contract'
 
 const profile = {
   name: 'compilerArtefacts',
@@ -255,7 +255,7 @@ export const getContractData = (contractName: string, compiler: CompilerAbstract
     name: contractName,
     contract: contract,
     compiler: compiler,
-    abi: contract.object.abi,
+    abi: contract.object.abi as FuncABI[],
     bytecodeObject: contract.object.evm.bytecode.object,
     bytecodeLinkReferences: contract.object.evm.bytecode.linkReferences,
     object: contract.object,

@@ -2,7 +2,7 @@ import React from "react"
 import { Actions, CompilationRawResult, OZDeployMode, VisitedContract, NetworkDeploymentFile } from "../types"
 import { trackMatomoEvent } from "@remix-api"
 import { CompilerAbstract } from "@remix-project/remix-solidity"
-import type { ContractData, SolcBuildFile } from "@remix-project/core-plugin"
+import type { ContractData, SolcBuildFile, FuncABI } from "@remix-project/core-plugin"
 import { execution } from '@remix-project/remix-lib'
 import { IntlShape } from "react-intl"
 import { deployWithProxyMsg, isOverSizePrompt, logBuilder, unavailableProxyLayoutMsg, upgradeReportMsg, upgradeWithProxyMsg } from "@remix-ui/helper"
@@ -74,7 +74,7 @@ export function getContractData (contractName: string, compiler: CompilerAbstrac
     name: contractName,
     contract: contract,
     compiler: compiler,
-    abi: contract.object.abi,
+    abi: contract.object.abi as FuncABI[],
     bytecodeObject: contract.object.evm.bytecode.object,
     bytecodeLinkReferences: contract.object.evm.bytecode.linkReferences,
     object: contract.object,

@@ -313,8 +313,7 @@ export function UniversalDappUI(props: UdappProps) {
                       try {
                         console.log('[QuickDapp] Sparkle button clicked', { name: props.instance.name, address, timestamp: Date.now() });
 
-                        // [QuickDapp] Open AI Assistant with contract details + conversational request.
-                        // The AI will ask 3 design questions first, then call generate_dapp with all args.
+                        // [QuickDapp] Open AI Assistant with contract details + generate directly with defaults.
                         const abi = props.instance.abi || props.instance.contractData?.abi || []
                         const abiJson = JSON.stringify(abi)
 
@@ -325,7 +324,7 @@ contractAddress: ${address}
 chainId: ${props.plugin.REACT_API.chainId}
 contractAbi: ${abiJson}
 
-Before generating, please ask me about my design preferences first.`
+Use defaults: React framework, modern dark mode UI, single-page DApp with Ethers.js. Generate the DApp directly without asking additional questions.`
 
                         // Activate and focus AI Assistant
                         try {

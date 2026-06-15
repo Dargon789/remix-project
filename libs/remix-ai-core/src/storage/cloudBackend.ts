@@ -1,3 +1,4 @@
+import { remixAILogger } from '../helpers/logger'
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 /**
  * AWS S3 cloud backend for chat history synchronization
@@ -65,10 +66,10 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
       try {
         await this.loadMessageIndex()
       } catch (error) {
-        console.warn('Failed to load message index, will rebuild on demand:', error)
+        remixAILogger.warn('Failed to load message index, will rebuild on demand:', error)
       }
     } catch (error) {
-      console.error('S3 backend initialization failed:', error)
+      remixAILogger.error('S3 backend initialization failed:', error)
       this.isInitialized = false
       throw new SyncError(`Failed to initialize S3 backend: ${error.message}`)
     }
@@ -126,7 +127,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
       // Sort by lastAccessedAt descending
       return conversations.sort((a, b) => b.lastAccessedAt - a.lastAccessedAt)
     } catch (error) {
-      console.error('Failed to get conversations from S3:', error)
+      remixAILogger.error('Failed to get conversations from S3:', error)
       return []
     }
   }
@@ -141,7 +142,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
       const conversationData = JSON.parse(data) as ConversationData
       return conversationData.metadata
     } catch (error) {
-      console.error(`Failed to get conversation ${id} from S3:`, error)
+      remixAILogger.error(`Failed to get conversation ${id} from S3:`, error)
       return null
     }
   }
@@ -250,7 +251,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
       const conversationData = JSON.parse(data) as ConversationData
       return conversationData.messages
     } catch (error) {
-      console.error(`Failed to get messages for conversation ${conversationId}:`, error)
+      remixAILogger.error(`Failed to get messages for conversation ${conversationId}:`, error)
       return []
     }
   }
@@ -286,14 +287,14 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
         }
 
         // Index stale - message not in expected conversation
-        console.warn(`Index stale for message ${messageId}, rebuilding`)
+        remixAILogger.warn(`Index stale for message ${messageId}, rebuilding`)
       } catch (error) {
-        console.warn(`Fast path failed for message ${messageId}:`, error)
+        remixAILogger.warn(`Fast path failed for message ${messageId}:`, error)
       }
     }
 
     // SLOW PATH: Index missing/stale - rebuild and retry
-    console.warn(`Rebuilding message index for message ${messageId}`)
+    remixAILogger.warn(`Rebuilding message index for message ${messageId}`)
     await this.rebuildMessageIndex()
 
     // Retry with rebuilt index
@@ -368,7 +369,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
         try {
           await this.persistMessageIndex()
         } catch (error) {
-          console.warn('Failed to persist message index:', error)
+          remixAILogger.warn('Failed to persist message index:', error)
         }
       }
 
@@ -410,7 +411,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
       try {
         await this.loadMessageIndex()
       } catch (error) {
-        console.warn('Failed to load message index during pull:', error)
+        remixAILogger.warn('Failed to load message index during pull:', error)
       }
 
       result.conversationsSynced = index.conversations.length
@@ -479,7 +480,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
               return
             }
           } catch (error) {
-            console.warn('Direct update with conversationId failed, falling back to index:', error)
+            remixAILogger.warn('Direct update with conversationId failed, falling back to index:', error)
           }
         }
 
@@ -532,7 +533,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
         const data = await this.getObject(key)
         this.messageIndex = JSON.parse(data) as MessageIndex
       } catch (error) {
-        console.warn('Message index not found, will rebuild on demand:', error)
+        remixAILogger.warn('Message index not found, will rebuild on demand:', error)
         this.messageIndex = {
           version: 1,
           lastUpdated: Date.now(),
@@ -636,7 +637,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
       this.messageIndex.lastUpdated = Date.now()
       this.indexDirty = true
     } catch (error) {
-      console.warn(`Failed to remove messages from index for conversation ${conversationId}:`, error)
+      remixAILogger.warn(`Failed to remove messages from index for conversation ${conversationId}:`, error)
     }
   }
 
@@ -679,7 +680,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
               const conversationData = JSON.parse(data) as ConversationData
               conversations.push(conversationData.metadata)
             } catch (error) {
-              console.warn(`Failed to read conversation ${item.Key}:`, error)
+              remixAILogger.warn(`Failed to read conversation ${item.Key}:`, error)
             }
           }
         }
@@ -692,7 +693,7 @@ export class S3ChatHistoryBackend implements IChatHistoryBackend {
 
       await this.putObject(this.getIndexKey(), JSON.stringify(index, null, 2))
     } catch (error) {
-      console.error('Failed to update index:', error)
+      remixAILogger.error('Failed to update index:', error)
     }
   }
 

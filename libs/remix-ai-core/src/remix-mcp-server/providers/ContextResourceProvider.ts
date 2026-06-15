@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * Context Resource Provider - Provides comprehensive IDE context for AI assistants
  * This resource is automatically included with every request to give AI full context
@@ -181,7 +182,7 @@ export class ContextResourceProvider extends BaseResourceProvider {
       const tree = await this.buildTree('', 3); // Max depth of 3
       return tree;
     } catch (error) {
-      console.warn('Failed to collect file tree:', error);
+      remixAILogger.warn('Failed to collect file tree:', error);
       return { error: error.message };
     }
   }
@@ -276,7 +277,7 @@ export class ContextResourceProvider extends BaseResourceProvider {
 
       return state;
     } catch (error) {
-      console.warn('Failed to collect editor state:', error);
+      remixAILogger.warn('Failed to collect editor state:', error);
       return { error: error.message };
     }
   }
@@ -332,7 +333,7 @@ export class ContextResourceProvider extends BaseResourceProvider {
 
       return gitStatus;
     } catch (error) {
-      console.warn('Failed to collect git status:', error);
+      remixAILogger.warn('Failed to collect git status:', error);
       return { error: error.message };
     }
   }
@@ -414,7 +415,7 @@ export class ContextResourceProvider extends BaseResourceProvider {
       }
       return terminal;
     } catch (error) {
-      console.warn('Failed to collect terminal output:', error);
+      remixAILogger.warn('Failed to collect terminal output:', error);
       return { error: error.message };
     }
   }

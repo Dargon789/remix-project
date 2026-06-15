@@ -1,4 +1,4 @@
-import { IUserApiKeyConfig, API_KEYS_ALLOWED_PLANS } from '@remix/remix-ai-core'
+import { remixAILogger, IUserApiKeyConfig, API_KEYS_ALLOWED_PLANS } from '@remix/remix-ai-core'
 
 export interface IPluginWithCalls {
   call(plugin: string, method: string, ...args: any[]): Promise<any>
@@ -25,13 +25,13 @@ export class ApiKeySettingsHelper {
       const hasPermission = featureGroups.some((fg: any) =>
         API_KEYS_ALLOWED_PLANS.includes(fg.name)
       )
-      console.log('[ApiKeySettingsHelper] API keys permission check:', {
+      remixAILogger.log('[ApiKeySettingsHelper] API keys permission check:', {
         hasPermission,
         featureGroups: featureGroups.map((fg: any) => fg.name)
       })
       return hasPermission
     } catch (error) {
-      console.warn('[ApiKeySettingsHelper] Failed to check API keys permission:', error)
+      remixAILogger.warn('[ApiKeySettingsHelper] Failed to check API keys permission:', error)
       return false
     }
   }
@@ -44,7 +44,7 @@ export class ApiKeySettingsHelper {
       const value = await this.plugin.call('settings' as any, 'get', `settings/${key}`)
       return value !== undefined ? value : ''
     } catch (error) {
-      console.warn('[ApiKeySettingsHelper] Failed to read setting:', key, error)
+      remixAILogger.warn('[ApiKeySettingsHelper] Failed to read setting:', key, error)
       return ''
     }
   }
@@ -56,7 +56,7 @@ export class ApiKeySettingsHelper {
     try {
       await this.plugin.call('config' as any, 'setAppParameter', `settings/${key}`, value)
     } catch (error) {
-      console.warn('[ApiKeySettingsHelper] Failed to write setting:', key, error)
+      remixAILogger.warn('[ApiKeySettingsHelper] Failed to write setting:', key, error)
     }
   }
 
@@ -68,7 +68,7 @@ export class ApiKeySettingsHelper {
       // First check if user has permission to use own API keys
       const hasPermission = await this.canUseOwnApiKeys()
       if (!hasPermission) {
-        console.log('[ApiKeySettingsHelper] User does not have permission to use own API keys')
+        remixAILogger.log('[ApiKeySettingsHelper] User does not have permission to use own API keys')
         return undefined
       }
 
@@ -84,7 +84,7 @@ export class ApiKeySettingsHelper {
       const useOwnKeys = useOwnKeysValue === 'true' || useOwnKeysValue === true
 
       // Debug logging
-      console.log('[ApiKeySettingsHelper] Reading API keys from settings:', {
+      remixAILogger.log('[ApiKeySettingsHelper] Reading API keys from settings:', {
         useOwnKeys,
         hasAnthropicKey: !!anthropicApiKey,
         hasMistralKey: !!mistralApiKey,
@@ -106,7 +106,7 @@ export class ApiKeySettingsHelper {
         moonshotApiKey: String(moonshotApiKey || '')
       }
     } catch (error) {
-      console.warn('[ApiKeySettingsHelper] Failed to read user API keys config:', error)
+      remixAILogger.warn('[ApiKeySettingsHelper] Failed to read user API keys config:', error)
       return undefined
     }
   }
@@ -140,7 +140,7 @@ export class ApiKeySettingsHelper {
       }
       return !!apiKey
     } catch (error) {
-      console.warn('[ApiKeySettingsHelper] Failed to check if using own API key:', error)
+      remixAILogger.warn('[ApiKeySettingsHelper] Failed to check if using own API key:', error)
       return false
     }
   }

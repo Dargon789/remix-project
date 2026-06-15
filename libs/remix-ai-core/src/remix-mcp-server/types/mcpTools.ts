@@ -111,7 +111,7 @@ export interface FileGrepArgs {
 }
 
 export interface SolidityCompileArgs {
-  file?: string;
+  filePath?: string;
   version?: string;
   optimize?: boolean;
   runs?: number;
@@ -169,7 +169,7 @@ export interface SimulateTransactionArgs {
 }
 
 export interface RunScriptArgs {
-  file: string
+  filePath: string
 }
 
 export interface AddInstanceArgs {

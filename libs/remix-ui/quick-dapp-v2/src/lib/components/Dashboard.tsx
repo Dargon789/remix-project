@@ -10,7 +10,7 @@ interface DashboardProps {
   onOpen: (dapp: DappConfig) => void | Promise<void>;
   onCreateNew: () => void;
   onDeleteAll?: () => void;
-  onDeleteOne?: (slug: string) => void;
+  onDeleteOne?: (id: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -36,9 +36,13 @@ const Dashboard: React.FC<DashboardProps> = ({
   const availableNetworks = useMemo(() => {
     const networks = new Set<string>();
     validDapps.forEach(dapp => {
-      if (dapp.contract.networkName) {
-        networks.add(dapp.contract.networkName);
-      } else {
+      try {
+        if (dapp.contract.networkName) {
+          networks.add(dapp.contract.networkName);
+        } else {
+          networks.add('Unknown Network');
+        }
+      } catch (e) {
         networks.add('Unknown Network');
       }
     });
@@ -69,10 +73,10 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [validDapps, selectedNetwork, sortOrder]);
 
   const confirmDeleteOne = () => {
-    const slug = dappToDelete;
+    const id = dappToDelete;
     setDappToDelete(null); // Close modal immediately
-    if (slug && onDeleteOne) {
-      onDeleteOne(slug);
+    if (id && onDeleteOne) {
+      onDeleteOne(id);
     }
   };
 
@@ -150,7 +154,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         ) : (
           filteredAndSortedDapps.map((dapp) => (
             <DappCard
-              key={dapp.id}
+              key={dapp.slug}
               dapp={dapp}
               isProcessing={!!processingState[dapp.slug]}
               generationProgress={

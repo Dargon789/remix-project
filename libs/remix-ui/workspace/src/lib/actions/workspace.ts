@@ -538,7 +538,6 @@ export const loadWorkspacePreset = async (template: WorkspaceTemplate = 'remixDe
     }
   }
 
-  console.log('Loading workspace preset with template:', template, 'and URL params:', params)
   switch (template) {
   case 'code-template':
     // creates a new workspace code-sample and loads code from url params.
@@ -899,12 +898,19 @@ export const deleteWorkspace = async (workspaceName: string, cb?: (err: Error, r
 }
 
 export const deleteAllWorkspaces = async () => {
-  const workspaces = await getWorkspaces()
-  for (const workspace of workspaces) {
-    await deleteWorkspaceFromProvider(workspace.name)
-    await dispatch(setDeleteWorkspace(workspace.name))
-    plugin.workspaceDeleted(workspace.name)
-  }
+  return workspaceOperationQueue.run(async function deleteAllWorkspaces() {
+    const workspaces = await getWorkspaces()
+    await plugin.fileManager.closeAllFiles()
+
+    for (const workspace of workspaces) {
+      await deleteWorkspaceFromProvider(workspace.name)
+      await dispatch(setDeleteWorkspace(workspace.name))
+      plugin.workspaceDeleted(workspace.name)
+    }
+
+    plugin.call('notification', 'toast', 'Creating default workspace...')
+    await _createWorkspaceInternal('default_workspace', 'remixDefault')
+  })
 }
 
 const deleteWorkspaceFromProvider = async (workspaceName: string) => {

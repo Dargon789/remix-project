@@ -29,6 +29,28 @@
   color: var(--bs-secondary);
 }
 
+.panel-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--bs-secondary-color, #8b8fa8);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.panel-control-btn.active {
+  background-color: rgba(var(--bs-primary-rgb), 0.08);
+  color: var(--bs-primary);
+}
+
+.panel-control-btn:hover {
+  background-color: rgba(var(--bs-primary-rgb), 0.08);
+  color: var(--bs-primary);
+}
+
 .top-bar-dropdownItem {
   color: var(--text);
   cursor: pointer;

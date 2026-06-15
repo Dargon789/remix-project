@@ -1,3 +1,4 @@
+import { remixAILogger } from '../helpers/logger'
 import { IMCPTool } from "../types/mcp"
 
 export interface IToolSelectionResult {
@@ -143,7 +144,7 @@ export class SimpleToolSelector {
       ...nonCoreResults.slice(0, Math.max(0, remainingSlots)).map(st => st.tool)
     ]
 
-    console.log(`[SimpleToolSelector] Selected ${result.length} tools (${coreToolResults.length} core + ${result.length - coreToolResults.length} others, max ${maxTools})`)
+    remixAILogger.log(`[SimpleToolSelector] Selected ${result.length} tools (${coreToolResults.length} core + ${result.length - coreToolResults.length} others, max ${maxTools})`)
     return result
   }
 

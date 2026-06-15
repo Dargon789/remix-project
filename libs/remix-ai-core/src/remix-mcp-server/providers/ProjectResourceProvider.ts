@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * Project Resource Provider - Provides access to project files and metadata
  */
@@ -67,7 +68,7 @@ export class ProjectResourceProvider extends BaseResourceProvider {
       );
 
     } catch (error) {
-      console.warn('Failed to get project resources:', error);
+      remixAILogger.warn('Failed to get project resources:', error);
     }
 
     return resources;
@@ -154,7 +155,7 @@ export class ProjectResourceProvider extends BaseResourceProvider {
         }
       }
     } catch (error) {
-      console.warn(`Failed to process path ${path}:`, error);
+      remixAILogger.warn(`Failed to process path ${path}:`, error);
     }
   }
 
@@ -162,11 +163,17 @@ export class ProjectResourceProvider extends BaseResourceProvider {
     try {
       const workspacePath = await this.getWorkspacePath(plugin);
       const structure = await this.buildDirectoryTree(plugin, workspacePath);
-
+      let openedFiles: string[] = []
+      try {
+        openedFiles = await plugin.call('fileManager', 'getOpenedFiles') || [];
+      } catch (error) {
+        remixAILogger.warn('Failed to get opened files:', error)
+      }
       return this.createJsonContent('project://structure', {
         root: workspacePath,
         structure,
-        generatedAt: new Date().toISOString()
+        generatedAt: new Date().toISOString(),
+        currentOpenedFiles: openedFiles
       });
     } catch (error) {
       return this.createTextContent('project://structure', `Error building project structure: ${error.message}`);
@@ -354,7 +361,7 @@ export class ProjectResourceProvider extends BaseResourceProvider {
         })));
       }
     } catch (error) {
-      console.warn(`Failed to scan imports in ${path}:`, error);
+      remixAILogger.warn(`Failed to scan imports in ${path}:`, error);
     }
   }
 

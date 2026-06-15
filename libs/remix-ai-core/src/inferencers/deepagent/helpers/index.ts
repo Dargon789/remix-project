@@ -1,7 +1,5 @@
 export {
-  getBasicMcpToolsForSecurityAuditor,
   getBasicFileToolsForGasOptimizer,
-  getCoordinationToolsForComprehensiveAuditor,
   getEducationToolsForWeb3Educator
 } from './subagentToolFilters'
 
@@ -13,6 +11,5 @@ export {
 } from './promptAnalysis'
 
 export {
-  selectOptimalModel,
-  getDefaultModelSelection
+  selectOptimalModel
 } from './modelSelection'

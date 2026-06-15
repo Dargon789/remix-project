@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 import { IMCPToolCall, IMCPToolResult } from "../../types/mcp";
 
 export interface IToolCallRecord {
@@ -51,7 +52,7 @@ export class CodeExecutor {
 
     try {
       this.validateCode(code);
-      console.log('[MCP Code mode] - Executing code \n', code)
+      remixAILogger.log('[MCP Code mode] - Executing code \n', code)
       const context = this.createExecutionContext();
       const result = await this.executeWithTimeout(code, context);
 
@@ -176,7 +177,7 @@ export class CodeExecutor {
                 }
               }
             } catch (e) {
-              console.warn(`[MCP Code mode] - Failed to parse tool output content for tool "${name}":`, e)
+              remixAILogger.warn(`[MCP Code mode] - Failed to parse tool output content for tool "${name}":`, e)
             }
 
             self.toolCallRecords.push({

@@ -2,12 +2,13 @@ import React from 'react'
 import { ViewPlugin } from '@remixproject/engine-web'
 import * as packageJson from '../../../../../package.json'
 import { PluginViewWrapper } from '@remix-ui/helper'
-import { RemixUiQuickDappV2 } from '@remix-ui/quick-dapp-v2'
+import { RemixUiQuickDappV2, getNetworkName } from '@remix-ui/quick-dapp-v2'
 import { EventEmitter } from 'events'
+import { remixAILogger } from '@remix/remix-ai-core'
 
 const profile = {
   name: 'quick-dapp-v2',
-  displayName: 'Quick Dapp V2',
+  displayName: 'QuickDApp',
   icon: 'assets/img/quickdappv2.webp',
   description: 'Edit & deploy a Dapp',
   kind: 'quick-dapp-v2',
@@ -44,27 +45,27 @@ export class QuickDappV2 extends ViewPlugin {
 
     // Listen to remixAI events from DApp MCP tools
     this.on('remixAI', 'dappGenerated', async (data: any) => {
-      console.log('[QuickDapp] dappGenerated received', { slug: data?.slug, isUpdate: data?.isUpdate })
+      remixAILogger.log('[QuickDapp] dappGenerated received', { slug: data?.slug, isUpdate: data?.isUpdate })
       this.event.emit('dappGenerated', data)
     })
 
     this.on('remixAI', 'dappGenerationError', (data: any) => {
-      console.log('[QuickDapp] dappGenerationError received', { slug: data?.slug })
+      remixAILogger.log('[QuickDapp] dappGenerationError received', { slug: data?.slug })
       this.event.emit('dappGenerationError', data)
     })
 
     this.on('filePanel', 'workspaceDeleted', (workspaceName: string) => {
-      console.log('[QuickDapp] workspaceDeleted:', workspaceName)
+      remixAILogger.log('[QuickDapp] workspaceDeleted:', workspaceName)
       this.event.emit('workspaceDeleted', workspaceName)
     })
 
     this.on('remixAI', 'generationProgress', (data: any) => {
-      console.log('[QuickDapp] generationProgress:', data?.status, data?.slug)
+      remixAILogger.log('[QuickDapp] generationProgress:', data?.status, data?.slug)
       this.event.emit('generationProgress', data)
     })
 
     this.on('remixAI', 'dappUpdateStart', (data: any) => {
-      console.log('[QuickDapp] dappUpdateStart:', data?.slug)
+      remixAILogger.log('[QuickDapp] dappUpdateStart:', data?.slug)
       this.event.emit('dappUpdateStart', data)
     })
   }
@@ -178,7 +179,7 @@ export class QuickDappV2 extends ViewPlugin {
       try {
         resolved = await this.call('blockchain' as any, 'getProvider');
       } catch (_) {}
-      console.warn(`[QuickDapp] chainId invalid ("${payload.chainId}"), resolved from provider: "${resolved}"`);
+      remixAILogger.warn(`[QuickDapp] chainId invalid ("${payload.chainId}"), resolved from provider: "${resolved}"`);
       payload.chainId = resolved || 'vm-osaka';
     }
 
@@ -219,7 +220,7 @@ export class QuickDappV2 extends ViewPlugin {
       try { await this.call('fileManager', 'mkdir', '.deploys/pinned-contracts'); } catch (_) {}
       try { await this.call('fileManager', 'mkdir', `.deploys/pinned-contracts/${payload.chainId}`); } catch (_) {}
       await this.call('fileManager', 'writeFile', pinPath, JSON.stringify(pinnedData, null, 2));
-      console.log('[QuickDapp] Contract pinned in source workspace:', pinPath);
+      remixAILogger.log('[QuickDapp] Contract pinned in source workspace:', pinPath);
 
       // Save dapp-mapping for "Go to DApp" navigation
       const dappMappingPath = `.deploys/dapp-mappings/${payload.address}_${workspaceName}.json`;
@@ -232,9 +233,9 @@ export class QuickDappV2 extends ViewPlugin {
       };
       try { await this.call('fileManager', 'mkdir', '.deploys/dapp-mappings'); } catch (_) {}
       await this.call('fileManager', 'writeFile', dappMappingPath, JSON.stringify(dappMapping, null, 2));
-      console.log('[QuickDapp] Dapp mapping saved:', dappMappingPath);
+      remixAILogger.log('[QuickDapp] Dapp mapping saved:', dappMappingPath);
     } catch (e) {
-      console.warn('[QuickDapp] Auto-pin in source workspace failed (non-critical):', e);
+      remixAILogger.warn('[QuickDapp] Auto-pin in source workspace failed (non-critical):', e);
     }
 
     // Capture VM state if on VM provider
@@ -271,11 +272,11 @@ export class QuickDappV2 extends ViewPlugin {
               vmStateSnapshot = directState;
             }
           } catch (e2) {
-            console.warn('[QuickDapp] getStateDetails fallback also failed:', e2);
+            remixAILogger.warn('[QuickDapp] getStateDetails fallback also failed:', e2);
           }
         }
       } catch (e) {
-        console.warn('[QuickDapp] VM state capture failed (non-critical):', e);
+        remixAILogger.warn('[QuickDapp] VM state capture failed (non-critical):', e);
       }
     }
 
@@ -294,7 +295,7 @@ export class QuickDappV2 extends ViewPlugin {
         name: payload.contractName,
         abi: payload.abi,
         chainId: payload.chainId,
-        networkName: payload.networkName || 'Unknown Network'
+        networkName: payload.networkName || getNetworkName(payload.chainId)|| 'Unknown Network'
       },
       sourceWorkspace: {
         name: sourceWorkspaceName,
@@ -324,10 +325,10 @@ export class QuickDappV2 extends ViewPlugin {
         try {
           await this.call('blockchain' as any, 'loadContext', vmProviderName);
         } catch (e2) {
-          console.warn('[QuickDapp] loadContext after state restore failed (non-critical):', e2);
+          remixAILogger.warn('[QuickDapp] loadContext after state restore failed (non-critical):', e2);
         }
       } catch (e) {
-        console.warn('[QuickDapp] VM state restore failed (non-critical):', e);
+        remixAILogger.warn('[QuickDapp] VM state restore failed (non-critical):', e);
       }
     }
 
@@ -345,7 +346,7 @@ export class QuickDappV2 extends ViewPlugin {
         pinnedAt: Date.now()
       };
       await this.call('fileManager', 'writeFile', pinnedPath, JSON.stringify(pinnedData, null, 2));
-      console.log('[QuickDapp] Contract pinned in dapp workspace:', pinnedPath);
+      remixAILogger.log('[QuickDapp] Contract pinned in dapp workspace:', pinnedPath);
 
       try {
         const existingContracts = await this.call('udappDeployedContracts' as any, 'getDeployedContracts');
@@ -366,10 +367,10 @@ export class QuickDappV2 extends ViewPlugin {
         // Non-critical: UI will refresh on next workspace switch
       }
     } catch (e) {
-      console.warn('[QuickDapp] Contract pin in dapp workspace failed (non-critical):', e);
+      remixAILogger.warn('[QuickDapp] Contract pin in dapp workspace failed (non-critical):', e);
     }
 
-    console.log('[QuickDapp] createDappWorkspace done', { slug: workspaceName });
+    remixAILogger.log('[QuickDapp] createDappWorkspace done', { slug: workspaceName });
     return { slug: workspaceName, workspaceName };
   }
 
@@ -392,11 +393,11 @@ export class QuickDappV2 extends ViewPlugin {
     status: string;
     createdAt: number;
   }>> {
-    console.log('[QuickDapp] listDapps called')
+    remixAILogger.log('[QuickDapp] listDapps called')
     try {
       const allWorkspaces = await this.call('filePanel', 'getWorkspacesForPlugin')
       if (!allWorkspaces || !Array.isArray(allWorkspaces)) {
-        console.log('[QuickDapp] No workspaces found')
+        remixAILogger.log('[QuickDapp] No workspaces found')
         return []
       }
 
@@ -404,7 +405,7 @@ export class QuickDappV2 extends ViewPlugin {
         .map((ws: any) => typeof ws === 'string' ? ws : ws.name)
         .filter((name: string) => name && name.startsWith('dapp-'))
 
-      console.log('[QuickDapp] Found', dappWorkspaces.length, 'dapp workspaces')
+      remixAILogger.log('[QuickDapp] Found', dappWorkspaces.length, 'dapp workspaces')
 
       const results: any[] = []
       for (const wsName of dappWorkspaces) {
@@ -427,14 +428,14 @@ export class QuickDappV2 extends ViewPlugin {
             createdAt: config.createdAt || 0
           })
         } catch (e) {
-          console.warn('[QuickDapp] Failed to read config for', wsName, e)
+          remixAILogger.warn('[QuickDapp] Failed to read config for', wsName, e)
         }
       }
 
-      console.log('[QuickDapp] listDapps returned', results.length, 'dapps')
+      remixAILogger.log('[QuickDapp] listDapps returned', results.length, 'dapps')
       return results.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
     } catch (e) {
-      console.error('[QuickDapp] listDapps failed:', e)
+      remixAILogger.error('[QuickDapp] listDapps failed:', e)
       return []
     }
   }

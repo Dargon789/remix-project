@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * Compilation Resource Provider - Provides access to compilation results and artifacts
  */
@@ -110,7 +111,7 @@ export class CompilationResourceProvider extends BaseResourceProvider {
       await this.addContractResources(plugin, resources);
 
     } catch (error) {
-      console.warn('Failed to get compilation resources:', error);
+      remixAILogger.warn('Failed to get compilation resources:', error);
     }
 
     return resources;
@@ -189,7 +190,7 @@ export class CompilationResourceProvider extends BaseResourceProvider {
         );
       }
     } catch (error) {
-      console.warn('[CompilationResourceProvider] Failed to add contract resources:', error);
+      remixAILogger.warn('[CompilationResourceProvider] Failed to add contract resources:', error);
     }
   }
 

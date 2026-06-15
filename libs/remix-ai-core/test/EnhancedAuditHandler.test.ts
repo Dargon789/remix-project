@@ -243,7 +243,6 @@ tape('EnhancedAuditHandler', function (t) {
     // Execute audit on non-existent file
     const result = await handler.execute({ filePath: 'NonExistent.sol' }, mockPlugin as any)
 
-    console.log('File Not Found Result:', result)
     st.true(result.isError, 'Should return error for non-existent file')
     st.true(result.content[0]?.text?.includes('not found'), 'Error message should mention file not found')
 

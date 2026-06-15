@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { ICompletions, IGeneration, IParams, IAIStreamResponse } from "../../types/types";
 import { GenerationParams } from "../../types/models";
@@ -33,7 +34,7 @@ function trackMatomoEvent(category: string, action: string, name: string) {
     }
   } catch (error) {
     // Silent fail for tracking
-    console.debug('Matomo tracking failed:', error);
+    remixAILogger.debug('Matomo tracking failed:', error);
   }
 }
 
@@ -52,12 +53,17 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
   private MAX_TOOL_EXECUTIONS = 10;
   private baseInferencer: RemoteInferencer; // The actual inferencer to use (could be Ollama or Remote)
   private toolSelector: WeightedToolSelector = new WeightedToolSelector();
+  // Optional bearer-token provider passed by the host plugin. Forwarded
+  // verbatim to every MCPClient we create so external HTTP/SSE MCP
+  // servers see the user's JWT.
+  private getAuthToken?: () => Promise<string | null>;
   MAXTOOLS = 25
 
-  constructor(servers: IMCPServer[] = [], apiUrl?: string, completionUrl?: string, remixMCPServer?: any, baseInferencer?: RemoteInferencer) {
+  constructor(servers: IMCPServer[] = [], apiUrl?: string, completionUrl?: string, remixMCPServer?: any, baseInferencer?: RemoteInferencer, getAuthToken?: () => Promise<string | null>) {
     super(apiUrl, completionUrl);
     this.remixMCPServer = remixMCPServer;
     this.baseInferencer = baseInferencer;
+    this.getAuthToken = getAuthToken;
     this.initializeMCPServers(servers);
   }
 
@@ -66,7 +72,8 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
       if (server.enabled !== false) {
         const client = new MCPClient(
           server,
-          server.transport === 'internal' ? this.remixMCPServer : undefined
+          server.transport === 'internal' ? this.remixMCPServer : undefined,
+          server.transport === 'internal' ? undefined : this.getAuthToken
         );
         this.mcpClients.set(server.name, client);
         this.connectionStatuses.set(server.name, {
@@ -123,7 +130,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
       try {
         await client.connect();
       } catch (error) {
-        console.warn(`[MCP Inferencer] Failed to connect to MCP server ${client.getServerName()}:`, error);
+        remixAILogger.warn(`[MCP Inferencer] Failed to connect to MCP server ${client.getServerName()}:`, error);
       }
     });
 
@@ -149,7 +156,8 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
 
     const client = new MCPClient(
       server,
-      server.transport === 'internal' ? this.remixMCPServer : undefined
+      server.transport === 'internal' ? this.remixMCPServer : undefined,
+      server.transport === 'internal' ? undefined : this.getAuthToken
     );
     this.mcpClients.set(server.name, client);
     this.connectionStatuses.set(server.name, {
@@ -189,7 +197,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
       try {
         await client.connect();
       } catch (error) {
-        console.warn(`[MCP Inferencer] Failed to auto-connect to MCP server ${server.name}:`, error);
+        remixAILogger.warn(`[MCP Inferencer] Failed to auto-connect to MCP server ${server.name}:`, error);
       }
     }
   }
@@ -202,7 +210,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
       this.mcpClients.delete(serverName);
       this.connectionStatuses.delete(serverName);
     } else {
-      console.warn(`[MCP Inferencer] Server ${serverName} not found`);
+      remixAILogger.warn(`[MCP Inferencer] Server ${serverName} not found`);
     }
   }
 
@@ -251,7 +259,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
             allResources.push({ resource, serverName });
           });
         } catch (error) {
-          console.warn(`[MCP Inferencer] Failed to list resources from ${serverName}:`, error);
+          remixAILogger.warn(`[MCP Inferencer] Failed to list resources from ${serverName}:`, error);
         }
       }
 
@@ -330,7 +338,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
             mcpContext += "\n--- End Resource ---\n";
           }
         } catch (error) {
-          console.warn(`Failed to read resource ${resource.uri}:`, error);
+          remixAILogger.warn(`Failed to read resource ${resource.uri}:`, error);
         }
       }
 
@@ -374,7 +382,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
           }
         }
       } catch (error) {
-        console.warn(`Failed to get resources from MCP server ${serverName}:`, error);
+        remixAILogger.warn(`Failed to get resources from MCP server ${serverName}:`, error);
       }
     }
 
@@ -407,7 +415,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
 
         // avoid circular tooling
         if (toolExecutionCount >= this.MAX_TOOL_EXECUTIONS) {
-          console.warn(`[MCP] Maximum tool execution iterations (${this.MAX_TOOL_EXECUTIONS}) reached`);
+          remixAILogger.warn(`[MCP] Maximum tool execution iterations (${this.MAX_TOOL_EXECUTIONS}) reached`);
           return { streamResponse: await this.baseInferencer.answer(enrichedPrompt, options) };
         }
 
@@ -421,7 +429,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
               // Convert LLM tool call to internal MCP format
               const mcpToolCall = this.convertLLMToolCallToMCP(llmToolCall);
               const result = await this.executeToolForLLM(mcpToolCall, uiCallback);
-              console.log(`[MCP] Tool ${mcpToolCall.name} executed successfully with result `, result);
+              remixAILogger.log(`[MCP] Tool ${mcpToolCall.name} executed successfully with result `, result);
 
               // Extract full text content from MCP result
               const extractContent = (mcpResult: any): string => {
@@ -472,7 +480,7 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
                 uiCallback(false);
               }
 
-              console.error(`[MCP] Tool execution error for ${llmToolCall.function?.name}:`, error);
+              remixAILogger.error(`[MCP] Tool execution error for ${llmToolCall.function?.name}:`, error);
               const errorContent = `Error executing tool: ${error.message}`;
 
               if (options.provider === 'anthropic') {
@@ -790,9 +798,9 @@ export class MCPInferencer extends RemoteInferencer implements ICompletions, IGe
           historyLength: chatHistory?.length || 0
         });
 
-        console.log(`[MCPInferencer] Tool selection: ${mcpTools.length} → ${selectedTools.length} tools (${Math.round((1 - selectedTools.length / mcpTools.length) * 100)}% reduction)`)
+        remixAILogger.log(`[MCPInferencer] Tool selection: ${mcpTools.length} → ${selectedTools.length} tools (${Math.round((1 - selectedTools.length / mcpTools.length) * 100)}% reduction)`)
       } catch (error) {
-        console.warn('[MCPInferencer] Tool selection failed, using all tools:', error)
+        remixAILogger.warn('[MCPInferencer] Tool selection failed, using all tools:', error)
         selectedTools = mcpTools
       }
     }
@@ -1000,7 +1008,7 @@ Use this tool when you need:
 
       // Execute the code
       const result = await codeExecutor.execute(code);
-      console.log('code execution output', result)
+      remixAILogger.log('code execution output', result)
 
       if (result.success) {
         return {

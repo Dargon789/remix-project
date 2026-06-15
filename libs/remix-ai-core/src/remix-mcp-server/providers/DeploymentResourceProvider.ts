@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * Deployment Resource Provider - Provides access to deployment history and contract instances
  */
@@ -25,7 +26,7 @@ export class DeploymentResourceProvider extends BaseResourceProvider {
       await this.addContractInstances(plugin, resources);
 
     } catch (error) {
-      console.warn('Failed to get deployment resources:', error);
+      remixAILogger.warn('Failed to get deployment resources:', error);
     }
 
     return resources;
@@ -62,7 +63,7 @@ export class DeploymentResourceProvider extends BaseResourceProvider {
         )
       })
     } catch (error) {
-      console.warn('Failed to add contract instances:', error);
+      remixAILogger.warn('Failed to add contract instances:', error);
     }
   }
 }

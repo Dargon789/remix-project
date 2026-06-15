@@ -18,6 +18,7 @@ import {
   setScenarioPath,
   getFuncABIValues
 } from './actions'
+//@ts-ignore
 import './css/run-tab.css'
 import { ScenarioPrompt } from './components/scenario'
 import { ChainCompatibleInfo, getCompatibleChain, HardFork, isChainCompatible } from './actions/evmmap'
@@ -27,7 +28,7 @@ export type CheckStatus = 'Passed' | 'Failed' | 'Not Found'
 export function RunTabUI(props: RunTabProps) {
   const { plugin } = props
   const initialState = props.initialState || runTabInitialState
-
+  //@ts-ignore
   const [runTab, dispatch] = useReducer(runTabReducer, initialState)
   const REACT_API = { runTab }
   const currentfile = plugin.config.get('currentFile')

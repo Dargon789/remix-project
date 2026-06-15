@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * Debugging Resource Provider - Provides access to debugging session data and trace information
  */
@@ -85,7 +86,7 @@ export class DebuggingResourceProvider extends BaseResourceProvider {
       );
 
     } catch (error) {
-      console.warn('Failed to get debugging resources:', error);
+      remixAILogger.warn('Failed to get debugging resources:', error);
     }
 
     return resources;
@@ -201,7 +202,7 @@ export class DebuggingResourceProvider extends BaseResourceProvider {
         );
       }
 
-      console.log('debug://global-context', {
+      remixAILogger.log('debug://global-context', {
         success: true,
         context: result,
         metadata: {
@@ -269,7 +270,7 @@ export class DebuggingResourceProvider extends BaseResourceProvider {
           'Debug cache not available. There is no debug session going on.'
         );
       }
-      console.log('debug://trace-cache', {
+      remixAILogger.log('debug://trace-cache', {
         success: true,
         cache: result,
         metadata: {

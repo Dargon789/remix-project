@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * File Management Tool Handlers for Remix MCP Server
  */
@@ -124,7 +125,7 @@ export class FileReplacerHandler extends BaseToolHandler {
 
   async execute(args: FileReplacerArgs, plugin: Plugin): Promise<IMCPToolResult> {
     try {
-      console.log(`[FileReplacerHandler] - Replacing content in file: ${args.path} using regex: ${args.regEx}`);
+      remixAILogger.log(`[FileReplacerHandler] - Replacing content in file: ${args.path} using regex: ${args.regEx}`);
       const exists = await plugin.call('fileManager', 'exists', args.path)
       if (!exists) {
         return this.createErrorResult(`File not found: ${args.path}`);
@@ -201,7 +202,7 @@ export class FileReplacerHandler extends BaseToolHandler {
 //       // const exists = await plugin.call('fileManager', 'exists', args.path)
 //       // if (exists) {
 //       //   const hasUnacceptedChanges = await plugin.call('editor', 'hasUnacceptedChanges')
-//       //   console.log(`[FileWriteHandler] - File ${args.path} already exists. Checking for unaccepted changes: ${hasUnacceptedChanges}`);
+//       //   remixAILogger.log(`[FileWriteHandler] - File ${args.path} already exists. Checking for unaccepted changes: ${hasUnacceptedChanges}`);
 //       //   if (hasUnacceptedChanges) {
 //       //     return this.createErrorResult(`Project has unaccepted changes. Please review and accept/reject changes before overwriting.`);
 //       //   }
@@ -210,7 +211,7 @@ export class FileReplacerHandler extends BaseToolHandler {
 //       //   if (!exists) {await plugin.call('fileManager', 'writeFile', args.path, "")}
 //       //   await plugin.call('fileManager', 'open', args.path)
 //       // } catch (openError) {
-//       //   console.warn(`Failed to open file in editor: ${openError.message}`);
+//       //   remixAILogger.warn(`Failed to open file in editor: ${openError.message}`);
 //       // }
 //       // await new Promise(resolve => setTimeout(resolve, 300))
 

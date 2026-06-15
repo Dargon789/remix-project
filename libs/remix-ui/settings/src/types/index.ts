@@ -122,8 +122,9 @@ export interface SettingsState {
   'credits-balance': ConfigState,
   'connected-accounts': ConfigState,
   'billing-section': ConfigState,
-  'ollama-config': ConfigState,
-  'ollama-endpoint': ConfigState,
+  // Ollama configuration is temporarily disabled - will be enabled later
+  // 'ollama-config': ConfigState,
+  // 'ollama-endpoint': ConfigState,
   'deepagent-api-keys-config': ConfigState,
   'deepagent-anthropic-api-key': ConfigState,
   'deepagent-mistral-api-key': ConfigState,

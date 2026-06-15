@@ -4,6 +4,7 @@ import { useAuth } from '../../../../app/src/lib/remix-app/context/auth-context'
 import { AppContext } from '../../../../app/src/lib/remix-app/context/context'
 import { endpointUrls } from '@remix-endpoints-helper'
 import { Registry } from '@remix-project/remix-lib'
+import { OtpDigitInput, OtpDigitInputHandle } from '../otp-digit-input'
 import './login-modal.css'
 
 interface LoginModalProps {
@@ -17,6 +18,34 @@ interface ProviderConfig {
   icon: JSX.Element
   description: string
   enabled: boolean
+}
+
+const LOGIN_DEBUG_KEYS = ['remix-login-debug', 'remix-auth-debug']
+type LoginLogMethod = 'log' | 'warn' | 'error'
+
+function isLoginDebugEnabled(): boolean {
+  try {
+    return LOGIN_DEBUG_KEYS.some(key => localStorage.getItem(key) === 'true')
+  } catch {
+    return false
+  }
+}
+
+function writeLoginLog(method: LoginLogMethod, args: any[]): void {
+  if (!isLoginDebugEnabled()) return
+  try {
+    const consoleRef = globalThis.console
+    const target = consoleRef?.[method]
+    if (typeof target === 'function') target.apply(consoleRef, args)
+  } catch {
+    // Login diagnostics must never affect auth flows.
+  }
+}
+
+const loginModalLogger = {
+  log: (...args: any[]) => writeLoginLog('log', args),
+  warn: (...args: any[]) => writeLoginLog('warn', args),
+  error: (...args: any[]) => writeLoginLog('error', args)
 }
 
 /** Mask email for display: user@example.com → us***@example.com */
@@ -81,7 +110,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
   const [codeExpiresIn, setCodeExpiresIn] = useState(0)
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null)
 
-  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const otpRef = useRef<OtpDigitInputHandle>(null)
   const emailInputRef = useRef<HTMLInputElement>(null)
   const verifyingRef = useRef(false)
 
@@ -110,7 +139,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
           const result: AccessPolicyResponse = await plugin.call('auth', 'getAccessPolicy')
           if (result) {
             setAccessPolicy(result)
-            console.log('[LoginModal] Access policy:', result.policy, result.message)
+            loginModalLogger.log('[LoginModal] Access policy:', result.policy, result.message)
           }
         } else {
           // Fallback: fetch directly from endpoint
@@ -121,11 +150,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
           if (res.ok) {
             const data: AccessPolicyResponse = await res.json()
             setAccessPolicy(data)
-            console.log('[LoginModal] Access policy (direct):', data.policy, data.message)
+            loginModalLogger.log('[LoginModal] Access policy (direct):', data.policy, data.message)
           }
         }
       } catch (err) {
-        console.warn('[LoginModal] Failed to fetch access policy, defaulting to open:', err)
+        loginModalLogger.warn('[LoginModal] Failed to fetch access policy, defaulting to open:', err)
       } finally {
         setAccessPolicyLoading(false)
       }
@@ -166,13 +195,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
           await plugin.call('auth', 'setPendingInviteToken', token)
           await plugin.call('auth', 'setPendingInviteValidation', token, data)
         } catch (e) {
-          console.warn('[LoginModal] Failed to store pending invite:', e)
+          loginModalLogger.warn('[LoginModal] Failed to store pending invite:', e)
         }
       }
 
       return data
     } catch (err) {
-      console.error('[LoginModal] Failed to validate invite token:', err)
+      loginModalLogger.error('[LoginModal] Failed to validate invite token:', err)
       const errorResult: InviteValidateResponse = {
         valid: false,
         error: 'Failed to validate token',
@@ -200,7 +229,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
     try {
       await plugin.call('invitationManager', 'showInvite', token)
     } catch (err) {
-      console.error('[LoginModal] Failed to show invite:', err)
+      loginModalLogger.error('[LoginModal] Failed to show invite:', err)
     }
   }
 
@@ -216,9 +245,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
             const poolResult = await plugin.call('auth', 'isPoolAvailable')
             setTestAccountsAvailable(poolResult.available === true)
             if (poolResult.reason) setPoolStatusText(poolResult.reason)
-            console.log('[LoginModal] Test account pool:', poolResult)
+            loginModalLogger.log('[LoginModal] Test account pool:', poolResult)
           } catch (testErr) {
-            console.log('[LoginModal] Pool check failed (this is normal for production):', testErr)
+            loginModalLogger.log('[LoginModal] Pool check failed (this is normal for production):', testErr)
           }
         }
 
@@ -230,7 +259,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
         if (!response.ok) throw new Error(`Failed to fetch providers: ${response.status}`)
 
         const data = await response.json()
-        console.log('[LoginModal] Supported providers from backend:', data)
+        loginModalLogger.log('[LoginModal] Supported providers from backend:', data)
 
         const allProviders: ProviderConfig[] = [
           { id: 'google', label: 'Google', icon: <i className="fab fa-google"></i>, description: 'Sign in with your Google account', enabled: data.providers?.includes('google') ?? false },
@@ -246,7 +275,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
         setProviders(allProviders.filter(p => p.enabled))
         setLoadingProviders(false)
       } catch (err) {
-        console.error('[LoginModal] Failed to fetch providers:', err)
+        loginModalLogger.error('[LoginModal] Failed to fetch providers:', err)
         setProviders([
           { id: 'google', label: 'Google', icon: <i className="fab fa-google"></i>, description: 'Sign in with your Google account', enabled: true },
           { id: 'github', label: 'GitHub', icon: <i className="fab fa-github"></i>, description: 'Sign in with your GitHub account', enabled: true },
@@ -280,7 +309,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
       onClose()
     } catch (err) {
       trackEvent('loginFailed', provider)
-      console.error('[LoginModal] Login failed:', err)
+      loginModalLogger.error('[LoginModal] Login failed:', err)
     }
   }
 
@@ -352,7 +381,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
       setSendCooldown(60)
       setOtpDigits(['', '', '', '', '', ''])
       setEmailError(null)
-      setTimeout(() => otpInputRefs.current[0]?.focus(), 100)
+      setTimeout(() => otpRef.current?.focus(), 100)
     } catch (err: any) {
       setEmailError(err.message || 'Failed to send verification code')
     } finally {
@@ -430,7 +459,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
           setEmailError(data.error || 'Invalid verification code')
         }
         setOtpDigits(['', '', '', '', '', ''])
-        setTimeout(() => otpInputRefs.current[0]?.focus(), 100)
+        setTimeout(() => otpRef.current?.focus(), 100)
         return
       }
 
@@ -457,11 +486,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
           try {
             await plugin.call('auth', 'notifyEmailOtpLogin', data.user, data.token)
           } catch (e) {
-            console.warn('[LoginModal] Failed to notify auth plugin of email OTP login:', e)
+            loginModalLogger.warn('[LoginModal] Failed to notify auth plugin of email OTP login:', e)
           }
         }
 
-        console.log('[LoginModal] Email OTP login successful')
+        loginModalLogger.log('[LoginModal] Email OTP login successful')
         // Close the modal after successful login
         onClose()
       } else {
@@ -472,51 +501,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
     } finally {
       verifyingRef.current = false
       setOtpVerifying(false)
-    }
-  }
-
-  // --- OTP digit input handlers ---
-  const handleOtpDigitChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return
-
-    const newDigits = [...otpDigits]
-    newDigits[index] = value.slice(-1)
-    setOtpDigits(newDigits)
-
-    // Auto-advance to next input
-    if (value && index < 5) {
-      otpInputRefs.current[index + 1]?.focus()
-    }
-
-    // Auto-submit when all 6 digits filled
-    const fullCode = newDigits.join('')
-    if (fullCode.length === 6) {
-      handleVerifyCode(fullCode)
-    }
-  }
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus()
-    }
-    if (e.key === 'Enter') {
-      handleVerifyCode()
-    }
-  }
-
-  const handleOtpPaste = (e: React.ClipboardEvent) => {
-    e.preventDefault()
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-    if (!pasted) return
-
-    const newDigits = Array(6).fill('').map((_, i) => pasted[i] || '')
-    setOtpDigits(newDigits)
-
-    const focusIdx = Math.min(pasted.length, 5)
-    otpInputRefs.current[focusIdx]?.focus()
-
-    if (pasted.length === 6) {
-      handleVerifyCode(pasted)
     }
   }
 
@@ -728,25 +712,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
                   )}
 
                   {/* 6-digit OTP inputs */}
-                  <div className="d-flex gap-2 mb-3 login-modal-otp-group" onPaste={handleOtpPaste}>
-                    {otpDigits.map((digit, i) => (
-                      <input
-                        key={i}
-                        ref={(el) => { otpInputRefs.current[i] = el }}
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        className={`login-modal-otp-digit ${digit ? 'has-value' : ''}`}
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleOtpDigitChange(i, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                        onFocus={(e) => e.target.select()}
-                        autoFocus={i === 0}
-                        disabled={otpVerifying}
-                      />
-                    ))}
-                  </div>
+                  <OtpDigitInput
+                    ref={otpRef}
+                    value={otpDigits}
+                    onChange={setOtpDigits}
+                    onComplete={(code) => handleVerifyCode(code)}
+                    onSubmit={() => handleVerifyCode()}
+                    disabled={otpVerifying}
+                    className="mb-3"
+                  />
 
                   {/* Code expiry timer */}
                   {codeExpiresIn > 0 && (
@@ -986,6 +960,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, plugin }) => {
                     {/* Test Account Pool button - only shown when pool is available */}
                     {testAccountsAvailable && (
                       <button
+                        data-id="loginModalE2EPoolButton"
                         className="btn btn-outline-warning w-100 d-flex align-items-center justify-content-center py-2 no-hover-effect"
                         onClick={() => handleLogin('test')}
                         disabled={loading}

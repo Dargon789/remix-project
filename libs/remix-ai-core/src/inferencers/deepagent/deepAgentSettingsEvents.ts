@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 import EventEmitter from 'events'
 
 /**
@@ -26,7 +27,7 @@ export const deepAgentSettingsEvents = DeepAgentSettingsEvents.getInstance()
  * This will emit an event that the RemixAI plugin listens to
  */
 export function onDeepAgentApiKeysChanged(): void {
-  console.log('[DeepAgent] API keys settings changed, emitting reinitialize event')
+  remixAILogger.log('[DeepAgent] API keys settings changed, emitting reinitialize event')
   deepAgentSettingsEvents.emit('apiKeysChanged')
 }
 

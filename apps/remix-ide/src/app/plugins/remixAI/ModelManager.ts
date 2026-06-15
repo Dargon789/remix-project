@@ -1,21 +1,17 @@
-import {
-  RemoteInferencer,
-  OllamaInferencer,
+import { remixAILogger,
   MCPInferencer,
-  DeepAgentInferencer,
   GenerationParams,
   CompletionParams,
   AssistantParams,
   isOllamaAvailable,
   getBestAvailableModel,
   listModels,
-  getDefaultModel,
+  modelSupportsTools,
   getModelById
 } from '@remix/remix-ai-core'
 import type { AIModel } from '@remix/remix-ai-core'
 import type { IRemixAIPlugin } from './types'
 import type { DeepAgentEventBridge } from './DeepAgentEventBridge'
-import { ApiKeySettingsHelper } from './ApiKeySettingsHelper'
 
 export interface ModelManagerDeps {
   plugin: IRemixAIPlugin
@@ -25,19 +21,33 @@ export interface ModelManagerDeps {
 
 export class ModelManager {
   private deps: ModelManagerDeps
-  private apiKeyHelper: ApiKeySettingsHelper
 
   constructor(deps: ModelManagerDeps) {
     this.deps = deps
-    this.apiKeyHelper = new ApiKeySettingsHelper(deps.plugin)
   }
 
   async setModel(modelId: string, allowedModels: string[] = []): Promise<void> {
     const plugin = this.deps.plugin
-    let model = getModelById(modelId)
+    // The static `getModelById` only knows the anonymous fallback list
+    // (placeholder + ollama). Real model metadata lives in the
+    // assistantState plugin, fed by /permissions.ai_models. Look it up
+    // there first; only fall back to the static helper for the bootstrap
+    // / ollama cases.
+    let model: AIModel | undefined
+    try {
+      const dynamic: AIModel[] = await plugin.call('assistantState', 'getAvailableModels')
+      if (Array.isArray(dynamic)) {
+        model = dynamic.find(m => m.id === modelId)
+      }
+    } catch (e) {
+      remixAILogger.warn('[ModelManager] assistantState.getAvailableModels failed', e)
+    }
+    if (!model) model = getModelById(modelId)
     if (!model) {
-      model = getDefaultModel()
-      modelId = model.id
+      // No silent fallback. The picker is fed by /permissions — if a
+      // caller asks for a model id that isn't in any catalogue we have a
+      // bug, not a recoverable situation. Throw loud.
+      throw new Error(`[ModelManager.setModel] Model id "${modelId}" not found in /permissions ai_models nor in the anonymous fallback catalogue. Cannot continue without an API-resolved model.`)
     }
 
     plugin.allowedModels = allowedModels
@@ -76,7 +86,8 @@ export class ModelManager {
         undefined,
         undefined,
         plugin.remixMCPServer,
-        plugin.remoteInferencer
+        plugin.remoteInferencer,
+        plugin.getMcpAuthToken
       )
       plugin.mcpInferencer.event.on('mcpServerConnected', (_serverName: string) => {
         // Handle server connected
@@ -93,109 +104,35 @@ export class ModelManager {
       await plugin.mcpInferencer.connectAllServers()
     }
 
-    // Reinitialize DeepAgent if enabled and model changed
-    console.log(`[ModelManager] Model set to ${modelId} (provider: ${model.provider}). Previous model was ${previousModelId}. Reinitializing DeepAgent if needed.`)
     if (plugin.deepAgentEnabled && plugin.deepAgentInferencer && plugin.remixMCPServer && previousModelId !== modelId) {
-      console.log('[ModelManager] Reinitializing DeepAgent due to model change...')
-      await this.reinitializeDeepAgentForModelChange(model, modelId)
+      remixAILogger.log('[ModelManager] Reinitializing DeepAgent due to model change...')
+      await (plugin as any).deepAgentManager.reinitialize()
     }
 
     // Emit event for UI updates
     plugin.emit('modelChanged', modelId)
+    ;(plugin as any).publishRouteStatus?.()
   }
 
-  private async handleOllamaProvider(model: AIModel, modelId: string): Promise<void> {
+  private async handleOllamaProvider(_model: AIModel, _modelId: string): Promise<void> {
     const plugin = this.deps.plugin
     const isAvailable = await isOllamaAvailable()
 
     if (!isAvailable) {
-      console.error('Ollama is not available. Please ensure Ollama is running. Falling back to default model.')
-      const defaultModel = getDefaultModel()
-      this.applyFallbackModel(defaultModel)
-      return
+      // Loud failure: no silent fallback to a hardcoded default. The UI
+      // catches this and shows the Ollama-setup help message.
+      throw new Error('[ModelManager.handleOllamaProvider] Ollama is not available. Start `ollama serve` or pick a different model.')
     }
 
     const bestModel = await getBestAvailableModel()
     if (!bestModel) {
-      console.error('No Ollama models available. Falling back to default model.')
-      const defaultModel = getDefaultModel()
-      this.applyFallbackModel(defaultModel)
-      return
+      throw new Error('[ModelManager.handleOllamaProvider] No tool-capable Ollama model is installed. The agent needs a model that supports tool calling — run `ollama pull qwen2.5-coder` (or another tool-capable model) and try again.')
     }
 
-    // Switch to Ollama inferencer
-    plugin.remoteInferencer = new OllamaInferencer(bestModel)
-    this.setupInferencerEvents(plugin.remoteInferencer)
-  }
+    (plugin as any).discoveredOllamaModel = bestModel
+    remixAILogger.log(`[ModelManager] Ollama provider selected, discovered model: ${bestModel}`)
 
-  private applyFallbackModel(defaultModel: AIModel): void {
-    const plugin = this.deps.plugin
-    plugin.selectedModelId = defaultModel.id
-    plugin.selectedModel = defaultModel
-    GenerationParams.provider = defaultModel.provider
-    GenerationParams.model = defaultModel.id
-    CompletionParams.provider = defaultModel.provider
-    CompletionParams.model = defaultModel.id
-    AssistantParams.provider = defaultModel.provider
-    AssistantParams.model = defaultModel.id
-  }
-
-  private setupInferencerEvents(inferencer: RemoteInferencer | OllamaInferencer): void {
-    const plugin = this.deps.plugin
-    inferencer.event.on('onInference', () => {
-      plugin.isInferencing = true
-    })
-    inferencer.event.on('onInferenceDone', () => {
-      plugin.isInferencing = false
-    })
-  }
-
-  private async reinitializeDeepAgentForModelChange(_model: AIModel, _modelId: string): Promise<void> {
-    const plugin = this.deps.plugin
-    console.log('[RemixAI Plugin] Model changed, reinitializing DeepAgent with new model:', _model.provider, _modelId)
-
-    try {
-      // Clean up old instance
-      this.deps.eventBridge.teardownListeners(plugin.deepAgentInferencer!)
-      await plugin.deepAgentInferencer!.close()
-
-      // Get user API keys config
-      const userApiKeys = await this.apiKeyHelper.getUserApiKeysConfig()
-      if (userApiKeys?.useOwnKeys) {
-        console.log('[RemixAI Plugin] Using user-provided API keys for DeepAgent (model change)')
-      }
-
-      // Create new instance with updated model
-      plugin.deepAgentInferencer = new DeepAgentInferencer(
-        plugin as any, // Cast to Plugin type
-        plugin.remixMCPServer.tools,
-        {
-          memoryBackend: (localStorage.getItem('deepagent_memory_backend') as 'state' | 'store') || 'store',
-          enableSubagents: true,
-          enablePlanning: true,
-          userApiKeys
-        },
-        plugin.remoteInferencer,
-        plugin.mcpInferencer,
-        { provider: _model.provider as 'anthropic' | 'mistralai' | 'openai' | 'moonshot', modelId: _modelId }
-      )
-      await plugin.deepAgentInferencer.initialize()
-
-      // Reset and set up event listeners
-      this.deps.eventBridge.resetSetup()
-      this.deps.setupDeepAgentEventListeners()
-
-      console.log('[RemixAI Plugin] DeepAgent reinitialized with new model successfully')
-
-      // Apply pending thread_id after model switch reinitialization
-      if (plugin.pendingDeepAgentThreadId) {
-        plugin.deepAgentInferencer.setSessionThreadId(plugin.pendingDeepAgentThreadId)
-        plugin.pendingDeepAgentThreadId = null
-      }
-    } catch (error) {
-      console.error('[RemixAI Plugin] Failed to reinitialize DeepAgent on model change:', error)
-      // Keep DeepAgent enabled but log the error
-    }
+    plugin.emit('ollamaModelDiscovered', bestModel)
   }
 
   async setOllamaModel(ollamaModelName: string): Promise<void> {
@@ -203,44 +140,50 @@ export class ModelManager {
 
     // Special method for selecting specific Ollama model after "Ollama" is selected
     if (plugin.selectedModel.provider !== 'ollama') {
-      console.warn('setOllamaModel should only be called when Ollama provider is selected')
+      remixAILogger.warn('setOllamaModel should only be called when Ollama provider is selected')
       return
     }
 
     const isAvailable = await isOllamaAvailable()
     if (!isAvailable) {
-      console.error('Ollama is not available. Please ensure Ollama is running.')
+      remixAILogger.error('Ollama is not available. Please ensure Ollama is running.')
       return
     }
 
-    plugin.remoteInferencer = new OllamaInferencer(ollamaModelName)
-    this.setupInferencerEvents(plugin.remoteInferencer)
+    // Block models without tool support — the agent depends on tool calling.
+    if (!(await modelSupportsTools(ollamaModelName))) {
+      throw new Error(`Ollama model "${ollamaModelName}" does not support tool calling and can't be used with the Remix agent. Pick a tool-capable model (e.g. qwen2.5-coder, llama3.1).`)
+    }
 
-    // Update MCP if enabled
-    if (plugin.mcpEnabled && plugin.mcpInferencer) {
-      plugin.mcpInferencer = new MCPInferencer(
-        plugin.mcpServers,
-        undefined,
-        undefined,
-        plugin.remixMCPServer,
-        plugin.remoteInferencer
-      )
-      await plugin.mcpInferencer.connectAllServers()
+    (plugin as any).discoveredOllamaModel = ollamaModelName
+    remixAILogger.log(`[ModelManager] Ollama model selected: ${ollamaModelName}`)
+
+    if (plugin.deepAgentEnabled && plugin.deepAgentInferencer && plugin.remixMCPServer) {
+      remixAILogger.log(`[ModelManager] Reinitializing DeepAgent for Ollama model: ${ollamaModelName}`)
+      await (plugin as any).deepAgentManager.reinitialize()
     }
   }
 
   async setAssistantProvider(provider: string): Promise<void> {
-    const providerToModelMap: Record<string, string> = {
-      'openai': 'gpt-4-turbo',
-      'mistralai': 'mistral-medium-latest',
-      'anthropic': 'claude-sonnet-4-6',
-      'ollama': 'ollama'
+    const plugin = this.deps.plugin
+    // Resolve the provider to a concrete model via /permissions instead
+    // of a hardcoded provider→model literal map. We pick the first available
+    // model whose provider matches — preferring the one flagged is_default.
+    let catalogue: AIModel[] = []
+    try {
+      catalogue = await plugin.call('assistantState' as any, 'getAvailableModels')
+    } catch (e) {
+      throw new Error(`[ModelManager.setAssistantProvider] Cannot resolve provider "${provider}" — assistantState.getAvailableModels failed: ${(e as Error)?.message ?? e}`)
     }
-    const modelId = providerToModelMap[provider] || getDefaultModel().id
-    await this.setModel(modelId)
+    const candidates = (Array.isArray(catalogue) ? catalogue : []).filter(m => m.provider === provider && m.available)
+    if (candidates.length === 0) {
+      throw new Error(`[ModelManager.setAssistantProvider] No available model for provider "${provider}" in /permissions ai_models. Backend must advertise at least one row for this provider.`)
+    }
+    const chosen = candidates.find(m => m.isDefault) ?? candidates[0]
+    await this.setModel(chosen.id)
   }
 
-  async getOllamaModels(): Promise<string[]> {
+  async getOllamaModels(): Promise<{ name: string; supported: boolean }[]> {
     const plugin = this.deps.plugin
 
     if (plugin.selectedModel.provider !== 'ollama') {
@@ -252,7 +195,10 @@ export class ModelManager {
       throw new Error('Ollama is not running')
     }
 
-    const models = await listModels()
-    return models
+    // Return ALL installed models, flagged by tool support, so the UI can show
+    // unsupported models grayed out rather than hiding them. `supported` means
+    // the model can call tools — the hard requirement for the agent.
+    const all = await listModels()
+    return Promise.all(all.map(async (name) => ({ name, supported: await modelSupportsTools(name) })))
   }
 }

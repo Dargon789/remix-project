@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useAuth } from '@remix-ui/app'
+import { CustomTooltip } from '@remix-ui/helper'
 import JSZip from 'jszip'
 import './remix-ui-skills-explorer-modal.css'
+import { getFileType, parseSkillNameFromContent, ensureDirectoryExists } from './helpers'
 
 type ModalTab = 'browse' | 'upload'
 type UploadStep = 'select' | 'preview' | 'uploading'
@@ -12,64 +15,22 @@ interface ParsedSkillFile {
   sourceFileName: string
 }
 
-/**
- * Parse the `name` field from a SKILL.md YAML frontmatter block.
- * Convention: SKILL.md starts with ---\nname: <skill-name>\ndescription: ...\n---
- * The name value is used as the parent directory name under .skills/
- */
-function parseSkillNameFromContent(content: string): string | null {
-  const match = content.match(/^---[\s\S]*?^name:\s*([^\n]+)/m)
-  if (!match) return null
-  return match[1].trim()
-}
-
-/**
- * Validate file extension
- */
-function getFileType(filename: string): 'md' | 'zip' | null {
-  const lower = filename.toLowerCase()
-  if (lower.endsWith('.md')) return 'md'
-  if (lower.endsWith('.zip') || lower.endsWith('.skill')) return 'zip'
-  return null
-}
-
-// Resolve the skills endpoint — works in both local dev and production
-function getSkillsBaseUrl(): string {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { endpointUrls } = require('@remix-endpoints-helper')
-    const proxy = endpointUrls?.mcpCorsProxy
-    // In local dev, mcpCorsProxy is 'mcp' (relative), which won't work for
-    // an external skills server. Fall back to the direct endpoint.
-    if (proxy && proxy.startsWith('http')) {
-      return proxy + '/ethskills'
-    }
-  } catch (_) { /* ignore */ }
-  // Fallback: direct ethskills server
-  return 'https://mcp.api.remix.live/ethskills'
-}
-
 export interface SkillInfo {
   id: string
   name: string
   description: string
 }
-
-export interface SkillData {
-  id: string
-  name: string
-  description: string
-  content: string
-  resources: Record<string, string>
-}
-
 export interface RemixUiSkillsExplorerModalProps {
   isOpen: boolean
   onClose: () => void
   plugin?: any // Plugin instance to access fileManager
+  loadSkill: (skillId: string) => Promise<void>
 }
 
 export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProps) {
+  const { features } = useAuth()
+  const hasBasicSkills = !!features['skills:basic']
+  const hasAdvancedSkills = !!features['skills:advanced']
   const { isOpen, onClose, plugin } = props
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState<boolean>(false)
@@ -89,12 +50,22 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
   const [uploading, setUploading] = useState<boolean>(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const fetchSkillsList = async (url: string): Promise<SkillInfo[]> => {
-    const response = await fetch(url)
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+  // Helper function to check if a skill is basic (free)
+  const isBasicSkill = (skillName: string) => {
+    return basicSkillNames.includes(skillName.toLowerCase())
+  }
+
+  const fetchSkillsList = async (): Promise<SkillInfo[]> => {
+    if (!plugin) throw new Error('Plugin not available')
+    const ethSkillsApi: any = await plugin.call('auth', 'getEthSkillsApi')
+    if (!ethSkillsApi || typeof ethSkillsApi.listSkills !== 'function') {
+      throw new Error('EthSkills API service is not available')
     }
-    const data = await response.json()
+    const response = await ethSkillsApi.listSkills()
+    if (!response.ok || !response.data) {
+      throw new Error(response.error || `HTTP ${response.status}`)
+    }
+    const data = response.data
     if (!Array.isArray(data.skills)) {
       throw new Error('Invalid skills list format - expected array of skills')
     }
@@ -108,32 +79,6 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
       skills.push({ id: skill.id, name: skill.name, description })
     }
     return skills
-  }
-
-  const fetchSkillData = async (url: string): Promise<SkillData> => {
-    const response = await fetch(url)
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-    const data = await response.json()
-    if (!data.id || !data.name || !data.content || !data.resources) {
-      throw new Error('Invalid skill data format - missing required fields')
-    }
-    return {
-      id: data.id,
-      name: data.name,
-      description: data.description || '',
-      content: data.content,
-      resources: data.resources || {}
-    }
-  }
-
-  const ensureDirectoryExists = async (dirPath: string) => {
-    try {
-      await plugin.call('fileManager', 'mkdir', dirPath)
-    } catch (e) {
-      // Directory may already exist
-    }
   }
 
   // Parse uploaded file (either .md or .zip/.skill)
@@ -267,9 +212,9 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
     setUploading(true)
 
     try {
-      const skillDir = `.skills/${parsedSkill.folderName}`
-      await ensureDirectoryExists('.skills')
-      await ensureDirectoryExists(skillDir)
+      const skillDir = `skills/${parsedSkill.folderName}`
+      await ensureDirectoryExists('skills', plugin)
+      await ensureDirectoryExists(skillDir, plugin)
 
       for (const [filename, content] of Object.entries(parsedSkill.files)) {
         await plugin.call('fileManager', 'writeFile', `${skillDir}/${filename}`, content)
@@ -306,8 +251,7 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
       const load = async () => {
         setLoading(true)
         try {
-          const url = getSkillsBaseUrl() + '/skills'
-          const list = await fetchSkillsList(url)
+          const list = await fetchSkillsList()
           setSkills(list)
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Failed to load skills')
@@ -319,17 +263,69 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
     }
   }, [isOpen])
 
-  const filteredSkills = skills.filter(skill =>
-    skill.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    skill.description.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Define basic skills that are always available to free users
+  const basicSkillNames = [
+    'Why Ethereum'.toLowerCase(),
+    'Gas & Costs'.toLowerCase(),
+    'Ship'.toLowerCase(),
+    'Wallets'.toLowerCase(),
+    'Layer 2s'.toLowerCase(),
+    'Standards'.toLowerCase(),
+    'Money Legos'.toLowerCase(),
+    'Contract Addresses'.toLowerCase(),
+    'ethereum-address-safety'.toLowerCase(),
+    'use-circle-cli'.toLowerCase(),
+    'use-circle-wallets'.toLowerCase(),
+    'use-developer-controlled-wallets'.toLowerCase(),
+    'use-gateway'.toLowerCase(),
+    'use-usdc'.toLowerCase()
+  ]
+
+  // Filter skills based on search term and permission level
+  const filteredSkills = skills.filter(skill => {
+    // First check search term match
+    const matchesSearch = skill.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         skill.description.toLowerCase().includes(searchTerm.toLowerCase())
+
+    // Then check permission level
+    if (!matchesSearch) return false
+
+    // If user has advanced skills permission, show all skills
+    if (hasAdvancedSkills) return true
+
+    // If user has basic skills permission, show only basic skills
+    if (hasBasicSkills) return isBasicSkill(skill.name)
+
+    // If no skills permission, still show basic skills (free tier)
+    return isBasicSkill(skill.name)
+  })
 
   const toggleSkill = (id: string) => {
-    setSelectedSkills(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
+    // Find the skill to check if it's basic
+    const skill = skills.find(s => s.id === id)
+    if (!skill) return
+
+    // Check if user can select this skill based on permission level
+    const isBasic = isBasicSkill(skill.name)
+
+    // Advanced users can select all skills
+    if (hasAdvancedSkills) {
+      setSelectedSkills(prev => {
+        const next = new Set(prev)
+        next.has(id) ? next.delete(id) : next.add(id)
+        return next
+      })
+      return
+    }
+
+    // Basic users and free tier can only select basic skills
+    if (isBasic) {
+      setSelectedSkills(prev => {
+        const next = new Set(prev)
+        next.has(id) ? next.delete(id) : next.add(id)
+        return next
+      })
+    }
   }
 
   const handleLoadSelected = () => {
@@ -348,21 +344,7 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
 
     for (const skillId of selectedSkills) {
       try {
-        const url = getSkillsBaseUrl() + `/skills/${skillId}`
-        const skillData = await fetchSkillData(url)
-        // Use the name from SKILL.md frontmatter as the directory name per convention.
-        // e.g. "---\nname: my-skill\n---" → .skills/my-skill/
-        const dirName = parseSkillNameFromContent(skillData.content)
-        if (!dirName) {
-          errors.push(`${skillId}: SKILL.md is not in the correct format. Expected YAML frontmatter with a 'name' field (---\nname: skill-name\ndescription: ...\n---)`)
-          continue
-        }
-        const skillDir = `.skills/${dirName}`
-        await ensureDirectoryExists(skillDir)
-        await plugin.call('fileManager', 'writeFile', `${skillDir}/SKILL.md`, skillData.content)
-        for (const [filename, content] of Object.entries(skillData.resources)) {
-          await plugin.call('fileManager', 'writeFile', `${skillDir}/${filename}`, content)
-        }
+        await props.loadSkill(skillId)
       } catch (err) {
         errors.push(`${skillId}: ${err instanceof Error ? err.message : 'Failed'}`)
       }
@@ -460,13 +442,34 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
               <i className="fa-solid fa-compass me-2"></i>
               Browse Skills
             </button>
-            <button
-              className={`skills-explorer-tab ${activeTab === 'upload' ? 'active' : ''}`}
-              onClick={() => setActiveTab('upload')}
-            >
-              <i className="fa-solid fa-upload me-2"></i>
-              Upload Skill
-            </button>
+            {!hasAdvancedSkills ? (
+              <CustomTooltip
+                placement="top"
+                tooltipText="Coming soon"
+                tooltipClasses="text-nowrap"
+                tooltipId="skills-upload-disabled-tooltip"
+              >
+                <span className="d-inline-block" style={{ cursor: 'not-allowed' }}>
+                  <button
+                    className={`skills-explorer-tab disabled`}
+                    onClick={(e) => e.preventDefault()}
+                    style={{ opacity: 0.5, pointerEvents: 'none' }}
+                    tabIndex={-1}
+                  >
+                    <i className="fa-solid fa-upload me-2"></i>
+                    Upload Skill
+                  </button>
+                </span>
+              </CustomTooltip>
+            ) : (
+              <button
+                className={`skills-explorer-tab ${activeTab === 'upload' ? 'active' : ''}`}
+                onClick={() => setActiveTab('upload')}
+              >
+                <i className="fa-solid fa-upload me-2"></i>
+                Upload Skill
+              </button>
+            )}
           </div>
         )}
 
@@ -500,6 +503,15 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
                         Select one or more Ethereum development skills to add to your workspace
                       </div>
 
+                      {!hasAdvancedSkills && (
+                        <div className="alert alert-info mb-3" role="alert">
+                          <i className="fa-solid fa-info-circle me-2"></i>
+                          {hasBasicSkills
+                            ? "You have access to basic skills. More skills coming soon."
+                            : "Basic skills are available to all users. More skills coming soon."}
+                        </div>
+                      )}
+
                       {filteredSkills.length === 0 ? (
                         <div className="text-center py-5 text-muted">
                           <i className="fa-solid fa-search fa-3x mb-3"></i>
@@ -509,20 +521,35 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
                         <div className="d-flex flex-wrap gap-3">
                           {filteredSkills.map((skill) => {
                             const isSelected = selectedSkills.has(skill.id)
+                            const isBasic = isBasicSkill(skill.name)
+                            const isDisabled = !hasAdvancedSkills && !isBasic
+
                             return (
                               <div
                                 key={skill.id}
-                                className={`skill-card bg-light border p-3 ${isSelected ? 'border-primary' : ''}`}
-                                style={isSelected ? { boxShadow: '0 0 0 2px var(--bs-primary)' } : {}}
+                                className={`skill-card bg-light border p-3 ${isSelected ? 'border-primary' : ''} ${isDisabled ? 'disabled' : ''}`}
+                                style={{
+                                  ...(isSelected ? { boxShadow: '0 0 0 2px var(--bs-primary)' } : {}),
+                                  ...(isDisabled ? { opacity: 0.6, cursor: 'not-allowed' } : { cursor: 'pointer' })
+                                }}
                                 onClick={() => toggleSkill(skill.id)}
                                 data-id={`skill-card-${skill.id}`}
+                                title={isDisabled ? 'Upgrade to the advanced plan to select this skill' : ''}
                               >
                                 <div className="card-body">
                                   <div className="d-flex justify-content-between align-items-start mb-2">
                                     <h6 className="card-title text-dark mb-0">{skill.name}</h6>
-                                    {isSelected && (
-                                      <i className="fa-solid fa-circle-check text-primary ms-2 flex-shrink-0"></i>
-                                    )}
+                                    <div className="d-flex align-items-center">
+                                      {isBasic && !hasAdvancedSkills && (
+                                        <span className="badge bg-success me-2">Basic</span>
+                                      )}
+                                      {isSelected && (
+                                        <i className="fa-solid fa-circle-check text-primary flex-shrink-0"></i>
+                                      )}
+                                      {isDisabled && (
+                                        <i className="fa-solid fa-lock text-muted flex-shrink-0"></i>
+                                      )}
+                                    </div>
                                   </div>
                                   <p className="card-description text-muted mb-0">
                                     {skill.description || 'No description available'}
@@ -548,15 +575,15 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
                       {selectedSkillInfos.map(s => (
                         <div key={s.id} className="mb-1">
                           <strong className="text-light">{s.name}</strong>
-                          <span className="text-muted ms-2 small">→ .skills/{s.name}/</span>
+                          <span className="text-muted ms-2 small">→ skills/{s.name}/</span>
                         </div>
                       ))}
                     </div>
                     <div className="alert alert-info mb-4">
                       <i className="fa-solid fa-info-circle me-2"></i>
                       {selectedSkills.size === 1
-                        ? <span>This will create files in <code>.skills/{selectedSkillInfos[0]?.name || [...selectedSkills][0]}/</code> using the skill's SKILL.md name.</span>
-                        : <span>This will create files in <code>.skills/</code> for each selected skill.</span>}
+                        ? <span>This will create files in <code>skills/{selectedSkillInfos[0]?.name || [...selectedSkills][0]}/</code> using the skill's SKILL.md name.</span>
+                        : <span>This will create files in <code>skills/</code> for each selected skill.</span>}
                     </div>
                     {error && (
                       <div className="alert alert-danger mb-3" role="alert">
@@ -598,128 +625,141 @@ export function RemixUiSkillsExplorerModal(props: RemixUiSkillsExplorerModalProp
           {/* ===== UPLOAD TAB ===== */}
           {activeTab === 'upload' && (
             <>
-              {/* Upload Step 1: Select file */}
-              {uploadStep === 'select' && (
-                <div className="upload-skill-step">
-                  <div className="category-title">Upload a Skill</div>
-                  <div className="category-description mb-4">
-                    Add a custom skill to your workspace by uploading a skill file
-                  </div>
-
-                  {/* Drag and drop area */}
-                  <div
-                    className={`upload-dropzone ${isDragOver ? 'drag-over' : ''}`}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    data-id="skills-upload-dropzone"
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".md,.zip,.skill"
-                      onChange={handleFileInputChange}
-                      style={{ display: 'none' }}
-                      data-id="skills-upload-input"
-                    />
-                    <i className="fa-solid fa-cloud-arrow-up fa-3x mb-3 text-muted"></i>
-                    <div className="upload-dropzone-text">
-                      <span className="text-primary">Click to upload</span> or drag and drop
-                    </div>
-                    <div className="upload-dropzone-hint text-muted small mt-2">
-                      .md, .zip, or .skill files
-                    </div>
-                  </div>
-
-                  {uploadError && (
-                    <div className="alert alert-danger mt-3" role="alert">
-                      <i className="fa-solid fa-exclamation-triangle me-2"></i>
-                      <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{uploadError}</pre>
-                    </div>
-                  )}
-
-                  {/* File requirements info */}
-                  <div className="upload-requirements mt-4">
-                    <div className="requirements-title text-muted mb-2">
-                      <i className="fa-solid fa-info-circle me-2"></i>
-                      File Requirements
-                    </div>
-                    <ul className="requirements-list small text-muted">
-                      <li><strong>.md file:</strong> A markdown file containing the skill instructions (will be saved as SKILL.md)</li>
-                      <li><strong>.zip or .skill file:</strong> An archive that must include a SKILL.md file</li>
-                    </ul>
-                  </div>
+              {/* Check permissions first */}
+              {!hasAdvancedSkills ? (
+                <div className="d-flex flex-column align-items-center py-5">
+                  <i className="fa-solid fa-lock fa-3x mb-4 text-muted"></i>
+                  <h3 className="mb-3">Upload Feature Restricted</h3>
+                  <p className="text-muted text-center">
+                    Upgrade to a paid plan to enable the upload feature.
+                  </p>
                 </div>
-              )}
+              ) : (
+                <>
+                  {/* Upload Step 1: Select file */}
+                  {uploadStep === 'select' && (
+                    <div className="upload-skill-step">
+                      <div className="category-title">Upload a Skill</div>
+                      <div className="category-description mb-4">
+                    Add a custom skill to your workspace by uploading a skill file
+                      </div>
 
-              {/* Upload Step 2: Preview */}
-              {uploadStep === 'preview' && parsedSkill && (
-                <div className="upload-preview-step">
-                  <div className="d-flex flex-column align-items-center py-4">
-                    <i className="fa-solid fa-file-circle-check fa-3x mb-4 text-success"></i>
-                    <h3 className="mb-3">Skill Ready to Add</h3>
+                      {/* Drag and drop area */}
+                      <div
+                        className={`upload-dropzone ${isDragOver ? 'drag-over' : ''}`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                        data-id="skills-upload-dropzone"
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".md,.zip,.skill"
+                          onChange={handleFileInputChange}
+                          style={{ display: 'none' }}
+                          data-id="skills-upload-input"
+                        />
+                        <i className="fa-solid fa-cloud-arrow-up fa-3x mb-3 text-muted"></i>
+                        <div className="upload-dropzone-text">
+                          <span className="text-primary">Click to upload</span> or drag and drop
+                        </div>
+                        <div className="upload-dropzone-hint text-muted small mt-2">
+                      .md, .zip, or .skill files
+                        </div>
+                      </div>
 
-                    <div className="upload-preview-details mb-4 w-100">
-                      <div className="preview-item d-flex justify-content-between py-2 border-bottom">
-                        <span className="text-muted">Source File:</span>
-                        <span className="text-info">{parsedSkill.sourceFileName}</span>
-                      </div>
-                      <div className="preview-item d-flex justify-content-between py-2 border-bottom">
-                        <span className="text-muted">Skill Folder:</span>
-                        <code>.skills/{parsedSkill.folderName}</code>
-                      </div>
-                      <div className="preview-item d-flex justify-content-between py-2 border-bottom">
-                        <span className="text-muted">Files:</span>
-                        <span className="text-info">{Object.keys(parsedSkill.files).length} file(s)</span>
-                      </div>
-                      <div className="preview-files mt-3">
-                        <span className="text-muted small">Files to be created:</span>
-                        <ul className="files-list small mt-2">
-                          {Object.keys(parsedSkill.files).map((filename) => (
-                            <li key={filename}>
-                              <code>{parsedSkill.folderName}/{filename}</code>
-                            </li>
-                          ))}
+                      {uploadError && (
+                        <div className="alert alert-danger mt-3" role="alert">
+                          <i className="fa-solid fa-exclamation-triangle me-2"></i>
+                          <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{uploadError}</pre>
+                        </div>
+                      )}
+
+                      {/* File requirements info */}
+                      <div className="upload-requirements mt-4">
+                        <div className="requirements-title text-muted mb-2">
+                          <i className="fa-solid fa-info-circle me-2"></i>
+                      File Requirements
+                        </div>
+                        <ul className="requirements-list small text-muted">
+                          <li><strong>.md file:</strong> A markdown file containing the skill instructions (will be saved as SKILL.md)</li>
+                          <li><strong>.zip or .skill file:</strong> An archive that must include a SKILL.md file</li>
                         </ul>
                       </div>
                     </div>
+                  )}
 
-                    {uploadError && (
-                      <div className="alert alert-danger mb-3 w-100" role="alert">
-                        <i className="fa-solid fa-exclamation-triangle me-2"></i>
-                        <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{uploadError}</pre>
-                      </div>
-                    )}
+                  {/* Upload Step 2: Preview */}
+                  {uploadStep === 'preview' && parsedSkill && (
+                    <div className="upload-preview-step">
+                      <div className="d-flex flex-column align-items-center py-4">
+                        <i className="fa-solid fa-file-circle-check fa-3x mb-4 text-success"></i>
+                        <h3 className="mb-3">Skill Ready to Add</h3>
 
-                    <div className="d-flex gap-3">
-                      <button className="btn btn-secondary" onClick={resetUpload}>Cancel</button>
-                      <button
-                        data-id="skills-upload-confirm"
-                        className="btn btn-primary"
-                        onClick={handleUploadConfirm}
-                      >
-                        <i className="fa-solid fa-plus me-2"></i>
+                        <div className="upload-preview-details mb-4 w-100">
+                          <div className="preview-item d-flex justify-content-between py-2 border-bottom">
+                            <span className="text-muted">Source File:</span>
+                            <span className="text-info">{parsedSkill.sourceFileName}</span>
+                          </div>
+                          <div className="preview-item d-flex justify-content-between py-2 border-bottom">
+                            <span className="text-muted">Skill Folder:</span>
+                            <code>skills/{parsedSkill.folderName}</code>
+                          </div>
+                          <div className="preview-item d-flex justify-content-between py-2 border-bottom">
+                            <span className="text-muted">Files:</span>
+                            <span className="text-info">{Object.keys(parsedSkill.files).length} file(s)</span>
+                          </div>
+                          <div className="preview-files mt-3">
+                            <span className="text-muted small">Files to be created:</span>
+                            <ul className="files-list small mt-2">
+                              {Object.keys(parsedSkill.files).map((filename) => (
+                                <li key={filename}>
+                                  <code>{parsedSkill.folderName}/{filename}</code>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+
+                        {uploadError && (
+                          <div className="alert alert-danger mb-3 w-100" role="alert">
+                            <i className="fa-solid fa-exclamation-triangle me-2"></i>
+                            <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{uploadError}</pre>
+                          </div>
+                        )}
+
+                        <div className="d-flex gap-3">
+                          <button className="btn btn-secondary" onClick={resetUpload}>Cancel</button>
+                          <button
+                            data-id="skills-upload-confirm"
+                            className="btn btn-primary"
+                            onClick={handleUploadConfirm}
+                          >
+                            <i className="fa-solid fa-plus me-2"></i>
                         Add Skill
-                      </button>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {/* Upload Step 3: Uploading */}
-              {uploadStep === 'uploading' && (
-                <div className="uploading-skill-step">
-                  <div className="d-flex flex-column align-items-center py-5">
-                    <div className="spinner-border text-primary fa-3x mb-4" role="status">
-                      <span className="visually-hidden">Adding skill...</span>
-                    </div>
-                    <h3 className="text-light mb-3">Adding Skill</h3>
-                    <p className="text-muted">
+                  {/* Upload Step 3: Uploading */}
+                  {uploadStep === 'uploading' && (
+                    <div className="uploading-skill-step">
+                      <div className="d-flex flex-column align-items-center py-5">
+                        <div className="spinner-border text-primary fa-3x mb-4" role="status">
+                          <span className="visually-hidden">Adding skill...</span>
+                        </div>
+                        <h3 className="text-light mb-3">Adding Skill</h3>
+                        <p className="text-muted">
                       Saving skill files to your workspace...
-                    </p>
-                  </div>
-                </div>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

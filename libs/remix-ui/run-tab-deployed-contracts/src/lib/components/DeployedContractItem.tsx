@@ -14,6 +14,8 @@ import { ContractKebabMenu } from './ContractKebabMenu'
 import { TreeView, TreeViewItem } from '@remix-ui/tree-view'
 import BN from 'bn.js'
 import { TrackingContext } from '@remix-ide/tracking'
+import { useAuth } from '@remix-ui/app'
+import isElectron from 'is-electron'
 
 const txHelper = remixLib.execution.txHelper
 const txFormat = remixLib.execution.txFormat
@@ -31,8 +33,11 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
   const { dispatch, plugin, themeQuality } = useContext(DeployedContractsAppContext)
   const { trackMatomoEvent } = useContext(TrackingContext)
   const intl = useIntl()
+  const { features } = useAuth()
+  const hasQuickdappAccess = features?.['dapp:quickdapp']?.is_enabled
+  const isDesktop = isElectron()
   const [networkName, setNetworkName] = useState<string>('')
-  const [isExpanded, setIsExpanded] = useState<boolean>(false)
+  const [isExpanded, setIsExpanded] = useState<boolean>(true)
   const [contractABI, setContractABI] = useState(null)
   const [value, setValue] = useState<string>('0')
   const [valueUnit, setValueUnit] = useState<string>('wei')
@@ -378,11 +383,16 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
     }
 
     try {
+      // Permission gate: non-beta users see the QuickDapp lock screen
+      if (!hasQuickdappAccess) {
+        await plugin.call('manager', 'activatePlugin', 'quick-dapp-v2')
+        await plugin.call('tabs' as any, 'focus', 'quick-dapp-v2')
+        return
+      }
+
       console.log('[QuickDapp] handleCreateDapp START', { name: contract.name, address: contract.address, timestamp: Date.now() });
 
       // Send contract details to AI Assistant for DApp generation
-      const abi = contract.abi || contract.contractData?.abi || []
-      const abiJson = JSON.stringify(abi)
 
       let chainId: string
       try {
@@ -399,14 +409,48 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
       }
       console.log('[QuickDapp] chainId resolved:', chainId);
 
-      const prompt = `I want to create a DApp frontend for my deployed contract. Here are the contract details you'll need when calling generate_dapp:
+      const prompt = isDesktop
+        ? `I want to create a DApp frontend inline in the /frontend folder of my current workspace. Follow these steps exactly:
 
-contractName: ${contract.name}
-contractAddress: ${contract.address}
-chainId: ${chainId}
-contractAbi: ${abiJson}
+STEP 1 - CHECK FOR EXISTING CONTENT:
+Check if /frontend exists with content. If yes, ask: "The /frontend folder already has files. Overwrite them?"
 
-Before generating, please ask me about my design preferences first.`
+STEP 2 - CALL THE TOOL:
+After I confirm (or if /frontend is empty/doesn't exist), you MUST call generate_dapp with these parameters:
+
+generate_dapp({
+  description: "Modern dark mode single-page DApp using React and Ethers.js",
+  contractName: "${contract.name}",
+  contractAddress: "${contract.address}",
+  chainId: "${chainId}",
+  frontendMode: "inline",
+  confirmOverwrite: true  // only if I confirmed overwrite
+})
+
+IMPORTANT: Your next action MUST be checking /frontend and then calling generate_dapp. Do not just say "Understood" or "Proceeding" - actually call the tool.`
+        : `I want to create a DApp frontend. Follow these steps exactly:
+
+STEP 1 - ASK FOR LOCATION CHOICE:
+Ask me: "Where should I create your DApp?"
+- Inline: In /frontend folder of current workspace
+- Workspace: In a new dedicated workspace
+
+STEP 2 - IF I CHOOSE INLINE:
+Check if /frontend exists with content. If yes, ask: "The /frontend folder already has files. Overwrite them?"
+
+STEP 3 - CALL THE TOOL:
+After I answer, you MUST call generate_dapp with these parameters:
+
+generate_dapp({
+  description: "Modern dark mode single-page DApp using React and Ethers.js",
+  contractName: "${contract.name}",
+  contractAddress: "${contract.address}",
+  chainId: "${chainId}",
+  frontendMode: "inline" or "workspace",  // based on my choice
+  confirmOverwrite: true  // only if I chose inline AND confirmed overwrite
+})
+
+IMPORTANT: After I make my choice, your next action MUST be calling generate_dapp. Do not just say "Understood" or "Proceeding" - actually call the tool.`
 
       console.log('[QuickDapp] prompt assembled, length:', prompt.length);
 

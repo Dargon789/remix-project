@@ -24,8 +24,9 @@ import RenderUnKnownTransactions from './components/RenderUnknownTransactions' /
 import RenderCall from './components/RenderCall' // eslint-disable-line
 import RenderKnownTransactions from './components/RenderKnownTransactions' // eslint-disable-line
 import DebuggerCallStack from './components/DebuggerCallStack' // eslint-disable-line
+import { showCopyableValues } from './components/CopyableValues' // eslint-disable-line
 import parse from 'html-react-parser'
-import { EMPTY_BLOCK, KNOWN_TRANSACTION, RemixUiTerminalProps, SET_ISVM, SET_OPEN, UNKNOWN_TRANSACTION } from './types/terminalTypes'
+import { EMPTY_BLOCK, KNOWN_TRANSACTION, RemixUiTerminalProps, SET_ISVM, SET_OPEN, UNKNOWN_TRANSACTION, COPYABLE_VALUES } from './types/terminalTypes'
 import { wrapScript } from './utils/wrapScript'
 import { TerminalContext } from './context'
 
@@ -185,6 +186,15 @@ export const RemixUiTerminal = (props: RemixUiTerminalProps) => {
           type: 'html',
           payload: {
             message: [html ? (html.innerText ? html.innerText : html) : null],
+          },
+        })
+      },
+
+      logCopyableValues: (data) => {
+        scriptRunnerDispatch({
+          type: 'copyableValues',
+          payload: {
+            message: [data],
           },
         })
       },
@@ -674,7 +684,7 @@ export const RemixUiTerminal = (props: RemixUiTerminalProps) => {
 
   return (
     ( props.visible &&
-      <div style={{ flexGrow: 1 }} className="remix_ui_terminal_panel h-100 mb-2" ref={panelRef}>
+      <div style={{ flexGrow: 1 }} className="remix_ui_terminal_panel h-100" ref={panelRef}>
         <div tabIndex={-1} className="remix_ui_terminal_container d-flex h-100 m-0 flex-column" data-id="terminalContainer">
           {handleAutoComplete()}
           <div className="position-relative d-flex flex-column-reverse h-100" key={`terminal-view-${showDebuggerCallStack ? 'debug' : 'normal'}`}>
@@ -751,6 +761,15 @@ export const RemixUiTerminal = (props: RemixUiTerminalProps) => {
                               provider={x.provider}
                             />
                           )}
+                        </div>
+                      )
+                    })
+                } else if (x.name === 'copyableValues') {
+                  return x.message
+                    .map((data, i) => {
+                      return (
+                        <div className={classNameBlock} data-id="block_copyableValues" key={index}>
+                          {showCopyableValues(data)}
                         </div>
                       )
                     })

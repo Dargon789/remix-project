@@ -1,22 +1,29 @@
 import { useState, useEffect } from 'react'
-import { endpointUrls } from '@remix-endpoints-helper'
-import { getDefaultModel, AVAILABLE_MODELS } from '@remix/remix-ai-core'
-import { all } from 'axios'
+import { remixAILogger } from '@remix/remix-ai-core'
+
+interface AssistantStatePluginCaller {
+  call: (pluginName: string, method: string, ...args: any[]) => Promise<any>
+}
 
 export interface ModelAccess {
   allowedMcps: string[]
+  /** @deprecated The model catalogue now lives on the assistantState plugin
+   *  (`getAvailableModels()`). This field is kept as an empty array purely
+   *  for legacy callers and will be removed once those are migrated. */
   allowedModels: string[]
   isLoading: boolean
   error: string | null
+  /** @deprecated Use `model.available` from `getAvailableModels()` instead. */
   checkAccess: (modelId: string) => boolean
   refreshAccess: () => Promise<void>
 }
 
-export function useModelAccess(): ModelAccess {
-  const [allowedModels, setAllowedModels] = useState<string[]>(() => {
-    const defaultModel = getDefaultModel()
-    return [defaultModel.id, 'ollama']
-  })
+/**
+ * Hook for MCP feature gating only. Model access is now handled by the
+ * assistantState plugin (`getAvailableModels()`), which derives every
+ * picker entry from the backend's `permissions.ai_models` array.
+ */
+export function useModelAccess(plugin?: AssistantStatePluginCaller): ModelAccess {
   const [allowedMcps, setAllowedMcps] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,80 +33,26 @@ export function useModelAccess(): ModelAccess {
     setError(null)
 
     try {
-      const token = localStorage.getItem('remix_access_token')
-      if (!token) {
-        // Fallback to default model and ollama only
-        const defaultModel = getDefaultModel()
-        setAllowedModels([defaultModel.id, 'ollama'])
+      if (!plugin?.call) {
         setAllowedMcps([])
         return
       }
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
 
-      const response = await fetch(`${endpointUrls.permissions}`, {
-        credentials: 'include',
-        headers
-      })
-      if (response.ok) {
-        const data = await response.json()
-
-        // Parse enabled AI features from backend response
-        const enabledProviders = new Set<string>()
-
-        if (data.features) {
-          // Check each AI feature and map to provider
-          if (data.features['ai:Anthropic']?.is_enabled) {
-            enabledProviders.add('anthropic')
-          }
-          if (data.features['ai:OpenAI']?.is_enabled) {
-            enabledProviders.add('openai')
-          }
-          if (data.features['ai:Mistral']?.is_enabled) {
-            enabledProviders.add('mistralai')
-          }
-        }
-
-        const allowedMcpsFea = []
-        if (data.features) {
-          // Check each AI feature and map to provider
-          if (data.features['mcp:basicExternal']?.is_enabled) {
-            allowedMcpsFea.push('mcpBasicExternal')
-          }
-        }
-
-        // Start with default model and ollama (always available)
-        const defaultModel = getDefaultModel()
-        const allowedModelIds: string[] = [defaultModel.id, 'ollama']
-
-        // Add models from API-enabled providers
-        AVAILABLE_MODELS.forEach(model => {
-          // Skip if already added (default or ollama)
-          if (allowedModelIds.includes(model.id)) {
-            return
-          }
-
-          // Only add models from enabled providers
-          if (model.requiresAuth && enabledProviders.has(model.provider)) {
-            allowedModelIds.push(model.id)
-          } else {
-            allowedModelIds.push(model.id)
-          }
-        })
-
-        setAllowedModels(allowedModelIds)
-        setAllowedMcps(allowedMcpsFea)
-      } else {
-        // Fallback to default model and ollama only
-        const defaultModel = getDefaultModel()
-        setAllowedModels([defaultModel.id, 'ollama'])
+      const snap: any = await plugin.call('assistantState', 'getSnapshot')
+      if (!snap?.isAuthenticated || !snap?.permissions) {
         setAllowedMcps([])
+        return
       }
+
+      const allowedMcpsFea: string[] = []
+      if (snap.permissions?.features?.['mcp:basicExternal']?.is_enabled) {
+        allowedMcpsFea.push('mcpBasicExternal')
+      }
+      setAllowedMcps(allowedMcpsFea)
     } catch (err) {
-      console.error('Failed to fetch model access:', err)
-      const defaultModel = getDefaultModel()
-      setAllowedModels([defaultModel.id, 'ollama'])
+      remixAILogger.error('Failed to read MCP access from assistantState:', err)
       setAllowedMcps([])
-      setError('Failed to load model access')
+      setError('Failed to load MCP access')
     } finally {
       setIsLoading(false)
     }
@@ -107,15 +60,13 @@ export function useModelAccess(): ModelAccess {
 
   useEffect(() => {
     fetchModelAccess()
-  }, [])
+  }, [plugin])
 
-  const checkAccess = (modelId: string) => {
-    return allowedModels.includes(modelId)
-  }
+  const checkAccess = (_modelId: string) => true
 
   return {
     allowedMcps,
-    allowedModels,
+    allowedModels: [],
     isLoading,
     error,
     checkAccess,

@@ -35,7 +35,7 @@ export default function ChatHistoryHeading({
     : null
 
   return (
-    <section className={`d-flex flex-row justify-content-between align-items-center p-2 border-0`} data-theme={theme?.toLowerCase()}
+    <section className={`d-flex flex-row justify-content-between align-items-center px-2 py-1 border-0 border-top border-bottom border-[#3F4455]`} data-theme={theme?.toLowerCase()}
       style={{ backgroundColor: theme && theme.toLowerCase() === 'dark' ? '#222336' : '#eff1f5' }}>
       <div className="flex-grow-1 overflow-hidden me-2">
         {truncatedTitle ? (

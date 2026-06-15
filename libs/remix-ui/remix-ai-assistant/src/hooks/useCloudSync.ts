@@ -1,6 +1,6 @@
 /* eslint-disable @nrwl/nx/enforce-module-boundaries */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChatHistoryStorageManager } from '@remix/remix-ai-core'
+import { ChatHistoryStorageManager, remixAILogger } from '@remix/remix-ai-core'
 import { SyncStatus } from '../lib/types'
 
 interface UseCloudSyncProps {
@@ -77,7 +77,7 @@ export const useCloudSync = ({
       const errorMessage = err instanceof Error ? err.message : 'Failed to pull from cloud'
       setSyncStatus('error')
       setSyncError(errorMessage)
-      console.error('Pull from cloud failed:', err)
+      remixAILogger.error('Pull from cloud failed:', err)
     } finally {
       if (isMountedRef.current) {
         setIsSyncing(false)
@@ -94,7 +94,6 @@ export const useCloudSync = ({
     }
 
     if (!storageManager.isSyncEnabled()) {
-      return
       return
     }
 

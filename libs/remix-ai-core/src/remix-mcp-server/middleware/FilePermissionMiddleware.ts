@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * File Permission Middleware
  * Manages user permissions for file write operations
@@ -51,7 +52,7 @@ export class FilePermissionMiddleware extends BaseMiddleware {
         return await this.promptUserPermission(filePath, plugin);
       }
     } catch (error) {
-      console.error('[FilePermissionMiddleware] Error checking permission:', error);
+      remixAILogger.error('[FilePermissionMiddleware] Error checking permission:', error);
       return {
         allowed: false,
         reason: 'Permission check failed'
@@ -94,7 +95,7 @@ export class FilePermissionMiddleware extends BaseMiddleware {
         return { allowed: true };
       }
     } catch (error) {
-      console.error('[FilePermissionMiddleware] Error prompting user:', error);
+      remixAILogger.error('[FilePermissionMiddleware] Error prompting user:', error);
       return {
         allowed: false,
         reason: 'Permission prompt failed'
@@ -120,7 +121,7 @@ export class FilePermissionMiddleware extends BaseMiddleware {
 
       return result === true;
     } catch (error) {
-      console.error('[FilePermissionMiddleware] Error showing first modal:', error);
+      remixAILogger.error('[FilePermissionMiddleware] Error showing first modal:', error);
       return false;
     }
   }
@@ -145,7 +146,7 @@ export class FilePermissionMiddleware extends BaseMiddleware {
       const scope = result === true ? 'specific' : 'all';
       return scope;
     } catch (error) {
-      console.error('[FilePermissionMiddleware] Error showing second modal:', error);
+      remixAILogger.error('[FilePermissionMiddleware] Error showing second modal:', error);
       // Default to specific on error
       return 'specific';
     }
@@ -158,7 +159,7 @@ export class FilePermissionMiddleware extends BaseMiddleware {
     try {
       plugin.call('notification', 'toast', message);
     } catch (error) {
-      console.error('[FilePermissionMiddleware] Error showing toast:', error);
+      remixAILogger.error('[FilePermissionMiddleware] Error showing toast:', error);
     }
   }
 }

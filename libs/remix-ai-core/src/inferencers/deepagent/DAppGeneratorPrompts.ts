@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * DApp Generator Prompts for DeepAgent
  *
@@ -468,8 +469,40 @@ any default templates or examples provided in the system prompt.
 "${description}"
 <<< USER REQUEST END <<<
 
-If the user asked for a specific language (e.g. Korean), use it for all UI text.
+If the user asked for a specific language (e.g. German), use it for all UI text.
 If the user asked for a specific theme (e.g. Dark), implement it using Tailwind classes.
+
+**DEFAULT THEME (Apply unless user specifies otherwise):**
+Use a clean, minimalistic modern design with these guidelines:
+git 
+1. **Color Scheme (Dark Mode Default):**
+   - Background: \`bg-gray-900\` or \`bg-slate-900\`
+   - Cards/Panels: \`bg-gray-800\` or \`bg-slate-800\` with subtle border \`border-gray-700\`
+   - Primary accent: \`bg-indigo-600 hover:bg-indigo-700\` for buttons and interactive elements
+   - Text: \`text-white\` for headings, \`text-gray-300\` for body text, \`text-gray-400\` for secondary
+
+2. **Typography:**
+   - Clean sans-serif (Tailwind default)
+   - Headings: \`text-2xl font-bold\` or \`text-3xl font-semibold\`
+   - Body: \`text-base\` or \`text-sm\`
+   - Good contrast and readable line heights
+
+3. **Layout & Spacing:**
+   - Container: \`max-w-4xl mx-auto px-4 py-8\`
+   - Generous spacing: \`space-y-6\` between sections
+   - Card padding: \`p-6\` or \`p-8\`
+   - Rounded corners: \`rounded-xl\` for cards, \`rounded-lg\` for buttons
+
+4. **Components:**
+   - Buttons: \`px-6 py-3 rounded-lg font-medium transition-colors\`
+   - Inputs: \`bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent\`
+   - Cards: \`bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-lg\`
+
+5. **Visual Polish:**
+   - Subtle shadows: \`shadow-lg\` or \`shadow-xl\`
+   - Smooth transitions: \`transition-all duration-200\`
+   - Hover states on interactive elements
+   - Clear visual hierarchy
 `,
 
   /** Vision: Image is the Single Source of Truth for design */
@@ -710,7 +743,7 @@ export const buildDAppUserMessage = (
       if (fileName === 'index.html' || fileName.startsWith('src/') || fileName.startsWith('/src/') || fileName === '/index.html') {
         // Safety: skip undefined/null/non-string content
         if (content === undefined || content === null || typeof content !== 'string') {
-          console.warn(`[DAppPrompts] Skipping file with invalid content: ${fileName} (type: ${typeof content})`)
+          remixAILogger.warn(`[DAppPrompts] Skipping file with invalid content: ${fileName} (type: ${typeof content})`)
           continue
         }
         filteredFiles[fileName] = content
@@ -718,7 +751,7 @@ export const buildDAppUserMessage = (
     }
 
     if (Object.keys(filteredFiles).length === 0) {
-      console.warn('[DAppPrompts] No valid source files found in currentFiles')
+      remixAILogger.warn('[DAppPrompts] No valid source files found in currentFiles')
     }
 
     const filesString = JSON.stringify(filteredFiles, null, 2)
@@ -918,7 +951,7 @@ export class QuickDappPromptMiddleware implements AgentMiddleware {
   name: string = 'QuickDappPromptMiddleware'
   async beforeModel(state: any, runtime: any) {
     const sysPromptContext = runtime.context?.ctx || "None";
-    console.log(`[${this.name}] Injecting system prompt context:`, sysPromptContext);
+    remixAILogger.log(`[${this.name}] Injecting system prompt context:`, sysPromptContext);
 
     return {
       ...state,

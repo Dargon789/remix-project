@@ -48,7 +48,26 @@ export class IndexedDbCachePlugin extends Plugin {
 
   constructor() {
     super(profile)
+  }
+
+  onActivation() {
     this.initializeDatabase()
+  }
+
+  private isDebugEnabled(): boolean {
+    try {
+      return localStorage.getItem('remix-indexeddb-cache-debug') === 'true' || localStorage.getItem('remix-storage-debug') === 'true'
+    } catch {
+      return false
+    }
+  }
+
+  private log(...args: any[]): void {
+    if (this.isDebugEnabled()) console.log(...args)
+  }
+
+  private error(...args: any[]): void {
+    if (this.isDebugEnabled()) console.error(...args)
   }
 
   private async initializeDatabase(): Promise<void> {
@@ -56,13 +75,13 @@ export class IndexedDbCachePlugin extends Plugin {
       const request = indexedDB.open(this.dbName, this.dbVersion)
 
       request.onerror = () => {
-        console.error('IndexedDB Cache: Failed to open database')
+        this.error('IndexedDB Cache: Failed to open database')
         this.emit('cacheError', 'Failed to initialize database')
         reject(new Error('Failed to open IndexedDB'))
       }
 
       request.onupgradeneeded = (event) => {
-        console.log('IndexedDB Cache: Upgrading database')
+        this.log('IndexedDB Cache: Upgrading database')
         this.db = (event.target as IDBOpenDBRequest).result
 
         if (!this.db.objectStoreNames.contains(this.storeName)) {
@@ -76,7 +95,7 @@ export class IndexedDbCachePlugin extends Plugin {
       request.onsuccess = (event) => {
         this.db = (event.target as IDBOpenDBRequest).result
         this.dbIsReady = true
-        console.log('IndexedDB Cache: Database ready')
+        this.log('IndexedDB Cache: Database ready')
         this.emit('cacheReady')
         resolve()
       }
@@ -156,7 +175,7 @@ export class IndexedDbCachePlugin extends Plugin {
           // Check if entry has expired
           if (result.expiry && Date.now() > result.expiry) {
             // Remove expired entry asynchronously
-            this.remove(key, namespace).catch(console.error)
+            this.remove(key, namespace).catch(error => this.log('IndexedDB Cache: Failed to remove expired entry', error))
             resolve(null)
             return
           }

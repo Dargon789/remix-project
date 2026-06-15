@@ -131,12 +131,12 @@ export class ApiClient implements IApiClient {
     if (this.token) {
       requestHeaders['Authorization'] = `Bearer ${this.token}`
     }
-    
+
     // Normalize URL to avoid double slashes
     const normalizedBase = this.baseUrl.replace(/\/+$/, '')
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
     const url = `${normalizedBase}${normalizedEndpoint}`
-    
+
     try {
       const response = await fetch(url, {
         method,
@@ -173,6 +173,12 @@ export class ApiClient implements IApiClient {
         return {
           ok: false,
           status: response.status,
+          // Surface the parsed body even on error responses so callers can
+          // disambiguate documented error shapes (e.g. 404 + { status: 'pending' }
+          // for transaction polling, 409 + { error: 'ALREADY_SUBSCRIBED', ... }
+          // for purchase). Backend contracts may include structured payloads
+          // alongside non-2xx statuses.
+          data,
           error: errorData?.error || errorData?.message || `HTTP ${response.status}: ${response.statusText}`,
           tokenExpired: response.status === 401
         }

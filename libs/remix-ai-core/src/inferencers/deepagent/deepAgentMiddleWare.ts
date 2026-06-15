@@ -1,13 +1,19 @@
+import { remixAILogger } from '../../helpers/logger'
 /* eslint-disable no-prototype-builtins */
 /* eslint-disable no-case-declarations */
 /* eslint-disable no-useless-escape */
-import { AgentMiddleware, ModelRequest, WrapModelCallHandler } from 'langchain'
+import { AIMessage, AgentMiddleware, BaseMessage, ModelRequest, WrapModelCallHandler, trimMessages } from 'langchain'
+import { Plugin } from '@remixproject/engine'
 
 /**
  * Custom middleware for DeepAgent with beforeModel hook functionality
  */
 export class RemixDeepAgentMiddleware implements AgentMiddleware {
   name = 'RemixDeepAgentMiddleware'
+
+  constructor (private plugin: Plugin) {
+    this.plugin = plugin
+  }
 
   /**
    * Hook called before each model invocation
@@ -17,32 +23,32 @@ export class RemixDeepAgentMiddleware implements AgentMiddleware {
    */
   async wrapModelCall(request: ModelRequest, handler: WrapModelCallHandler) {
     // Before model call - log the request
-    console.log('[RemixDeepAgentMiddleware] Before model call:', {
+    remixAILogger.log('[RemixDeepAgentMiddleware] Before model call:', {
       messages: request?.messages?.length || 0,
       timestamp: new Date().toISOString()
     })
 
     removePeviousContextFromMessages(request)
-    shortenToolDescription(request)
+    await shortenToolDescription(request, this.plugin)
 
     // Call the actual model
     const result = await handler(request as any)
 
     // After model call - log completion
-    console.log('[RemixDeepAgentMiddleware] After model call completed')
+    remixAILogger.log('[RemixDeepAgentMiddleware] After model call completed')
 
     return result
   }
 }
 
 const removePeviousContextFromMessages = (request: ModelRequest) => {
-  console.log('[RemixDeepAgentMiddleware] Removing previous context from messages if present', request)
+  remixAILogger.log('[RemixDeepAgentMiddleware] Removing previous context from messages if present', request)
   // Optimize message history by removing context from all human messages except the last one
   if (request.messages && request.messages.length > 1) {
     for (let i = 0; i < request.messages.length - 1; i++) {
       const message = request.messages[i]
       if (typeof message.content === 'string') {
-        console.log(`[RemixDeepAgentMiddleware] Processing string content for message ${i}`)
+        remixAILogger.log(`[RemixDeepAgentMiddleware] Processing string content for message ${i}`)
         const content = message.content
         if (content.startsWith('Context:')) {
           const questionIndex = content.indexOf('Question:')
@@ -50,13 +56,13 @@ const removePeviousContextFromMessages = (request: ModelRequest) => {
             // Strip out everything between "Context:" and "Question:", including "Question:"
             const newContent = content.substring(questionIndex + 'Question:'.length).trim()
             ;(message as any).content = newContent
-            console.log(`[RemixDeepAgentMiddleware] Stripped context from message ${i}`)
+            remixAILogger.log(`[RemixDeepAgentMiddleware] Stripped context from message ${i}`)
           }
         }
       }
       // Handle array content (complex message types for Mistral, OpenAI, etc.)
       else if (Array.isArray(message.content)) {
-        console.log(`[RemixDeepAgentMiddleware] Processing array content for message ${i}`)
+        remixAILogger.log(`[RemixDeepAgentMiddleware] Processing array content for message ${i}`)
         for (let j = 0; j < message.content.length; j++) {
           const contentPart = message.content[j]
           // Only process text type content
@@ -68,7 +74,7 @@ const removePeviousContextFromMessages = (request: ModelRequest) => {
                 // Strip out everything between "Context:" and "Question:", including "Question:"
                 const newText = text.substring(questionIndex + 'Question:'.length).trim()
                 contentPart.text = newText
-                console.log(`[RemixDeepAgentMiddleware] Stripped context from message ${i}, part ${j}`)
+                remixAILogger.log(`[RemixDeepAgentMiddleware] Stripped context from message ${i}, part ${j}`)
               }
             }
           }
@@ -78,15 +84,51 @@ const removePeviousContextFromMessages = (request: ModelRequest) => {
   }
 }
 
-const shortenToolDescription = (request: ModelRequest) => {
+const shortenToolDescription = async (request: ModelRequest, plugin: Plugin) => {
   request.tools.find((tool) => {
     if (tool.name === 'write_todos') {
-      tool.description = shortWriteTodosDescription
+      // Keep a minimal description - full guidance is in system prompt
+      const minDesc = 'Track and display task progress to the user. Use for multi-step tasks.'
+      tool.description = minDesc;
+      (tool as any).lc_kwargs.description = minDesc
+    }
+    if (tool.name === 'ls') {
+      tool.description = '';
+      (tool as any).lc_kwargs.description = ''
+    }
+    if (tool.name === 'read_file') {
+      tool.description = '';
+      (tool as any).lc_kwargs.description = ''
+    }
+    if (tool.name === 'write_file') {
+      tool.description = '';
+      (tool as any).lc_kwargs.description = ''
+    }
+    if (tool.name === 'edit_file') {
+      tool.description = '';
+      (tool as any).lc_kwargs.description = ''
+    }
+    if (tool.name === 'glob') {
+      tool.description = '';
+      (tool as any).lc_kwargs.description = ''
+    }
+    if (tool.name === 'grep') {
+      tool.description = '';
+      (tool as any).lc_kwargs.description = ''
     }
     if (tool.name === 'task') {
-      tool.description = shortTaskDescription
+      tool.description = '';
+      (tool as any).lc_kwargs.description = ''
     }
   });
+
+  let hasSkills = true
+  try {
+    const dirs = await plugin.call('fileManager', 'dirList', 'skills')
+    hasSkills = dirs && Object.keys(dirs).length > 0
+  } catch (e) {
+    remixAILogger.warn('Unable to get skills folder. hasSkills set to true', e)
+  }
 
   (request.systemMessage.content as any[]).map((part) => {
     if (part.text.includes('## `write_todos`')) {
@@ -99,14 +141,20 @@ const shortenToolDescription = (request: ModelRequest) => {
       part.text = shortSystemTask
     }
     if (part.text.includes('## Skills System')) {
-      part.text = shortSystemSkillsSystem
+      part.text = hasSkills ? shortSystemSkillsSystem : ''
     }
   })
   request.systemPrompt = (request.systemMessage.content as any).map((part: any) => part.text).join('\n')
 }
 
 const shortSytemWriteTodo = `## \`write_todos\`
-Use \`write_todos\` to track progress on complex, multi-step objectives. Skip it for simple tasks — it costs time and tokens.
+Use \`write_todos\` to track and show progress on tasks. This provides visibility to the user.
+**Use when:**
+- Task involves 2+ steps (e.g., write contract, compile, deploy)
+- User asks to implement a feature, fix a bug, or perform multi-file changes
+- You need to coordinate multiple operations
+
+**Rules:**
 - Mark each todo complete immediately when done (no batching)
 - Revise the list as new information emerges
 - Never call in parallel`
@@ -132,7 +180,7 @@ Spawns ephemeral subagents for isolated, delegatable work. Each returns a single
 const shortSystemFilesystemTools = `## Filesystem Tools
 \`ls\`, \`read_file\`, \`write_file\`, \`edit_file\`, \`glob\`, \`grep\` — interact with the filesystem. All paths must be absolute (start with \`/\`).
 - \`ls\`: list directory contents
-- \`read_file\`: read a file
+- \`read_file\`: read entire file (always returns full content, offset/limit ignored)
 - \`write_file\`: write a file
 - \`edit_file\`: edit a file
 - \`glob\`: find files by pattern (e.g. \`\*\*/\*.py\`)
@@ -146,92 +194,3 @@ Skills provide specialized workflows. When a task matches a skill's domain, read
 1. Check if the task matches a skill's description
 2. Read the skill's \`SKILL.md\` via \`read_file\` (path shown in skill list)
 3. Follow its instructions; use any helper scripts with absolute paths`
-
-const shortWriteTodosDescription = 'Create and manage a structured task list for the current work session to track progress on complex, multi-step work. Use when: a task has 3+ distinct steps, requires planning across multiple operations, the user provides multiple tasks, or the user explicitly requests a todo list. Skip for trivial, single-step, or purely conversational requests where tracking adds no value. Mark tasks as in_progress before starting and completed immediately after finishing — never mark complete if blocked, partial, or errored. Always keep at least one task in_progress until all are done, and update the list in real time as scope changes.'
-const shortTaskDescription = `Launch ephemeral subagents for complex, isolated, or parallelizable tasks. Each runs statelessly and returns one final report.
-## Agent Types
-- general-purpose — all tools; research, multi-step tasks, broad searches
-- Solidity Engineer — write/optimize Solidity
-- Security Analysis — vulnerability review
-- Gas Optimizer — gas usage tuning
-- Code Reviewer — code quality feedback
-- Comprehensive Auditor — full contract audits
-- Web3 Educator — explain Web3 concepts
-- Frontend Specialist — UI/frontend work
-- Web Search Specialist — web retrieval
-- Etherscan / TheGraph / Alchemy / Circle Specialist — platform-specific data & docs
-- Debug Specialist — troubleshoot contracts
-- Conversion Utilities Specialist — data format conversions
-## Usage Rules
-1. Always pass \`subagent_type\`.
-2. Launch agents in parallel (single message, multiple tool calls) when tasks are independent.
-3. Give each agent a detailed, self-contained prompt — they can't ask follow-ups.
-4. State whether you want research, analysis, or content creation.
-5. Agent output isn't shown to user — summarize it back.
-6. Use proactively when an agent's description says so.
-7. Skip subagents for trivial tasks; call tools directly.
-## When to Use
-- Complex research across multiple subjects (run in parallel)
-- Large/context-heavy analysis (isolate from main thread)
-- Independent parallel deliverables
-## When Not to Use
-- Simple tasks needing only a few direct tool calls
-
-### Example usage of the general-purpose agent:
-
-<example_agent_descriptions>
-"general-purpose": use this agent for general purpose tasks, it has access to all tools as the main agent.
-</example_agent_descriptions>
-
-<example>
-User: "I want to conduct research on the accomplishments of Lebron James, Michael Jordan, and Kobe Bryant, and then compare them."
-Assistant: *Uses the task tool in parallel to conduct isolated research on each of the three players*
-Assistant: *Synthesizes the results of the three isolated research tasks and responds to the User*
-<commentary>
-Research is a complex, multi-step task in it of itself.
-The research of each individual player is not dependent on the research of the other players.
-The assistant uses the task tool to break down the complex objective into three isolated tasks.
-Each research task only needs to worry about context and tokens about one player, then returns synthesized information about each player as the Tool Result.
-This means each research task can dive deep and spend tokens and context deeply researching each player, but the final result is synthesized information, and saves us tokens in the long run when comparing the players to each other.
-</commentary>
-</example>
-
-<example>
-User: "Analyze a single large code repository for security vulnerabilities and generate a report."
-Assistant: *Launches a single \`task\` subagent for the repository analysis*
-Assistant: *Receives report and integrates results into final summary*
-<commentary>
-Subagent is used to isolate a large, context-heavy task, even though there is only one. This prevents the main thread from being overloaded with details.
-If the user then asks followup questions, we have a concise report to reference instead of the entire history of analysis and tool calls, which is good and saves us time and money.
-</commentary>
-</example>
-
-### Example usage with custom agents:
-
-<example_agent_descriptions>
-"content-reviewer": use this agent after you are done creating significant content or documents
-"greeting-responder": use this agent when to respond to user greetings with a friendly joke
-"research-analyst": use this agent to conduct thorough research on complex topics
-</example_agent_description>
-
-<example>
-user: "Please write a function that checks if a number is prime"
-assistant: Sure let me write a function that checks if a number is prime
-assistant: First let me use the Write tool to write a function that checks if a number is prime
-assistant: I'm going to use the Write tool to write the following code:
-<code>
-function isPrime(n) {
-  if (n <= 1) return false
-  for (let i = 2; i * i <= n; i++) {
-    if (n % i === 0) return false
-  }
-  return true
-}
-</code>
-<commentary>
-Since significant content was created and the task was completed, now use the content-reviewer agent to review the work
-</commentary>
-assistant: Now let me use the content-reviewer agent to review the code
-assistant: Uses the Task tool to launch with the content-reviewer agent
-</example>
-`

@@ -14,9 +14,8 @@ export function PromptStopButton(props: PromptStopButtonProps) {
       style={{ backgroundColor: props.isStreaming ? undefined : props.backgroundColor }}
       data-id="remix-ai-composer-send-btn"
       onClick={() => {
-        if (props.isStreaming) {
-          props.handleCancel()
-        }
+        // Always call handleCancel when clicked - don't check isStreaming here
+        props.handleCancel()
       }}
     >
       <i className={`fa ${props.isStreaming ? 'fa-stop text-light' : ''}`}></i>

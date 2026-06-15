@@ -8,6 +8,22 @@ import type { AppLifecycle } from '@remix-project/remix-lib'
 import { RemixNavigator } from './types'
 import { Profile } from '@remixproject/plugin-utils'
 
+function isRemixAppManagerDebugEnabled(): boolean {
+  try {
+    return localStorage.getItem('remix-app-manager-debug') === 'true'
+  } catch {
+    return false
+  }
+}
+
+function logRemixAppManager(...args: any[]): void {
+  if (isRemixAppManagerDebugEnabled()) console.log(...args)
+}
+
+function errorRemixAppManager(...args: any[]): void {
+  if (isRemixAppManagerDebugEnabled()) console.error(...args)
+}
+
 // requiredModule removes the plugin from the plugin manager list on UI
 let requiredModules = [
   // services + layout views + system views
@@ -121,13 +137,15 @@ let requiredModules = [
   'betaCornerWidget',
   'lifecycle',
   'nudgePlugin',
-  'helpPlugin'
+  'helpPlugin',
+  'planManager',
+  'assistantState'
 ]
 
 // dependentModules shouldn't be manually activated (e.g hardhat is activated by remixd)
 const dependentModules = ['foundry', 'hardhat', 'truffle', 'slither']
 
-const loadLocalPlugins = ['doc-gen', 'doc-viewer', 'contract-verification', 'vyper', 'solhint', 'circuit-compiler', 'learneth', 'quick-dapp', 'noir-compiler']
+const loadLocalPlugins = ['doc-gen', 'doc-viewer', 'contract-verification', 'vyper', 'solhint', 'circuit-compiler', 'learneth', 'noir-compiler']
 
 const partnerPlugins = ['cookbookdev']
 
@@ -263,12 +281,12 @@ export class RemixAppManager extends BaseRemixAppManager {
         try {
           await this.call(name, 'deactivate')
         } catch (e) {
-          console.log(e)
+          logRemixAppManager(e)
         }
       }
       await this.toggleActive(name)
     } else {
-      console.log('cannot deactivate', name)
+      logRemixAppManager('cannot deactivate', name)
     }
   }
 
@@ -364,13 +382,13 @@ export class RemixAppManager extends BaseRemixAppManager {
       })
       localStorage.setItem('plugins-directory', JSON.stringify(plugins))
     } catch (e) {
-      console.log('getting plugins list from localstorage...')
+      logRemixAppManager('getting plugins list from localstorage...')
       const savedPlugins = localStorage.getItem('plugins-directory')
       if (savedPlugins) {
         try {
           plugins = JSON.parse(savedPlugins)
         } catch (e) {
-          console.error(e)
+          errorRemixAppManager(e)
         }
       }
     }
@@ -389,7 +407,7 @@ export class RemixAppManager extends BaseRemixAppManager {
         // add the local plugin
         plugins.push(profileJson)
       } catch (e) {
-        console.log(e)
+        logRemixAppManager(e)
       }
     }
 

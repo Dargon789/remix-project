@@ -14,7 +14,7 @@ parameters:
     default: ""
   run_file_tests_keyword:
     type: enum
-    enum: ["", "ai_panel", "ai_tool_selector", "ballot", "ballot_0_4_14", "blockchain", "bottom-bar", "chatHistory", "circom", "code_format", "compile_run_widget", "compiler_api", "contract_flattener", "contract_verification", "debugger", "defaultLayout", "deploy_vefiry", "dgit_github", "dgit_local", "dragbar_alignment", "editor", "editorGoToDefinition", "editorHoverContext", "editorReferences", "editor_autocomplete", "editor_error_marker", "editor_line_text", "eip1153", "eip7702", "environment-account", "erc20Breakpoint", "erc721", "etherscan_api", "expandAllFolders", "fileExplorer", "fileManager_api", "file_decorator", "file_explorer_context_menu", "file_explorer_dragdrop", "file_explorer_multiselect", "generalSettings", "gist", "homeTab", "importFromGithub", "importResolver", "invite_manual_code", "invite_membership_request", "invite_system", "layout", "learneth", "libraryDeployment", "matomo-bot-detection", "matomo-consent", "maximizePanels", "mcp_all_resources", "mcp_compilation_tools", "mcp_debugging_tools", "mcp_deployment_tools", "mcp_etherscan_tools", "mcp_file_management_tools", "mcp_file_permissions_chat", "mcp_integration_workflows", "mcp_misc_tools", "mcp_resource_providers", "mcp_security_middleware", "mcp_server_complete", "mcp_server_connection", "mcp_server_lifecycle", "mcp_thegraph_tools", "metamask", "migrateFileSystem", "noir", "pinned_contracts", "pluginManager", "plugin_api", "providers", "proxy_oz_v4", "proxy_oz_v5", "proxy_oz_v5_non_shanghai_runtime", "publishContract", "quickDapp_metamask", "quickDapp_v2", "recorder", "remixd", "runAndDeploy", "script-runner", "search", "signingMessage", "sol2uml", "solidityImport", "solidityUnittests", "specialFunctions", "staticAnalysis", "stressEditor", "template_exp_modal", "terminal", "testPoolLogin", "toggle_panels", "transaction-simulator", "transactionExecution", "txListener", "uniswap_v4_core", "url", "usingWebWorker", "verticalIconsPanel", "vm_state", "vyper_api", "workspace", "workspace_git"]
+    enum: ["", "ai_panel", "ai_tool_selector", "ballot", "ballot_0_4_14", "blockchain", "bottom-bar", "chatHistory", "circom", "code_format", "compile_run_widget", "compiler_api", "contract_flattener", "contract_verification", "debugger", "defaultLayout", "deploy_vefiry", "dgit_github", "dgit_local", "dragbar_alignment", "editor", "editorGoToDefinition", "editorHoverContext", "editorReferences", "editor_autocomplete", "editor_error_marker", "editor_line_text", "eip1153", "eip7702", "environment-account", "erc20Breakpoint", "erc721", "etherscan_api", "expandAllFolders", "fileExplorer", "fileManager_api", "file_decorator", "file_explorer_context_menu", "file_explorer_dragdrop", "file_explorer_multiselect", "generalSettings", "gist", "homeTab", "importFromGithub", "importResolver", "invite_manual_code", "invite_membership_request", "invite_system", "layout", "learneth", "libraryDeployment", "matomo-bot-detection", "matomo-consent", "maximizePanels", "mcp_all_resources", "mcp_compilation_tools", "mcp_debugging_tools", "mcp_deployment_tools", "mcp_etherscan_tools", "mcp_file_management_tools", "mcp_file_permissions_chat", "mcp_integration_workflows", "mcp_misc_tools", "mcp_resource_providers", "mcp_security_middleware", "mcp_server_complete", "mcp_server_connection", "mcp_server_lifecycle", "mcp_thegraph_tools", "metamask", "migrateFileSystem", "noir", "pinned_contracts", "pluginManager", "plugin_api", "providers", "proxy_oz_v4", "proxy_oz_v5", "proxy_oz_v5_non_shanghai_runtime", "publishContract", "quickDapp_v2", "recorder", "remixd", "runAndDeploy", "script-runner", "search", "signingMessage", "sol2uml", "solidityImport", "solidityUnittests", "specialFunctions", "staticAnalysis", "stressEditor", "template_exp_modal", "terminal", "testPoolLogin", "toggle_panels", "transaction-simulator", "transactionExecution", "txListener", "uniswap_v4_core", "url", "usingWebWorker", "verticalIconsPanel", "vm_state", "vyper_api", "workspace", "workspace_git"]
     default: ""
   run_flaky_tests:
     type: boolean
@@ -37,6 +37,16 @@ parameters:
   run_deploy_beta:
     type: boolean
     default: false
+  run_playwright_tests:
+    type: boolean
+    default: false
+  playwright_spec:
+    type: string
+    default: ""
+  playwright_project:
+    type: enum
+    enum: ["chromium", "firefox", "webkit"]
+    default: "chromium"
 
   # Resource sizing
   resource_class:
@@ -76,7 +86,7 @@ orbs:
 
 commands:
   nx-build-with-fallback:
-    description: "Run Nx build with Cloud fallback"
+    description: "Run local build (Nx Cloud disabled)"
     parameters:
       target:
         type: string
@@ -95,30 +105,32 @@ commands:
         description: "Custom fallback command (if empty, uses yarn build with skip-cache)"
     steps:
       - run:
-          name: Nx build << parameters.target >> (Cloud with fallback)
+          name: Local build << parameters.target >> (Nx Cloud disabled)
           command: |
             CONFIG_FLAG="<< parameters.config >>"
             MEMORY="<< parameters.memory >>"
             TARGET="<< parameters.target >>"
             FALLBACK="<< parameters.fallback_command >>"
 
-            if [ -n "${NX_CLOUD_ACCESS_TOKEN:-}" ]; then
-              echo "Attempting Nx Cloud build for $TARGET..."
-              if NX_VERBOSE_LOGGING=1 node --max-old-space-size=$MEMORY ./node_modules/.bin/nx build $TARGET $CONFIG_FLAG --cloud --verbose; then
-                echo "✓ Nx Cloud build succeeded"
-              else
-                echo "⚠ Nx Cloud build failed (out of credits or unavailable)"
-                echo "→ Falling back to local build..."
-                if [ -n "$FALLBACK" ]; then
-                  eval "$FALLBACK"
-                elif [ "$CONFIG_FLAG" = "--configuration=production" ]; then
-                  NODE_ENV=production yarn nx build $TARGET $CONFIG_FLAG
-                else
-                  NX_VERBOSE_LOGGING=1 yarn build --skip-nx-cache
-                fi
-              fi
-            else
-              echo "No NX_CLOUD_ACCESS_TOKEN; running local build"
+            # NX Cloud temporarily disabled - always use local build
+            export NX_NO_CLOUD=true
+            # if [ -n "${NX_CLOUD_ACCESS_TOKEN:-}" ]; then
+            #   echo "Attempting Nx Cloud build for $TARGET..."
+            #   if NX_VERBOSE_LOGGING=1 node --max-old-space-size=$MEMORY ./node_modules/.bin/nx build $TARGET $CONFIG_FLAG --cloud --verbose; then
+            #     echo "✓ Nx Cloud build succeeded"
+            #   else
+            #     echo "⚠ Nx Cloud build failed (out of credits or unavailable)"
+            #     echo "→ Falling back to local build..."
+            #     if [ -n "$FALLBACK" ]; then
+            #       eval "$FALLBACK"
+            #     elif [ "$CONFIG_FLAG" = "--configuration=production" ]; then
+            #       NODE_ENV=production yarn nx build $TARGET $CONFIG_FLAG
+            #     else
+            #       NX_VERBOSE_LOGGING=1 yarn build --skip-nx-cache
+            #     fi
+            #   fi
+            # else
+              echo "Skipping Nx Cloud; running local build"
               if [ -n "$FALLBACK" ]; then
                 eval "$FALLBACK"
               elif [ "$CONFIG_FLAG" = "--configuration=production" ]; then
@@ -126,7 +138,7 @@ commands:
               else
                 NX_VERBOSE_LOGGING=1 yarn build --skip-nx-cache
               fi
-            fi
+            # fi
 
 jobs:
   build:
@@ -625,6 +637,45 @@ jobs:
       - store_artifacts:
           path: ./reports/screenshots
 
+  playwright-tests:
+    docker:
+      - image: cimg/node:20.19.0-browsers
+    resource_class: << pipeline.parameters.resource_class >>
+    working_directory: ~/remix-project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/remix-project
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "yarn.lock" }}
+      - run: yarn
+      - run:
+          name: Unpack dist from workspace
+          command: |
+            if [ -f remix-dist.tar.gz ]; then
+              tar -xzf remix-dist.tar.gz
+            fi
+      - run:
+          name: Install Playwright browser binaries
+          command: npx playwright install --with-deps << pipeline.parameters.playwright_project >>
+      - run:
+          name: Run Playwright tests (scripted server lifecycle)
+          command: |
+            PLAYWRIGHT_PROJECT="<< pipeline.parameters.playwright_project >>" \
+            PLAYWRIGHT_SPEC="<< pipeline.parameters.playwright_spec >>" \
+            bash ./apps/remix-ide/ci/run_playwright_ci.sh
+      - store_test_results:
+          path: ./test-results
+      - store_artifacts:
+          path: ./playwright-report
+      - store_artifacts:
+          path: ./test-results
+      - run:
+          name: Dump server log on failure
+          when: on_fail
+          command: tail -n 200 ./tmp/remix-serve.log || true
+
   deploy-build:
     docker:
       - image: cimg/node:20.19.0-browsers
@@ -648,7 +699,7 @@ jobs:
             - node_modules
       - run:
           name: Build remix-ide for production
-          command: yarn build:production
+          command: NX_NO_CLOUD=true NX_DAEMON=false NX_PARALLEL=2 MINIFIER_PARALLEL=2 yarn build:production
           no_output_timeout: 30m
       - run: "./apps/remix-ide/ci/deploy_remix-<< parameters.script >>.sh"
 
@@ -790,12 +841,16 @@ workflows:
               shard_index: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
               vertical_mode: [true]
               skip_timings: [true]
+      - playwright-tests:
+          requires:
+            - build
       - tests-passed:
           requires:
             - lint
             - remix-libs
             - chrome-tests
             - plugins
+            - playwright-tests
       - deploy-build:
           script: "alpha"
           requires:
@@ -873,3 +928,11 @@ workflows:
     jobs:
       - deploy-build:
           script: "beta"
+
+  playwright_tests:
+    when: << pipeline.parameters.run_playwright_tests >>
+    jobs:
+      - build
+      - playwright-tests:
+          requires:
+            - build

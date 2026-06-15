@@ -1,3 +1,4 @@
+import { remixAILogger } from '../helpers/logger'
 import { ChatEntry } from "../types/types"
 import { ChatHistoryStorageManager } from "../storage/storageManager"
 
@@ -89,7 +90,7 @@ export abstract class ChatHistory{
 
     if (this.storage && this.currentConversationId) {
       return this.persistMessages(prompt, result).catch(err => {
-        console.error('Failed to persist chat history:', err)
+        remixAILogger.error('Failed to persist chat history:', err)
       })
     }
   }

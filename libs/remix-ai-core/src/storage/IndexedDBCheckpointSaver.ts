@@ -1,3 +1,4 @@
+import { remixAILogger } from '../helpers/logger'
 /**
  * IndexedDB-based CheckpointSaver for LangGraph
  * Drop-in replacement for MemorySaver that persists state across browser refreshes.
@@ -251,7 +252,7 @@ export class IndexedDBCheckpointSaver extends BaseCheckpointSaver {
     const ns = (config.configurable?.checkpoint_ns as string) ?? ''
     if (!threadId) throw new Error('Missing thread_id in config')
 
-    console.log('[DeepAgent-Checkpoint] put() called | threadId:', threadId, '| cpId:', checkpoint.id, '| ns:', JSON.stringify(ns))
+    remixAILogger.log('[DeepAgent-Checkpoint] put() called | threadId:', threadId, '| cpId:', checkpoint.id, '| ns:', JSON.stringify(ns))
 
     try {
       const [[, serializedCp], [, serializedMeta]] = await Promise.all([
@@ -276,7 +277,7 @@ export class IndexedDBCheckpointSaver extends BaseCheckpointSaver {
         })
       )
     } catch (err) {
-      console.error('[DeepAgent-Checkpoint] put() FAILED:', err)
+      remixAILogger.error('[DeepAgent-Checkpoint] put() FAILED:', err)
       throw err
     }
 

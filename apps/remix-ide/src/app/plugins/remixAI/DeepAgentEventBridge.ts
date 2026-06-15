@@ -1,7 +1,9 @@
+import { remixAILogger } from '@remix/remix-ai-core'
 import type { DeepAgentInferencer } from '@remix/remix-ai-core'
 import type {
   IRemixAIPlugin,
   StreamResultData,
+  ThinkingData,
   ToolCallData,
   SubagentStartData,
   SubagentCompleteData,
@@ -21,6 +23,7 @@ export class DeepAgentEventBridge {
     'onInferenceDone',
     'onStreamResult',
     'onStreamComplete',
+    'onThinking',
     'onToolCall',
     'onSubagentStart',
     'onSubagentComplete',
@@ -60,8 +63,12 @@ export class DeepAgentEventBridge {
       plugin.emit('onStreamResult', data)
     })
 
-    eventEmitter.on('onStreamComplete', (finalText: string) => {
-      plugin.emit('onStreamComplete', finalText)
+    eventEmitter.on('onStreamComplete', (data: string | { content: string; threadId?: string }) => {
+      plugin.emit('onStreamComplete', data)
+    })
+
+    eventEmitter.on('onThinking', (data: ThinkingData) => {
+      plugin.emit('onThinking', data)
     })
 
     eventEmitter.on('onToolCall', (data: ToolCallData) => {
@@ -104,11 +111,12 @@ export class DeepAgentEventBridge {
 
     // Human-in-the-loop: relay approval requests to UI
     eventEmitter.on('onToolApprovalRequired', (request: ToolApprovalRequest) => {
+      remixAILogger.log('[Bridge] onToolApprovalRequired', request.toolName, request.requestId)
       plugin.emit('onToolApprovalRequired', request)
     })
 
     this.listenersSetup = true
-    console.log('[RemixAI Plugin] DeepAgent event listeners set up')
+    remixAILogger.log('[RemixAI Plugin] DeepAgent event listeners set up')
   }
 
   teardownListeners(inferencer: DeepAgentInferencer): void {

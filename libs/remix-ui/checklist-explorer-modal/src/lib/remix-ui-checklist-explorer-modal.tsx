@@ -19,7 +19,7 @@ interface ChecklistCategory {
 interface ChecklistData {
   category: string
   description: string
-  data: ChecklistCategory[]
+  data: (ChecklistItem | ChecklistCategory)[]
 }
 
 export interface RemixUiChecklistExplorerModalProps {
@@ -174,25 +174,38 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   }
 
   const generateChecklistMarkdown = (): string => {
-    const selectedData = checklistData.filter(mainCat =>
-      mainCat.data.some(subCat =>
-        selectedCategories.has(`${mainCat.category}::${subCat.category}`)
-      )
-    )
+    const selectedData = checklistData.filter(mainCat => {
+      // Check if main category is selected (for direct checklist items)
+      if (selectedCategories.has(mainCat.category)) {
+        return true
+      }
+      // Check if any sub-categories are selected (for nested structure)
+      return mainCat.data.some(item => {
+        if (!isChecklistItem(item)) {
+          return selectedCategories.has(`${mainCat.category}::${item.category}`)
+        }
+        return false
+      })
+    })
 
     let markdown = `# Audit Checklist\n\n`
     markdown += `Generated on: ${new Date().toISOString().split('T')[0]}\n\n`
 
     selectedData.forEach(mainCategory => {
-      const selectedSubCategories = mainCategory.data.filter(subCat =>
-        selectedCategories.has(`${mainCategory.category}::${subCat.category}`)
-      )
+      markdown += `## ${mainCategory.category}\n\n`
+      if (mainCategory.description) {
+        markdown += `${mainCategory.description}\n\n`
+      }
 
-      if (selectedSubCategories.length > 0) {
-        markdown += `## ${mainCategory.category}\n\n`
-        if (mainCategory.description) {
-          markdown += `${mainCategory.description}\n\n`
-        }
+      // Check if this main category was directly selected (contains direct checklist items)
+      if (selectedCategories.has(mainCategory.category)) {
+        // Generate markdown for direct items in this category
+        markdown += generateNestedMarkdown(mainCategory.data, mainCategory.category)
+      } else {
+        // Handle sub-categories
+        const selectedSubCategories = mainCategory.data.filter(item =>
+          !isChecklistItem(item) && selectedCategories.has(`${mainCategory.category}::${item.category}`)
+        ) as ChecklistCategory[]
 
         selectedSubCategories.forEach(subCategory => {
           markdown += `### ${subCategory.category}\n\n`
@@ -229,8 +242,12 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
 
       // Generate filename with selected categories
       const selectedCategoryNames = Array.from(selectedCategories).map(categoryPath => {
-        const [mainCat, subCat] = categoryPath.split('::')
-        return `${mainCat}-${subCat}`
+        if (categoryPath.includes('::')) {
+          const [mainCat, subCat] = categoryPath.split('::')
+          return `${mainCat}-${subCat}`
+        } else {
+          return categoryPath
+        }
       }).join('_')
 
       // Clean the category names for filename (remove special characters and spaces)
@@ -295,7 +312,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
     const filteredSubData = filterData(mainCat.data, searchTerm)
     return {
       ...mainCat,
-      data: filteredSubData.filter(item => !isChecklistItem(item)) as ChecklistCategory[]
+      data: filteredSubData
     }
   }).filter(mainCat =>
     mainCat.data.length > 0 ||
@@ -384,66 +401,123 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                     </div>
                   ) : (
                     <div className="checklist-categories">
-                      {filteredData.map((mainCategory) => (
-                        <div key={mainCategory.category} className="main-category mb-3">
-                          <div className="main-category-header bg-secondary text-light p-2 rounded-top">
-                            <h5 className="mb-1">{mainCategory.category}</h5>
-                            <p className="mb-0 small text-light-emphasis">{mainCategory.description}</p>
-                          </div>
+                      {filteredData.map((mainCategory) => {
+                        // Check if this category has direct checklist items (no sub-categories)
+                        const hasDirectItems = mainCategory.data.some(item => isChecklistItem(item))
+                        const subCategories = mainCategory.data.filter(item => !isChecklistItem(item)) as ChecklistCategory[]
 
-                          <div className="sub-categories border border-secondary rounded-bottom">
-                            {mainCategory.data.map((subCategory) => {
-                              const categoryPath = `${mainCategory.category}::${subCategory.category}`
-                              const isSelected = selectedCategories.has(categoryPath)
-                              const isExpanded = expandedCategories.has(categoryPath)
+                        if (hasDirectItems && subCategories.length === 0) {
+                          // Category with only direct checklist items
+                          const isSelected = selectedCategories.has(mainCategory.category)
+                          const isExpanded = expandedCategories.has(mainCategory.category)
 
-                              return (
-                                <div key={categoryPath} className="sub-category border-bottom">
-                                  <div
-                                    className={`sub-category-header p-3 d-flex justify-content-between align-items-center cursor-pointer ${isSelected ? 'bg-light border-primary' : 'bg-light'}`}
-                                    onClick={() => toggleCategory(categoryPath)}
-                                    style={isSelected ? { boxShadow: '0 0 0 2px var(--bs-primary)' } : {}}
-                                  >
-                                    <div className="flex-grow-1">
-                                      <div className="d-flex align-items-center mb-1">
-                                        <h6 className="text-dark mb-0">{subCategory.category}</h6>
-                                        {isSelected && (
-                                          <i className="fa-solid fa-circle-check text-primary ms-2"></i>
-                                        )}
-                                      </div>
-                                      <p className="text-muted mb-0 small">{subCategory.description}</p>
-                                      <span className="badge bg-primary text-white small">{countTotalItems(subCategory.data)} items</span>
-                                    </div>
-                                    <button
-                                      className="btn btn-sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        toggleExpanded(categoryPath)
-                                      }}
-                                    >
-                                      <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
-                                    </button>
+                          return (
+                            <div key={mainCategory.category} className="main-category mb-3">
+                              <div
+                                className={`main-category-header p-3 d-flex justify-content-between align-items-center cursor-pointer ${isSelected ? 'bg-primary text-white' : 'bg-secondary text-light'}`}
+                                onClick={() => toggleCategory(mainCategory.category)}
+                                style={isSelected ? { boxShadow: '0 0 0 2px var(--bs-primary)' } : {}}
+                              >
+                                <div className="flex-grow-1">
+                                  <div className="d-flex align-items-center mb-1">
+                                    <h5 className="mb-0">{mainCategory.category}</h5>
+                                    {isSelected && (
+                                      <i className="fa-solid fa-circle-check ms-2"></i>
+                                    )}
                                   </div>
+                                  <p className="mb-0 small opacity-75">{mainCategory.description}</p>
+                                  <span className="badge bg-light text-dark small mt-1">{countTotalItems(mainCategory.data)} items</span>
+                                </div>
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleExpanded(mainCategory.category)
+                                  }}
+                                >
+                                  <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-white`}></i>
+                                </button>
+                              </div>
 
-                                  {isExpanded && (
-                                    <div className="category-items p-3 bg-light-subtle">
-                                      {collectChecklistItems(subCategory.data).slice(0, 3).map((item) => (
-                                        <div key={item.id} className="item-preview mb-2 p-2 bg-white border rounded">
-                                          <div className="fw-bold small text-dark">{item.question}</div>
-                                          <div className="text-muted small">{item.description.substring(0, 100)}...</div>
-                                        </div>
-                                      ))}
-                                      {countTotalItems(subCategory.data) > 3 && (
-                                        <div className="text-muted small">...and {countTotalItems(subCategory.data) - 3} more items</div>
-                                      )}
+                              {isExpanded && (
+                                <div className="category-items p-3 bg-light border border-secondary rounded-bottom">
+                                  {collectChecklistItems(mainCategory.data).slice(0, 3).map((item) => (
+                                    <div key={item.id} className="item-preview mb-2 p-2 bg-white border rounded">
+                                      <div className="fw-bold small text-dark">{item.question}</div>
+                                      <div className="text-muted small">{item.description.substring(0, 100)}...</div>
                                     </div>
+                                  ))}
+                                  {countTotalItems(mainCategory.data) > 3 && (
+                                    <div className="text-muted small">...and {countTotalItems(mainCategory.data) - 3} more items</div>
                                   )}
                                 </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                              )}
+                            </div>
+                          )
+                        } else {
+                          // Category with sub-categories (original structure)
+                          return (
+                            <div key={mainCategory.category} className="main-category mb-3">
+                              <div className="main-category-header bg-secondary text-light p-2 rounded-top">
+                                <h5 className="mb-1">{mainCategory.category}</h5>
+                                <p className="mb-0 small text-light-emphasis">{mainCategory.description}</p>
+                              </div>
+
+                              <div className="sub-categories border border-secondary rounded-bottom">
+                                {subCategories.map((subCategory) => {
+                                  const categoryPath = `${mainCategory.category}::${subCategory.category}`
+                                  const isSelected = selectedCategories.has(categoryPath)
+                                  const isExpanded = expandedCategories.has(categoryPath)
+
+                                  return (
+                                    <div key={categoryPath} className="sub-category border-bottom">
+                                      <div
+                                        className={`sub-category-header p-3 d-flex justify-content-between align-items-center cursor-pointer ${isSelected ? 'bg-light border-primary' : 'bg-light'}`}
+                                        onClick={() => toggleCategory(categoryPath)}
+                                        style={isSelected ? { boxShadow: '0 0 0 2px var(--bs-primary)' } : {}}
+                                      >
+                                        <div className="flex-grow-1">
+                                          <div className="d-flex align-items-center mb-1">
+                                            <h6 className="text-dark mb-0">{subCategory.category}</h6>
+                                            {isSelected && (
+                                              <i className="fa-solid fa-circle-check text-primary ms-2"></i>
+                                            )}
+                                          </div>
+                                          <p className="text-muted mb-0 small">{subCategory.description}</p>
+                                          <span className="badge bg-primary text-white small">{countTotalItems(subCategory.data)} items</span>
+                                        </div>
+                                        <button
+                                          className="btn btn-sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            toggleExpanded(categoryPath)
+                                          }}
+                                        >
+                                          <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+                                        </button>
+                                      </div>
+
+                                      {isExpanded && (
+                                        <div className="category-items p-3 bg-light-subtle">
+                                          {collectChecklistItems(subCategory.data).slice(0, 3).map((item) => (
+                                            <div key={item.id} className="item-preview mb-2 p-2 bg-white border rounded">
+                                              <div className="fw-bold small text-dark">{item.question}</div>
+                                              <div className="text-muted small">{item.description.substring(0, 100)}...</div>
+                                            </div>
+                                          ))}
+                                          {countTotalItems(subCategory.data) > 3 && (
+                                            <div className="text-muted small">...and {countTotalItems(subCategory.data) - 3} more items</div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        }
+                      })}
                     </div>
                   )}
                 </>
@@ -463,13 +537,21 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                   </div>
                   <div className="selected-categories">
                     {Array.from(selectedCategories).map(categoryPath => {
-                      const [mainCat, subCat] = categoryPath.split('::')
-                      return (
-                        <div key={categoryPath} className="mb-1">
-                          <span className="text-muted small">{mainCat} →</span>
-                          <span className="text-light ms-1">{subCat}</span>
-                        </div>
-                      )
+                      if (categoryPath.includes('::')) {
+                        const [mainCat, subCat] = categoryPath.split('::')
+                        return (
+                          <div key={categoryPath} className="mb-1">
+                            <span className="text-muted small">{mainCat} →</span>
+                            <span className="text-light ms-1">{subCat}</span>
+                          </div>
+                        )
+                      } else {
+                        return (
+                          <div key={categoryPath} className="mb-1">
+                            <span className="text-light">{categoryPath}</span>
+                          </div>
+                        )
+                      }
                     })}
                   </div>
                 </div>
@@ -478,8 +560,12 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                   {(() => {
                     const timestamp = new Date().toISOString().split('T')[0]
                     const selectedCategoryNames = Array.from(selectedCategories).map(categoryPath => {
-                      const [mainCat, subCat] = categoryPath.split('::')
-                      return `${mainCat}-${subCat}`
+                      if (categoryPath.includes('::')) {
+                        const [mainCat, subCat] = categoryPath.split('::')
+                        return `${mainCat}-${subCat}`
+                      } else {
+                        return categoryPath
+                      }
                     }).join('_')
                     const cleanCategoryNames = selectedCategoryNames
                       .replace(/[^a-zA-Z0-9_-]/g, '_')

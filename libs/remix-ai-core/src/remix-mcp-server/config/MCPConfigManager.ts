@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * MCP Configuration Manager
  * Loads and manages .mcp.config.json configuration
@@ -36,12 +37,12 @@ export class MCPConfigManager {
               await this.saveConfigWithWorkspaceCheck(minimalMCPConfig);
             }
           } catch (error) {
-            console.error('[MCPConfigManager] Error reloading config on file save:', error);
+            remixAILogger.error('[MCPConfigManager] Error reloading config on file save:', error);
             // If there's an error, write the default config
             try {
               await this.saveConfigWithWorkspaceCheck(minimalMCPConfig);
             } catch (saveError) {
-              console.error('[MCPConfigManager] Error writing default config:', saveError);
+              remixAILogger.error('[MCPConfigManager] Error writing default config:', saveError);
             }
           }
         }
@@ -75,7 +76,7 @@ export class MCPConfigManager {
             if (this.config.security.fileWritePermissions?.mode) {
               const validModes = ['ask', 'allow-all', 'deny-all', 'allow-specific'];
               if (!validModes.includes(this.config.security.fileWritePermissions.mode)) {
-                console.warn('[MCPConfigManager] Invalid fileWritePermissions mode, resetting to "ask"');
+                remixAILogger.warn('[MCPConfigManager] Invalid fileWritePermissions mode, resetting to "ask"');
                 this.config.security.fileWritePermissions.mode = 'ask';
               }
             }
@@ -84,7 +85,7 @@ export class MCPConfigManager {
             await this.saveConfig(this.config);
           }
         } catch (parseError) {
-          console.error('[MCPConfigManager] Error parsing config file, creating default:', parseError);
+          remixAILogger.error('[MCPConfigManager] Error parsing config file, creating default:', parseError);
           this.config = minimalMCPConfig;
           await this.saveConfig(this.config);
         }
@@ -95,7 +96,7 @@ export class MCPConfigManager {
 
       return this.config;
     } catch (error) {
-      console.error('[MCPConfigManager] Error loading config:', error);
+      remixAILogger.error('[MCPConfigManager] Error loading config:', error);
       this.config = defaultMCPConfig;
       return this.config;
     }
@@ -154,7 +155,7 @@ export class MCPConfigManager {
           }
         } catch (parseError) {
           // If parsing fails, log warning and start fresh
-          console.warn('[MCPConfigManager] Could not parse existing config, starting fresh:', parseError);
+          remixAILogger.warn('[MCPConfigManager] Could not parse existing config, starting fresh:', parseError);
           userConfig = {};
         }
       }
@@ -164,7 +165,7 @@ export class MCPConfigManager {
       await this.plugin.call('fileManager', 'writeFile', this.configPath, newConfigContent);
       this.config = config;
     } catch (error) {
-      console.error(`[MCPConfigManager] Error saving config: ${error.message}`);
+      remixAILogger.error(`[MCPConfigManager] Error saving config: ${error.message}`);
       throw error;
     }
   }
@@ -179,7 +180,7 @@ export class MCPConfigManager {
 
       await this.saveConfigWithWorkspaceCheck(defaultMCPConfig);
     } catch (error) {
-      console.error(`[MCPConfigManager] Error creating default config: ${error.message}`);
+      remixAILogger.error(`[MCPConfigManager] Error creating default config: ${error.message}`);
       throw error;
     }
   }

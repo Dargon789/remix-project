@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { FormattedMessage, useIntl } from 'react-intl'
 import { trackMatomoEvent } from '@remix-api'
+import { remixAILogger } from '@remix/remix-ai-core'
 
 interface AiChatButtonsProps {
   theme: string
@@ -35,9 +36,35 @@ export function AiChatButtons({ theme, plugin, sendPrompt, handleGenerateWorkspa
         }
         const compilationResult = await plugin.call('solidity', 'getCompilationResult')
         if (compilationResult && compilationResult.data && compilationResult.data.contracts) {
-          const contracts = Object.keys(compilationResult.data.contracts[currentFile] || {})
-          if (contracts && contracts.length > 0) {
-            setLatestCompiledContracts(contracts)
+          const fileContracts = compilationResult.data.contracts[currentFile] || {}
+          const ast = compilationResult.data.sources?.[currentFile]?.ast
+
+          // Get contract definitions from AST to check contractKind and abstract
+          const contractDefinitions = ast?.nodes?.filter(
+            (node: any) => node.nodeType === 'ContractDefinition'
+          ) || []
+
+          // Filter to only include deployable contracts:
+          // - Has bytecode (excludes interfaces)
+          // - Not a library (contractKind !== 'library')
+          // - Not abstract (abstract !== true)
+          const deployableContracts = Object.keys(fileContracts).filter(contractName => {
+            const contract = fileContracts[contractName]
+            const bytecode = contract?.evm?.bytecode?.object
+            if (!bytecode || bytecode.length === 0) return false
+
+            // Check AST for library and abstract contracts
+            const contractDef = contractDefinitions.find((node: any) => node.name === contractName)
+            if (contractDef) {
+              if (contractDef.contractKind === 'library') return false
+              if (contractDef.abstract === true) return false
+            }
+            return true
+          })
+
+          if (deployableContracts && deployableContracts.length > 0) {
+            // Show all deployable contracts (filtered: no interfaces, libraries, or abstract)
+            setLatestCompiledContracts(deployableContracts)
           } else {
             setLatestCompiledContracts(null)
           }
@@ -132,7 +159,7 @@ export function AiChatButtons({ theme, plugin, sendPrompt, handleGenerateWorkspa
         sendPrompt(intl.formatMessage({ id: 'remixApp.aiChatPrompt.exploreCapabilities' }))
         trackMatomoEvent(plugin, { category: 'ai', action: 'conv_starter', name: 'explore_capabilities', isClick: true })
       }
-    },
+    },/*
     {
       label: <FormattedMessage id="remixApp.aiChatButton.loadSkills" />,
       icon: `${theme?.toLowerCase() === 'dark' ? 'text-remix-ai' : 'text-remix-ai-light'} fas fa-cube`,
@@ -141,7 +168,7 @@ export function AiChatButtons({ theme, plugin, sendPrompt, handleGenerateWorkspa
         handleLoadSkills()
         trackMatomoEvent(plugin, { category: 'ai', action: 'conv_starter', name: 'load_skills', isClick: true })
       }
-    },
+    },*/
     {
       label: <FormattedMessage id="remixApp.aiChatButton.startLearning" />,
       icon: `${theme?.toLowerCase() === 'dark' ? 'text-remix-ai' : 'text-remix-ai-light'} fas fa-graduation-cap`,
@@ -165,7 +192,7 @@ export function AiChatButtons({ theme, plugin, sendPrompt, handleGenerateWorkspa
       icon: `${theme?.toLowerCase() === 'dark' ? 'text-remix-ai' : 'text-remix-ai-light'} fas fa-cube`,
       color: '',
       action: async () => {
-        console.log('[QuickDapp] Create DApp button clicked')
+        remixAILogger.log('[QuickDapp] Create DApp button clicked')
         sendPrompt(intl.formatMessage({ id: 'remixApp.aiChatPrompt.createDapp' }))
         trackMatomoEvent(plugin, { category: 'ai', action: 'conv_starter', name: 'create_dapp', isClick: true })
       }

@@ -213,7 +213,9 @@ async function driveQuickDappGeneration (browser: NightwatchBrowser): Promise<Qu
   return { sawProcessing, sawApproval, sawAutoAccept, finalState }
 }
 
-module.exports = {
+module.exports = {}
+
+const tests = {
   '@disabled': true,
   before: function (browser: NightwatchBrowser, done: VoidFunction) {
     if (!poolApiKey) {

@@ -1,3 +1,4 @@
+import { remixAILogger } from '../helpers/logger'
 import isElectron from 'is-electron'
 import { AssistantParams } from "../types/models";
 import { workspaceAgent } from "./workspaceAgent";
@@ -171,7 +172,7 @@ export class ContractAgent {
       await this.plugin.call('filePanel', 'createWorkspace', wsp_name, true)
       this.workspaceName = wsp_name
     } catch (error) {
-      console.error('Error creating workspace:', error)
+      remixAILogger.error('Error creating workspace:', error)
     }
   }
 

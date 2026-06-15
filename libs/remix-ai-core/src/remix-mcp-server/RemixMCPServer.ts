@@ -1,5 +1,6 @@
 /* eslint-disable no-case-declarations */
 import EventEmitter from 'events';
+import { remixAILogger, setRemixAILoggingEnabled } from '../helpers/logger';
 import {
   IMCPInitializeResult,
   IMCPServerCapabilities,
@@ -19,7 +20,7 @@ function trackMatomoEvent(category: string, action: string, name: string) {
     }
   } catch (error) {
     // Silent fail for tracking
-    console.debug('Matomo tracking failed:', error);
+    remixAILogger.debug('Matomo tracking failed:', error);
   }
 }
 import {
@@ -47,7 +48,6 @@ import { createDeploymentTools } from './handlers/DeploymentHandler';
 import { createDebuggingTools } from './handlers/DebuggingHandler';
 import { createCodeAnalysisTools } from './handlers/CodeAnalysisHandler';
 import { createContractClassificationTools } from './handlers/ContractClassifierHandler';
-import { createEnhancedAuditTools } from './handlers/EnhancedAuditHandler';
 import { createChartJsTools } from './handlers/ChartJsHandler';
 import { createTutorialsTools } from './handlers/TutorialsHandler';
 import { createAmpTools } from './handlers/AmpHandler';
@@ -96,6 +96,7 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
   constructor(plugin, config: RemixMCPServerConfig) {
     super();
     this._config = config;
+    setRemixAILoggingEnabled(!!this._config.debug);
     this._plugin = plugin
     this._tools = new RemixToolRegistry();
     this._resources = new RemixResourceProviderRegistry(plugin);
@@ -186,9 +187,11 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       if (this._isInitialized) return initResult;
 
       try {
-        await this._configManager.loadConfig();
+        const mcpConfig = await this._configManager.loadConfig();
+        this.syncLoggingConfig(mcpConfig);
       } catch (error) {
-        console.log(`[RemixMCPServer] Failed to load MCP config: ${error.message}, using defaults`);
+        this.syncLoggingConfig();
+        remixAILogger.log(`[RemixMCPServer] Failed to load MCP config: ${error.message}, using defaults`);
       }
 
       await this.initializeDefaultTools();
@@ -366,7 +369,7 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       const securityResult = await this._securityMiddleware.validateToolCall(call, context, this._plugin);
 
       if (!securityResult.allowed) {
-        console.log(`[RemixMCPServer] Security validation FAILED for tool '${call.name}': ${securityResult.reason}`);
+        remixAILogger.log(`[RemixMCPServer] Security validation FAILED for tool '${call.name}': ${securityResult.reason}`);
         throw new Error(`Security validation failed: ${securityResult.reason}`);
       }
 
@@ -381,14 +384,14 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
 
       if (!validationResult.valid) {
         const errorMessages = validationResult.errors.map(e => e.message).join(', ');
-        console.log(`[RemixMCPServer] Input validation FAILED for tool '${call.name}': ${errorMessages}`);
+        remixAILogger.log(`[RemixMCPServer] Input validation FAILED for tool '${call.name}': ${errorMessages}`);
         throw new Error(`Input validation failed: ${errorMessages}`);
       }
 
       // Log warnings if any
       if (validationResult.warnings.length > 0) {
         const warnings = validationResult.warnings.map(w => w.message).join(', ');
-        console.log(`[RemixMCPServer] Input validation warnings for tool '${call.name}': ${warnings}`);
+        remixAILogger.log(`[RemixMCPServer] Input validation warnings for tool '${call.name}': ${warnings}`);
       }
 
       // STEP 3: File Permision Check (for file operations)
@@ -403,10 +406,10 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
           );
 
           if (!permissionResult.allowed) {
-            console.log(`[RemixMCPServer] File operation permission DENIED for '${filePath}': ${permissionResult.reason}`);
+            remixAILogger.log(`[RemixMCPServer] File operation permission DENIED for '${filePath}': ${permissionResult.reason}`);
             throw new Error(`File operation permission denied: ${permissionResult.reason || 'User denied the operation'}. See file remix.config.json`);
           }
-          console.log(`[RemixMCPServer] File operation permission GRANTED for '${filePath}'`);
+          remixAILogger.log(`[RemixMCPServer] File operation permission GRANTED for '${filePath}'`);
         }
       }
 
@@ -434,7 +437,7 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       execution.endTime = new Date();
       this._stats.errorCount++;
 
-      console.log(`[RemixMCPServer] Tool '${call.name}' execution FAILED: ${error.message}`);
+      remixAILogger.log(`[RemixMCPServer] Tool '${call.name}' execution FAILED: ${error.message}`);
       this.emit('tool-executed', execution);
       return {
         isError:true,
@@ -594,7 +597,7 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       return result;
 
     } catch (error) {
-      console.error('[RemixMCPServer] Error checking permissions:', error);
+      remixAILogger.error('[RemixMCPServer] Error checking permissions:', error);
 
       this.logAuditEntry({
         id: `perm_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
@@ -632,7 +635,7 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
     }
 
     if (entry.severity === 'error') {
-      console.error('[RemixMCPServer] Audit:', entry);
+      remixAILogger.error('[RemixMCPServer] Audit:', entry);
     }
   }
 
@@ -762,7 +765,7 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       const result = await this._resources.getResources();
       this.emit('resources-refreshed', result.resources.length);
     } catch (error) {
-      console.log(`Failed to refresh resources: ${error.message}`, 'error');
+      remixAILogger.log(`Failed to refresh resources: ${error.message}`, 'error');
       throw error;
     }
   }
@@ -773,9 +776,10 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
   async reloadConfig(): Promise<void> {
     try {
       const mcpConfig = await this._configManager.reloadConfig();
+      this.syncLoggingConfig(mcpConfig);
       this.emit('config-reloaded', mcpConfig);
     } catch (error) {
-      console.log(`[RemixMCPServer] Failed to reload config: ${error.message}`);
+      remixAILogger.log(`[RemixMCPServer] Failed to reload config: ${error.message}`);
       throw error;
     }
   }
@@ -786,7 +790,15 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
 
   updateMCPConfig(partialConfig: Partial<any>): void {
     this._configManager.updateConfig(partialConfig);
+    this.syncLoggingConfig();
     this.emit('config-updated', this._configManager.getConfig());
+  }
+
+  private syncLoggingConfig(mcpConfig: any = this._configManager.getConfig()): void {
+    const logging = mcpConfig?.logging;
+    setRemixAILoggingEnabled(
+      !!this._config.debug || (logging?.console === true && logging?.level === 'debug')
+    );
   }
 
   private setState(newState: ServerState): void {
@@ -889,7 +901,7 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       const totalTools = this._tools.list().length;
 
     } catch (error) {
-      console.log(`Failed to initialize default tools: ${error.message}`, 'error');
+      remixAILogger.log(`Failed to initialize default tools: ${error.message}`, 'error');
       throw error;
     }
   }
@@ -923,7 +935,7 @@ export class RemixMCPServer extends EventEmitter implements IRemixMCPServer {
       const totalProviders = this._resources.list().length;
 
     } catch (error) {
-      console.log(`Failed to initialize default resource providers: ${error.message}`, 'error');
+      remixAILogger.log(`Failed to initialize default resource providers: ${error.message}`, 'error');
       throw error;
     }
   }

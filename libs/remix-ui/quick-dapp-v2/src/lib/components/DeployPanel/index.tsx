@@ -10,17 +10,19 @@ import { generateWalletSelectionScript } from '../../utils/wallet-selection-scri
 import { validateEnsName } from '../../utils/ens-utils';
 // remixClient removed - using plugin from context instead
 import { trackMatomoEvent } from '@remix-api';
+import { endpointUrls } from '@remix-endpoints-helper';
 
 import BaseAppWizard from './BaseAppWizard';
 import EnsRegistrationModal from './EnsRegistrationModal';
 
-const REMIX_ENDPOINT_IPFS = 'https://quickdapp-ipfs.api.remix.live';
+const REMIX_ENDPOINT_IPFS = endpointUrls.quickdappIpfs;
 
 function DeployPanel(): JSX.Element {
   const intl = useIntl();
   const { appState, dispatch, dappManager, plugin } = useContext(AppContext);
   const { activeDapp } = appState;
   const { title, details, logo } = appState.instance;
+  const isVM = !!activeDapp?.contract?.chainId && activeDapp.contract.chainId.toString().startsWith('vm');
 
   const [deployResult, setDeployResult] = useState({
     cid: activeDapp?.deployment?.ipfsCid || '',
@@ -64,7 +66,7 @@ function DeployPanel(): JSX.Element {
         }));
       }
     }
-  }, [activeDapp?.id, activeDapp?.deployment]);
+  }, [activeDapp?.slug, activeDapp?.deployment]);
 
   if (activeDapp?.config?.isBaseMiniApp) {
     return <BaseAppWizard />;
@@ -131,11 +133,13 @@ function DeployPanel(): JSX.Element {
     try {
       builder = new InBrowserVite();
       await builder.initialize();
-      const dappRootPath = '/';
+      const isInlineMode = activeDapp?.mode === 'inline';
+      const dappRootPath = isInlineMode ? '/frontend' : '/';
+      const rootPathLength = isInlineMode ? '/frontend'.length : 0;
       const filesMap = new Map<string, string>();
-      await readDappFiles(plugin, dappRootPath, filesMap, 0);
+      await readDappFiles(plugin, dappRootPath, filesMap, rootPathLength);
 
-      if (filesMap.size === 0) throw new Error("No DApp files found");
+      if (filesMap.size === 0) throw new Error(`No DApp files found in ${isInlineMode ? '/frontend folder' : 'workspace root'}`);
 
       const jsResult = await builder.build(filesMap, '/src/main.jsx');
       if (!jsResult.success) throw new Error(`Build failed: ${jsResult.error}`);
@@ -322,9 +326,15 @@ function DeployPanel(): JSX.Element {
         </Card.Header>
         <Collapse in={isPublishOpen}>
           <Card.Body>
-            <Button variant="primary" className="w-100" onClick={() => handleIpfsDeploy()} disabled={isDeploying} data-id="deploy-ipfs-btn">
+            <Button variant="primary" className="w-100" onClick={() => handleIpfsDeploy()} disabled={isDeploying || isVM} data-id="deploy-ipfs-btn">
               {isDeploying ? <><i className="fas fa-spinner fa-spin me-1"></i> Uploading...</> : <FormattedMessage id="quickDapp.deployToIPFS" defaultMessage="Deploy to IPFS" />}
             </Button>
+            {isVM && (
+              <Alert variant="warning" className="mt-2 small mb-0">
+                <i className="fas fa-exclamation-triangle me-1"></i>
+                IPFS deployment is not available for Remix VM contracts. Deploy your contract to a public network first.
+              </Alert>
+            )}
             {displayCid && (
               <Alert variant="success" className="mt-3" style={{ wordBreak: 'break-all' }} data-id="deploy-ipfs-success">
                 <div className="fw-bold">Deployed Successfully!</div>
@@ -340,20 +350,20 @@ function DeployPanel(): JSX.Element {
       {displayCid && (
         <Card className="mb-2">
           <Card.Header onClick={() => setIsEnsOpen(!isEnsOpen)} style={{ cursor: 'pointer' }} className="d-flex justify-content-between bg-transparent border-0" data-id="ens-section-header">
-            Register ENS (Arbitrum) <i className={`fas ${isEnsOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+            Register ENS Name <i className={`fas ${isEnsOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
           </Card.Header>
           <Collapse in={isEnsOpen}>
             <Card.Body>
-              <Alert variant="info">Register <strong>.remixdapp.eth</strong> on Arbitrum.</Alert>
+              <Alert variant="info">Register a <strong>.remixdapp.eth</strong> name for this DApp.</Alert>
               <Form.Group className="mb-2">
-                <div className="input-group">
+                <div className="input-group qd-ens-input-group">
                   <Form.Control type="text" placeholder="myapp" value={ensName} onChange={(e) => {
                     const val = e.target.value.toLowerCase();
                     setEnsName(val);
                     setEnsResult({ ...ensResult, success: '' });
                     setEnsNameError(validateEnsName(val));
                   }} />
-                  <span className="input-group-text">.remixdapp.eth</span>
+                  <span className="input-group-text qd-ens-suffix">.remixdapp.eth</span>
                 </div>
                 {ensNameError && <small className="text-danger mt-1 d-block">{ensNameError}</small>}
               </Form.Group>

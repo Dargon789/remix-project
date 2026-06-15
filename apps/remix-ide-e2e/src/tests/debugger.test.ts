@@ -1,15 +1,78 @@
 'use strict'
 import { NightwatchBrowser } from 'nightwatch'
 import init from '../helpers/init'
+import { releaseAccount } from '../helpers/pool'
+
+const poolApiKey = process.env.E2E_POOL_API_KEY || ''
 
 module.exports = {
   '@disabled': true,
   before: function (browser: NightwatchBrowser, done: VoidFunction) {
-    init(browser, done)
+    if (!poolApiKey) {
+      console.error('[Debugger] E2E_POOL_API_KEY not set — AI assistant steps will fail without it')
+      return init(browser, done)
+    }
+    // Pass the pool key + unlimited quota feature group so the auth plugin
+    // can check out a real test account. The "Ask RemixAI" group1 step
+    // needs a logged-in user with quota to hit the assistant endpoint.
+    const url = `http://127.0.0.1:8080#e2e_pool_key=${poolApiKey}&e2e_feature_groups=e2e-unlimited-quota`
+    init(browser, done, url, true)
+  },
+
+  after: async function (browser: NightwatchBrowser, done: VoidFunction) {
+    // Release the pool session the auth plugin checked out in `before`.
+    try {
+      const result: any = await new Promise((resolve) => {
+        browser.execute(function () {
+          return sessionStorage.getItem('remix_pool_session')
+        }, [], (res: any) => resolve(res))
+      })
+
+      if (result && result.value) {
+        const session = JSON.parse(result.value)
+        console.log(`[Debugger] Releasing pool session: ${session.sessionId}`)
+        await releaseAccount(session.sessionId)
+      }
+    } catch (err: any) {
+      console.error(`[Debugger] Release failed: ${err.message}`)
+    }
+    browser.end()
+    done()
   },
 
   '@sources': function () {
     return sources
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Pool login — runs for every group so AI-assistant-backed steps work.
+  // Mirrors the pattern used in testPoolLogin.test.ts / chatHistory.test.ts.
+  // ──────────────────────────────────────────────────────────────────────
+  'Should enable login and show sign-in button': function (browser: NightwatchBrowser) {
+    browser
+      .execute(function () {
+        localStorage.setItem('enableLogin', 'true')
+      })
+      .refreshPage()
+      .pause(5000)
+      .waitForElementVisible('*[data-id="login-button"]', 15000)
+      .assert.elementPresent('*[data-id="login-button"]')
+  },
+
+  'Should login via the test pool through the real UI flow': function (browser: NightwatchBrowser) {
+    browser
+      .click('*[data-id="login-button"]')
+      .pause(3000)
+      .waitForElementVisible({
+        selector: '//button[contains(., "E2E Test Pool")]',
+        locateStrategy: 'xpath',
+        timeout: 15000
+      })
+      .click({
+        selector: '//button[contains(., "E2E Test Pool")]',
+        locateStrategy: 'xpath'
+      })
+      .pause(5000)
   },
 
   'Should launch debugger #group1': function (browser: NightwatchBrowser) {

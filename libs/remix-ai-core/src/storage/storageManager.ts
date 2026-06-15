@@ -1,3 +1,4 @@
+import { remixAILogger } from '../helpers/logger'
 /**
  * Storage manager that coordinates multiple backends (local + cloud)
  */
@@ -42,7 +43,7 @@ export class ChatHistoryStorageManager {
           this.startBackgroundSync()
         }
       } catch (error) {
-        console.warn('Cloud backend unavailable, continuing with local-only mode:', error)
+        remixAILogger.warn('Cloud backend unavailable, continuing with local-only mode:', error)
         this.syncEnabled = false
       }
     }
@@ -239,7 +240,7 @@ export class ChatHistoryStorageManager {
         const message = await this.localBackend.getMessage(messageId)
         conversationId = message?.conversationId
       } catch (error) {
-        console.warn('Could not get conversationId from local backend:', error)
+        remixAILogger.warn('Could not get conversationId from local backend:', error)
       }
     }
 
@@ -313,7 +314,7 @@ export class ChatHistoryStorageManager {
       }
       return result
     } catch (error) {
-      console.error('Failed to pull from cloud:', error)
+      remixAILogger.error('Failed to pull from cloud:', error)
       return {
         success: false,
         conversationsSynced: 0,
@@ -340,7 +341,7 @@ export class ChatHistoryStorageManager {
       }
       return result
     } catch (error) {
-      console.error('Failed to sync to cloud:', error)
+      remixAILogger.error('Failed to sync to cloud:', error)
       return {
         success: false,
         conversationsSynced: 0,
@@ -388,7 +389,7 @@ export class ChatHistoryStorageManager {
     this.syncTimer = setInterval(() => {
       if (this.syncQueue.length > 0) {
         this.syncToCloud().catch(err => {
-          console.error('Background sync failed:', err)
+          remixAILogger.error('Background sync failed:', err)
         })
       }
     }, 5 * 60 * 1000)

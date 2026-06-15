@@ -198,7 +198,7 @@
   }
 }
 
-/* EditHtmlTemplate layout - default: stacked (narrow panel) */
+/* EditHtmlTemplate layout - default: stacked so controls keep a usable width. */
 .qd-main-col,
 .qd-side-col {
   width: 100% !important;
@@ -208,22 +208,38 @@
   margin-bottom: 1rem;
 }
 
-/* EditHtmlTemplate layout - wide container: side-by-side */
-@container qd-main (min-width: 700px) {
+.qd-side-col > .flex-shrink-0 {
+  width: 100%;
+}
+
+/* EditHtmlTemplate layout - side-by-side only when the controls can stay readable. */
+@container qd-main (min-width: 1100px) {
   .qd-main-col {
-    width: 80% !important;
-    flex: 0 0 80% !important;
-    max-width: 80% !important;
+    width: calc(100% - 400px) !important;
+    flex: 0 0 calc(100% - 400px) !important;
+    max-width: calc(100% - 400px) !important;
     padding-right: 1rem !important;
     margin-bottom: 0;
   }
   
   .qd-side-col {
-    width: 20% !important;
-    flex: 0 0 20% !important;
-    max-width: 20% !important;
+    width: 400px !important;
+    flex: 0 0 400px !important;
+    max-width: 400px !important;
     margin-bottom: 0;
   }
+}
+
+.qd-ens-input-group {
+  flex-wrap: nowrap;
+}
+
+.qd-ens-input-group .form-control {
+  min-width: 0;
+}
+
+.qd-ens-suffix {
+  white-space: nowrap;
 }
 
 .qd-progress-overlay {

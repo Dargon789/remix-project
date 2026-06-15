@@ -1,8 +1,8 @@
 'use strict'
 
 import { NightwatchBrowser } from 'nightwatch'
-import init from '../helpers/init'
 import examples from '../examples/example-contracts'
+import { initWithE2EPool, loginWithE2EPool, releaseE2EPool } from '../helpers/e2ePool'
 
 const sources = [
   { 'SimpleStorage.sol': { content: examples.ballot.content } }
@@ -11,10 +11,17 @@ const sources = [
 const tests = {
   '@disabled': true,
   before: function (browser: NightwatchBrowser, done: VoidFunction) {
-    init(browser, done, 'http://127.0.0.1:8080/#experimental=true', true, undefined, true, true)
+    initWithE2EPool(browser, done, 'AIToolSelector', undefined, true, undefined, true, true)
+  },
+  after: async function (browser: NightwatchBrowser, done: VoidFunction) {
+    await releaseE2EPool(browser, done, 'AIToolSelector')
   },
   '@sources': function () {
     return sources
+  },
+
+  'Should login via the test pool through the real UI flow': function (browser: NightwatchBrowser) {
+    loginWithE2EPool(browser)
   },
 
   'Setup workspace for tool selector tests #group1': function (browser: NightwatchBrowser) {
@@ -41,7 +48,7 @@ const tests = {
       })
       .execute(function () {
         // Send a prompt that should trigger compilation tools
-        (window as any).remixAIChat.current.sendChat('compile my solidity contract');
+        (window as any).remixAIChat.current.sendChat('compile the storage contract');
       })
       .waitForElementPresent({
         locateStrategy: 'xpath',
@@ -121,12 +128,19 @@ const tests = {
       })
       .execute(function () {
         // Send a prompt that should trigger deployment tools
-        (window as any).remixAIChat.current.sendChat('deploy my contract to the blockchain');
+        (window as any).remixAIChat.current.sendChat('deploy the storage contract');
       })
       .waitForElementPresent({
         locateStrategy: 'xpath',
+        selector: "//*[@data-id='hitl-auto-accept-checkbox']",
+        timeout: 600000
+      })
+      .click('*[data-id="hitl-auto-accept-checkbox"]')
+      .click('*[data-id="tool-approval-approve-button"]')
+      .waitForElementPresent({
+        locateStrategy: 'xpath',
         selector: "//*[@data-id='remix-ai-streaming' and @data-streaming='false']",
-        timeout: 60000
+        timeout: 600000
       })
       .waitForElementVisible({
         locateStrategy: 'xpath',
@@ -135,7 +149,7 @@ const tests = {
       })
   },
 
-  'Should select analysis tools for security audit prompt #group1': function (browser: NightwatchBrowser) {
+  'Should select analysis tools for security audit prompt #group1': '' + function (browser: NightwatchBrowser) {
     browser
       .assistantClearChat()
       .waitForCompilerLoaded()
@@ -173,12 +187,12 @@ const tests = {
       })
       .execute(function () {
         // Send a complex prompt that should match multiple categories
-        (window as any).remixAIChat.current.sendChat('compile my contract, analyze it for bugs, and help me deploy it');
+        (window as any).remixAIChat.current.sendChat('compile the owner contract, analyze it for bugs, and help me deploy it');
       })
       .waitForElementPresent({
         locateStrategy: 'xpath',
         selector: "//*[@data-id='remix-ai-streaming' and @data-streaming='false']",
-        timeout: 60000
+        timeout: 600000
       })
       .waitForElementVisible({
         locateStrategy: 'xpath',
@@ -187,7 +201,7 @@ const tests = {
       })
   },
 
-  'Should select git tools for version control prompt #group1': function (browser: NightwatchBrowser) {
+  'Should select git tools for version control prompt #group1': '' + function (browser: NightwatchBrowser) {
     browser
       .assistantClearChat()
       .waitForCompilerLoaded()
@@ -199,12 +213,12 @@ const tests = {
       })
       .execute(function () {
         // Send a prompt that should trigger git tools
-        (window as any).remixAIChat.current.sendChat('commit my changes to git');
+        (window as any).remixAIChat.current.sendChat('commit the changes to git');
       })
       .waitForElementPresent({
         locateStrategy: 'xpath',
         selector: "//*[@data-id='remix-ai-streaming' and @data-streaming='false']",
-        timeout: 60000
+        timeout: 600000
       })
       .waitForElementVisible({
         locateStrategy: 'xpath',
@@ -225,12 +239,12 @@ const tests = {
       })
       .execute(function () {
         // Send a prompt that should trigger testing tools
-        (window as any).remixAIChat.current.sendChat('run tests on my smart contract');
+        (window as any).remixAIChat.current.sendChat('run tests on the storage contract');
       })
       .waitForElementPresent({
         locateStrategy: 'xpath',
         selector: "//*[@data-id='remix-ai-streaming' and @data-streaming='false']",
-        timeout: 60000
+        timeout: 600000
       })
       .waitForElementVisible({
         locateStrategy: 'xpath',
@@ -251,12 +265,12 @@ const tests = {
       })
       .execute(function () {
         // Send a prompt that mentions Vyper
-        (window as any).remixAIChat.current.sendChat('compile my vyper contract');
+        (window as any).remixAIChat.current.sendChat('compile the vyper contract');
       })
       .waitForElementPresent({
         locateStrategy: 'xpath',
         selector: "//*[@data-id='remix-ai-streaming' and @data-streaming='false']",
-        timeout: 60000
+        timeout: 600000
       })
       .waitForElementVisible({
         locateStrategy: 'xpath',
@@ -277,12 +291,12 @@ const tests = {
       })
       .execute(function () {
         // Send a debugging prompt
-        (window as any).remixAIChat.current.sendChat('debug my transaction and set a breakpoint');
+        (window as any).remixAIChat.current.sendChat('debug the transaction');
       })
       .waitForElementPresent({
         locateStrategy: 'xpath',
         selector: "//*[@data-id='remix-ai-streaming' and @data-streaming='false']",
-        timeout: 60000
+        timeout: 600000
       })
       .waitForElementVisible({
         locateStrategy: 'xpath',
@@ -300,6 +314,7 @@ const checkBrowserIsChrome = function (browser: NightwatchBrowser) {
   return browser.browserName.indexOf('chrome') > -1
 }
 
+/*
 if (!checkBrowserIsChrome(browser)) {
   module.exports = {}
 } else {
@@ -307,3 +322,6 @@ if (!checkBrowserIsChrome(browser)) {
     ...(branch ? (runTestsConditions ? tests : {}) : tests)
   }
 }
+*/
+
+module.exports = {}

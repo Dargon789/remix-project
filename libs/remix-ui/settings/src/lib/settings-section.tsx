@@ -7,7 +7,7 @@ import { ThemeContext } from '@remix-ui/home-tab'
 import type { ViewPlugin } from '@remixproject/engine-web'
 import { CustomTooltip } from '@remix-ui/helper'
 import { IMCPServerManager } from './mcp-server-manager'
-import { ProfileSection, CreditsBalance, ConnectedAccounts, BillingSection } from './account-settings'
+import { ProfileSection, CreditsBalance, ConnectedAccounts } from './account-settings'
 import { validateApiKeyFormat, testApiKey, getProviderFromSettingKey, type ModelProvider } from '@remix/remix-ai-core'
 
 type SettingsSectionUIProps = {
@@ -173,6 +173,7 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
       if (name === 'copilot/suggest/activate') plugin.emit('copilotChoiceUpdated', newValue)
       if (name === 'matomo-perf-analytics') plugin.call('settings', 'updateMatomoPerfAnalyticsChoice', newValue)
       if (name === 'text-wrap') plugin.emit('textWrapChoiceUpdated', newValue)
+      if (name === 'mcp/servers/enable') plugin.call('remixAI', newValue ? 'enableMCPEnhancement' : 'disableMCPEnhancement')
     } else {
       console.error('Setting does not exist: ', name)
     }
@@ -283,7 +284,6 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
                             {option.type === 'custom' && option.customComponent === 'profileSection' && <span></span>}
                             {option.type === 'custom' && option.customComponent === 'creditsBalance' && <span></span>}
                             {option.type === 'custom' && option.customComponent === 'connectedAccounts' && <span></span>}
-                            {option.type === 'custom' && option.customComponent === 'billingSection' && <span></span>}
                           </div>
                         </div>
                       )}
@@ -306,11 +306,6 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
                       {option.type === 'custom' && option.customComponent === 'connectedAccounts' && (
                         <div className="mt-3">
                           <ConnectedAccounts plugin={plugin} />
-                        </div>
-                      )}
-                      {option.type === 'custom' && option.customComponent === 'billingSection' && (
-                        <div className="mt-3">
-                          <BillingSection plugin={plugin} />
                         </div>
                       )}
                       {

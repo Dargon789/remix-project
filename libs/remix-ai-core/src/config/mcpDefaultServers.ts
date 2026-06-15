@@ -107,6 +107,18 @@ export const mcpDefaultServersConfig: MCPDefaultServersConfig = {
       enabled: true,
       timeout: 30000
     },*/
+  ]
+};
+
+// Permission-gated bucket. Servers in this list MUST NOT be auto-connected
+// for anonymous users — they require a valid bearer token. Including them
+// in the unconditional defaults causes spurious 401s in the console and
+// leaks an unauthenticated request to a protected endpoint, which the
+// gateway treats as a security signal. Gate inclusion on `mcp:web-search`
+// via PermissionChecker.checkMCPAccess().
+export const mcpWebSearchServersConfig: MCPDefaultServersConfig = {
+  version: '1.0.0',
+  defaultServers: [
     {
       name: 'Web Search',
       description: 'Web search capabilities',

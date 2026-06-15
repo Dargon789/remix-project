@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../../helpers/logger'
 import { Plugin } from '@remixproject/engine'
 import { DynamicStructuredTool } from '@langchain/core/tools'
 import { z } from 'zod'
@@ -93,7 +94,7 @@ export class RemixToolAdapter {
 
         tools.push(langChainTool)
       } catch (error) {
-        console.warn(`[RemixToolAdapter] Failed to convert tool ${tool.name}:`, error)
+        remixAILogger.warn(`[RemixToolAdapter] Failed to convert tool ${tool.name}:`, error)
       }
     }
 
@@ -214,20 +215,20 @@ export async function createRemixTools(
   const adapter = new RemixToolAdapter(plugin, toolRegistry, approvalGate)
 
   const solidityTools = adapter.getSolidityTools()
-  console.log('solidity tools:', solidityTools)
+  remixAILogger.log('solidity tools:', solidityTools)
 
   const helperTools = RemixToolAdapter.createSolidityHelperTools(plugin)
-  console.log('helper tools:', helperTools)
+  remixAILogger.log('helper tools:', helperTools)
 
   let externalTools: DynamicStructuredTool[] = []
   if (mcpInferencer) {
     try {
       const allMCPTools = await mcpInferencer.getAvailableToolsForLLM()
       externalTools = adapter.convertExternalMCPTools(allMCPTools, mcpInferencer)
-      console.log(`[RemixToolAdapter] all tools  from MCPInferencer:`, externalTools)
-      console.log(`[RemixToolAdapter] Added ${externalTools.length} tools from external MCP clients`)
+      remixAILogger.log(`[RemixToolAdapter] all tools  from MCPInferencer:`, externalTools)
+      remixAILogger.log(`[RemixToolAdapter] Added ${externalTools.length} tools from external MCP clients`)
     } catch (error) {
-      console.warn('[RemixToolAdapter] Failed to get external MCP tools:', error)
+      remixAILogger.warn('[RemixToolAdapter] Failed to get external MCP tools:', error)
     }
   }
 

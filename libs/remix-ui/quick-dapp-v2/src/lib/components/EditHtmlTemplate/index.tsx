@@ -47,11 +47,13 @@ function EditHtmlTemplate(): JSX.Element {
   const [isBuilderReady, setIsBuilderReady] = useState(false);
   const [isBuilding, setIsBuilding] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [runtimeErrors, setRuntimeErrors] = useState<string[]>([]);
 
   const isAiUpdating = activeDapp ? (appState.dappProcessing[activeDapp.slug] || false) : false;
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const builderRef = useRef<InBrowserVite | null>(null);
+  const runBuildRef = useRef<(showNotification?: boolean) => Promise<void>>();
 
   const [notificationModal, setNotificationModal] = useState({
     show: false,
@@ -68,7 +70,13 @@ function EditHtmlTemplate(): JSX.Element {
     if (!plugin) return;
 
     const onDappUpdated = (data: any) => {
-      if (activeDapp && data.slug === activeDapp.slug) {
+      const isMatchingDapp = activeDapp && (
+        data.slug === activeDapp.slug ||
+        data.workspaceName === activeDapp.workspaceName
+      );
+
+      if (isMatchingDapp) {
+        console.log('[EditHtmlTemplate] dappGenerated received for current dapp:', data.slug || data.workspaceName);
         dispatch({
           type: 'SET_DAPP_PROCESSING',
           payload: { slug: activeDapp.slug, isProcessing: false }
@@ -99,14 +107,20 @@ function EditHtmlTemplate(): JSX.Element {
           });
         }
 
-        setTimeout(() => runBuild(true), 500);
+        // Trigger preview refresh after files are written
+        setTimeout(() => runBuildRef.current?.(true), 500);
       }
     };
 
     const onDappError = (errorData: any) => {
       const errorSlug = errorData?.slug;
-      // Only handle errors for this DApp
-      if (activeDapp && (!errorSlug || errorSlug === activeDapp.slug)) {
+      const isMatchingError = activeDapp && (
+        !errorSlug ||
+        errorSlug === activeDapp.slug ||
+        errorData?.workspaceName === activeDapp.workspaceName
+      );
+
+      if (isMatchingError) {
         const errorMessage = errorData?.error || errorData || 'Unknown Error';
         dispatch({
           type: 'SET_DAPP_PROCESSING',
@@ -174,7 +188,7 @@ function EditHtmlTemplate(): JSX.Element {
 
     if (dappManager && activeDapp) {
       try {
-        const updatedConfig = await dappManager.getDappConfig(activeDapp.workspaceName);
+        const updatedConfig = await dappManager.getDappConfig(activeDapp.slug);
         if (updatedConfig) {
           const updatedDapps = appState.dapps.map((d: any) =>
             d.slug === activeDapp.slug ? updatedConfig : d
@@ -223,7 +237,8 @@ function EditHtmlTemplate(): JSX.Element {
         }
       });
 
-      const previewPath = 'preview.png';
+      const isInlineMode = activeDapp.mode === 'inline';
+      const previewPath = isInlineMode ? 'frontend/preview.png' : 'preview.png';
       await plugin.call('fileManager', 'writeFile', previewPath, dataUrl);
     } catch (error) {
       console.error('[Capture] Failed:', error);
@@ -244,6 +259,7 @@ function EditHtmlTemplate(): JSX.Element {
 
     setIsBuilding(true);
     setIframeError('');
+    setRuntimeErrors([]);
     setShowIframe(true);
 
     try {
@@ -268,12 +284,15 @@ function EditHtmlTemplate(): JSX.Element {
     let indexHtmlContent = '';
 
     try {
-      const dappRootPath = '/';
-      await readDappFiles(plugin, dappRootPath, mapFiles, 0);
-      console.log('[QuickDapp][runBuild] Files read:', mapFiles.size);
+      const isInlineMode = activeDapp.mode === 'inline';
+      const dappRootPath = isInlineMode ? '/frontend' : '/';
+      const rootPathLength = isInlineMode ? '/frontend'.length : 0;
+      await readDappFiles(plugin, dappRootPath, mapFiles, rootPathLength);
+      console.log('[QuickDapp][runBuild] Files read:', mapFiles.size, isInlineMode ? '(inline mode)' : '(workspace mode)');
 
       if (mapFiles.size === 0) {
-        setIframeError(`No files found in workspace root. Make sure you are in the DApp workspace "${activeDapp.workspaceName}".`);
+        const pathHint = isInlineMode ? '/frontend folder' : 'workspace root';
+        setIframeError(`No files found in ${pathHint}. Make sure you are in the workspace "${activeDapp.workspaceName}".`);
         setIsBuilding(false);
         return;
       }
@@ -316,27 +335,53 @@ function EditHtmlTemplate(): JSX.Element {
     const debugScript = `<script>
 window.onerror = function(msg, url, line, col, error) {
   try { parent.console.error('[DApp-iframe] Error:', msg, 'at', url, 'line', line); } catch(e) {}
+  try { parent.postMessage({ source: 'quickdapp-preview', type: 'runtime-error', message: String(msg), file: url || '', line: line, col: col, stack: error && error.stack || '' }, '*'); } catch(e) {}
 };
 window.addEventListener('unhandledrejection', function(e) {
   try { parent.console.error('[DApp-iframe] Unhandled rejection:', e.reason); } catch(e2) {}
+  try {
+    var err = e.reason instanceof Error ? e.reason : null;
+    var msg = err ? err.message : String(e.reason);
+    parent.postMessage({ source: 'quickdapp-preview', type: 'runtime-error', message: msg, stack: err && err.stack || '' }, '*');
+  } catch(e2) {}
 });
 </script>`;
     const ext = `<script>
 (function() {
   if (parent.__remixVMBridge) {
     var _listeners = {};
+    function emit(event, payload) {
+      (_listeners[event] || []).slice().forEach(function(cb) {
+        try { cb(payload); } catch (e) { setTimeout(function() { throw e; }, 0); }
+      });
+    }
+    function setAccounts(accounts, emitChange) {
+      window.ethereum.selectedAddress = accounts && accounts[0] ? accounts[0] : null;
+      if (emitChange) {
+        emit('accountsChanged', accounts || []);
+      }
+      return accounts;
+    }
+    function syncSelectedAddress(method, result) {
+      if (method === 'eth_accounts' || method === 'eth_requestAccounts') {
+        return setAccounts(result, false);
+      }
+      return result;
+    }
     window.ethereum = {
       isMetaMask: false,
       isRemixVM: true,
       _events: {},
       request: function(args) {
-        return parent.__remixVMBridge.request(args);
+        return parent.__remixVMBridge.request(args).then(function(result) {
+          return syncSelectedAddress(args && args.method, result);
+        });
       },
       send: function(method, params) {
-        if (typeof method === 'object') {
-          return parent.__remixVMBridge.request(method);
-        }
-        return parent.__remixVMBridge.request({ method: method, params: params || [] });
+        var requestArgs = typeof method === 'object' ? method : { method: method, params: params || [] };
+        return parent.__remixVMBridge.request(requestArgs).then(function(result) {
+          return syncSelectedAddress(requestArgs && requestArgs.method, result);
+        });
       },
       on: function(event, cb) {
         if (!_listeners[event]) _listeners[event] = [];
@@ -353,6 +398,9 @@ window.addEventListener('unhandledrejection', function(e) {
     };
     window.ethereum.chainId = '0x539';
     window.ethereum.selectedAddress = null;
+    window.__remixVMUpdateAccounts = function(accounts) {
+      return setAccounts(accounts, true);
+    };
   } else if (parent.window && parent.window.ethereum) {
     window.ethereum = parent.window.ethereum;
   }
@@ -418,6 +466,9 @@ window.addEventListener('unhandledrejection', function(e) {
 
     setIsBuilding(false);
   }
+
+  // Keep runBuildRef updated so event handlers always call the latest version
+  runBuildRef.current = runBuild;
 
   const handleOpenAIAssistant = async () => {
     if (!activeDapp || !plugin) return;
@@ -513,9 +564,58 @@ window.addEventListener('unhandledrejection', function(e) {
       if (isVM && !isCurrentProviderVM) {
         return;
       }
-      setTimeout(() => runBuild(false), 100);
+      setTimeout(() => runBuildRef.current?.(false), 100);
     }
   }, [isBuilderReady, isAiUpdating, activeDapp?.slug, isCurrentProviderVM]);
+
+  // File change listener: auto-refresh preview when DApp files are modified
+  const fileChangeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!plugin || !activeDapp || !isBuilderReady) return;
+
+    const onFileChanged = (filePath: string) => {
+      if (!filePath.match(/\.(jsx?|tsx?|html|css)$/)) return;
+
+      if (isAiUpdating) return;
+
+      console.log('[EditHtmlTemplate] File changed, scheduling preview refresh:', filePath);
+
+      if (fileChangeDebounceRef.current) {
+        clearTimeout(fileChangeDebounceRef.current);
+      }
+      fileChangeDebounceRef.current = setTimeout(() => {
+        runBuildRef.current?.(false);
+      }, 800);
+    };
+
+    plugin.on('fileManager', 'fileSaved', onFileChanged);
+
+    return () => {
+      if (fileChangeDebounceRef.current) {
+        clearTimeout(fileChangeDebounceRef.current);
+      }
+      try { plugin.off('fileManager', 'fileSaved', onFileChanged); } catch (e) {}
+    };
+  }, [plugin, activeDapp?.workspaceName, isBuilderReady, isAiUpdating]);
+
+  // Listen for runtime errors from the DApp preview iframe
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.source !== 'quickdapp-preview' || event.data.type !== 'runtime-error') return;
+      setRuntimeErrors(prev => {
+        const base: string = event.data.message || 'Unknown error';
+        const file = event.data.file && !event.data.file.includes('about:') ? event.data.file : '';
+        const loc = event.data.line ? ` (${file ? file + ':' : 'line '}${event.data.line}${event.data.col ? ':' + event.data.col : ''})` : '';
+        // Extract first useful frame from stack (e.g. "at App (about:srcdoc:42:15)")
+        const stackFrame = event.data.stack ? (event.data.stack.split('\n').find((l: string) => l.trim().startsWith('at ') && !l.includes('esm.sh')) || '').trim() : '';
+        const msg = base + loc + (stackFrame ? '\n' + stackFrame : '');
+        if (prev.includes(msg) || prev.length >= 5) return prev;
+        return [...prev, msg];
+      });
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   // Detect when blockchain VM is ready via contextChanged event (debounced).
   // Uses plugin.on (passive event) instead of plugin.call (blocked by engine queue).
@@ -583,6 +683,24 @@ window.addEventListener('unhandledrejection', function(e) {
       return;
     }
 
+    const getSelectedVMAccount = async (): Promise<string | null> => {
+      const selected = await plugin.call('udappEnv', 'getSelectedAccount').catch(() => null);
+      return typeof selected === 'string' ? selected : null;
+    };
+
+    const orderAccountsBySelected = (accounts: string[], selected: string | null) => {
+      if (!selected) return accounts;
+      const selectedLower = selected.toLowerCase();
+      const match = accounts.find((account) => account.toLowerCase() === selectedLower);
+      if (!match) return accounts;
+      return [match, ...accounts.filter((account) => account.toLowerCase() !== selectedLower)];
+    };
+
+    const getOrderedVMAccounts = async (web3: any, method = 'eth_accounts', params: any[] = []) => {
+      const accounts: string[] = await web3.send(method, params);
+      return orderAccountsBySelected(accounts, await getSelectedVMAccount());
+    };
+
     const bridge = {
       request: async ({ method, params }: { method: string; params?: any[] }) => {
         if (method === 'wallet_switchEthereumChain' || method === 'wallet_addEthereumChain') {
@@ -595,7 +713,21 @@ window.addEventListener('unhandledrejection', function(e) {
           throw new Error('VM not ready');
         }
         try {
-          const result = await web3.send(method, params || []);
+          if (method === 'eth_accounts' || method === 'eth_requestAccounts') {
+            const accounts = await getOrderedVMAccounts(web3, method, params || []);
+            if (!isMounted) return;
+            return accounts;
+          }
+
+          const nextParams = Array.isArray(params) ? [...params] : [];
+          if ((method === 'eth_sendTransaction' || method === 'eth_call') && nextParams[0] && !nextParams[0].from) {
+            const selected = await getSelectedVMAccount();
+            if (selected) {
+              nextParams[0] = { ...nextParams[0], from: selected };
+            }
+          }
+
+          const result = await web3.send(method, nextParams);
           if (!isMounted) return;
           if (method === 'eth_sendTransaction') {
             // dumpState is non-critical, fire-and-forget
@@ -612,8 +744,58 @@ window.addEventListener('unhandledrejection', function(e) {
 
     (window as any).__remixVMBridge = bridge;
 
+    let selectedAccount: string | null = null;
+    let isCheckingAccount = false;
+    let pendingAccountsChanged: string[] | null = null;
+
+    const emitIframeAccountsChanged = (accounts: string[]) => {
+      const updateAccounts = (iframeRef.current?.contentWindow as any)?.__remixVMUpdateAccounts;
+      if (typeof updateAccounts === 'function') {
+        updateAccounts(accounts);
+        pendingAccountsChanged = null;
+        return;
+      }
+      pendingAccountsChanged = accounts;
+    };
+
+    const checkSelectedAccount = async () => {
+      if (!isMounted || isCheckingAccount) return;
+      isCheckingAccount = true;
+      try {
+        if (pendingAccountsChanged) {
+          emitIframeAccountsChanged(pendingAccountsChanged);
+        }
+
+        const nextSelectedAccount = await getSelectedVMAccount();
+        if (!nextSelectedAccount) return;
+
+        if (selectedAccount === null) {
+          selectedAccount = nextSelectedAccount;
+          return;
+        }
+
+        if (selectedAccount.toLowerCase() === nextSelectedAccount.toLowerCase()) return;
+
+        const web3 = (window as any).__remixVM_web3;
+        if (!web3) return;
+
+        selectedAccount = nextSelectedAccount;
+        const accounts = await getOrderedVMAccounts(web3);
+        if (!isMounted) return;
+        emitIframeAccountsChanged(accounts);
+      } catch (e) {
+        // Account-change propagation is best-effort; RPC calls still read the latest selected account.
+      } finally {
+        isCheckingAccount = false;
+      }
+    };
+
+    checkSelectedAccount();
+    const accountCheckInterval = window.setInterval(checkSelectedAccount, 1000);
+
     return () => {
       isMounted = false;
+      window.clearInterval(accountCheckInterval);
       delete (window as any).__remixVMBridge;
     };
   }, [isVM, isCurrentProviderVM, plugin]);
@@ -624,7 +806,7 @@ window.addEventListener('unhandledrejection', function(e) {
     <div className="d-flex flex-column h-100">
       <div className="py-2 px-3 border-bottom d-flex align-items-center flex-shrink-0">
         <button
-          className="btn btn-sm btn-secondary me-3"
+          className="btn btn-sm btn-secondary me-3 text-nowrap"
           onClick={handleBack}
           disabled={isCapturing}
           data-id="back-to-dashboard-btn"
@@ -786,6 +968,17 @@ window.addEventListener('unhandledrejection', function(e) {
                         sandbox="allow-popups allow-scripts allow-same-origin allow-forms allow-top-navigation"
                         data-id="dapp-preview-iframe"
                       />
+                      {runtimeErrors.length > 0 && !isAiUpdating && (
+                        <div className="position-absolute top-0 start-0 w-100 p-2" style={{ zIndex: 10 }}>
+                          <div className="alert alert-danger d-flex align-items-center py-1 px-2 mb-0 small shadow-sm">
+                            <i className="fas fa-exclamation-circle me-2 flex-shrink-0"></i>
+                            <span className="text-break flex-grow-1">
+                              <strong>Runtime Error:</strong> {runtimeErrors[runtimeErrors.length - 1]}
+                            </span>
+                            <button className="btn-close ms-2 flex-shrink-0" style={{ fontSize: '0.6rem' }} onClick={() => setRuntimeErrors([])}></button>
+                          </div>
+                        </div>
+                      )}
                       {iframeError && (
                         <div className="d-flex align-items-center justify-content-center h-100 text-center p-4">
                           <div>

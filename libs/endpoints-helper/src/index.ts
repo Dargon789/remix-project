@@ -28,6 +28,7 @@ export type EndpointUrls = {
   gitHubLoginProxy: string;
   sso: string;
   billing: string;
+  products: string;
   credits: string;
   audio: string;
   storage: string;
@@ -42,34 +43,39 @@ export type EndpointUrls = {
   dappGenerator: string;
   figma: string;
   mcp: string;
+  ethskills: string;
   quickdappIpfs: string;
   ensService: string;
   ccipRead: string;
   learneth: string;
   rss: string;
-  langchain: string;
-  langsmith: string;
+  langchain: string
 };
 
-/** Service key → path segment mapping (no leading slash) */
+/**
+ * Service key → path segment mapping (no leading slash).
+ * Paths reflect the production /.well-known/remix-config manifest hosted at
+ * https://api.remix.live where services are grouped under /endpoints, /ai, etc.
+ */
 const servicePathMap: Record<keyof Omit<EndpointUrls, 'solidityScanWebSocket' | 'membershipRequests'>, string> = {
-  corsProxy: 'corsproxy',
+  corsProxy: 'endpoints/corsproxy',
   mcpCorsProxy: 'mcp',
-  solidityScan: 'solidityscan',
-  ipfsGateway: 'jqgt',
-  commonCorsProxy: 'common-corsproxy',
-  github: 'github',
-  solcoder: 'solcoder',
-  completion: 'completion',
-  ghfolderpull: 'ghfolderpull',
-  embedly: 'embedly',
-  rag: 'rag',
+  solidityScan: 'endpoints/solidityscan',
+  ipfsGateway: 'endpoints/jqgt',
+  commonCorsProxy: 'endpoints/common-corsproxy',
+  github: 'endpoints/github',
+  solcoder: 'ai/solcoder',
+  completion: 'ai/completion',
+  ghfolderpull: 'endpoints/ghfolderpull',
+  embedly: 'endpoints/embedly',
+  rag: 'ai/rag',
   vyper2: 'vyper2',
-  gitHubLoginProxy: 'github-login-proxy',
+  gitHubLoginProxy: 'endpoints/github-login-proxy',
   sso: 'sso',
   billing: 'billing',
+  products: 'products',
   credits: 'credits',
-  audio: 'audio',
+  audio: 'ai/audio',
   storage: 'storage',
   permissions: 'permissions',
   walkthroughs: 'walkthroughs',
@@ -77,18 +83,17 @@ const servicePathMap: Record<keyof Omit<EndpointUrls, 'solidityScanWebSocket' | 
   invite: 'invite',
   feedback: 'feedback',
   workspaceLock: 'workspace-lock',
-  pimlico: 'pimlico',
-  dappGenerator: 'dapp-generator',
-  figma: 'figma',
+  pimlico: 'endpoints/pimlico',
+  dappGenerator: 'ai/dapp-generator',
+  figma: 'ai/figma',
   mcp: 'mcp',
-  quickdappIpfs: 'quickdapp-ipfs',
-  ensService: 'ens-service',
-  ccipRead: 'ccip-read',
+  ethskills: 'mcp/ethskills',
+  quickdappIpfs: 'endpoints/quickdapp-ipfs',
+  ensService: 'endpoints/ens-service',
+  ccipRead: 'endpoints/ccip-read',
   learneth: 'learneth',
-  rss: 'rss',
-  langchain: 'langchain',
-  langsmith: 'langsmith',
-
+  rss: 'endpoints/rss',
+  langchain: 'ai/langchain'
 };
 
 /** Build all endpoint URLs from a single base URL */
@@ -105,57 +110,22 @@ function buildUrls(baseUrl: string): EndpointUrls {
 
   // WebSocket variant
   if (base.startsWith('https://')) {
-    urls.solidityScanWebSocket = `${base}/solidityscan`.replace('https://', 'wss://');
+    urls.solidityScanWebSocket = `${base}/${servicePathMap.solidityScan}`.replace('https://', 'wss://');
   } else {
-    urls.solidityScanWebSocket = `${base}/solidityscan`.replace('http://', 'ws://');
+    urls.solidityScanWebSocket = `${base}/${servicePathMap.solidityScan}`.replace('http://', 'ws://');
   }
 
   return urls;
 }
 
-/** Legacy hardcoded URLs — used when NX_ENDPOINTS_URL is not set */
-const defaultUrls: EndpointUrls = {
-  corsProxy: 'https://gitproxy.api.remix.live',
-  mcpCorsProxy: 'https://mcp.api.remix.live',
-  solidityScan: 'https://solidityscan.api.remix.live',
-  ipfsGateway: 'https://jqgt.api.remix.live',
-  commonCorsProxy: 'https://common-corsproxy.api.remix.live',
-  github: 'https://github.api.remix.live',
-  solcoder: 'https://solcoder.api.remix.live',
-  completion: 'https://completion.api.remix.live',
-  ghfolderpull: 'https://ghfolderpull.api.remix.live',
-  embedly: 'https://embedly.api.remix.live',
-  rag: 'https://rag.api.remix.live',
-  vyper2: 'https://vyper2.api.remix.live',
-  solidityScanWebSocket: 'wss://solidityscan.api.remix.live',
-  gitHubLoginProxy: 'https://github-login-proxy.api.remix.live',
-  sso: 'https://auth.api.remix.live/sso',
-  billing: 'https://auth.api.remix.live/billing',
-  credits: 'https://auth.api.remix.live/credits',
-  audio: 'https://audio.api.remix.live',
-  storage: 'https://auth.api.remix.live/storage',
-  permissions: 'https://auth.api.remix.live/permissions',
-  walkthroughs: 'https://auth.api.remix.live/walkthroughs',
-  notifications: 'https://auth.api.remix.live/notifications',
-  invite: 'https://auth.api.remix.live/invite',
-  feedback: 'https://auth.api.remix.live/feedback',
-  membershipRequests: 'https://auth.api.remix.live/permissions/membership-requests/anonymous',
-  workspaceLock: 'https://auth.api.remix.live/workspace-lock',
-  pimlico: 'https://pimlico.api.remix.live',
-  dappGenerator: 'https://quickdapp-ai.api.remix.live',
-  figma: 'https://quickdapp-figma.api.remix.live',
-  mcp: 'https://mcp.api.remix.live',
-  quickdappIpfs: 'https://quickdapp-ipfs.api.remix.live',
-  ensService: 'https://quickdapp-ens.api.remix.live',
-  ccipRead: 'https://quickdapp-ccip.api.remix.live',
-  learneth: 'https://learneth.api.remix.live',
-  rss: 'https://rss.api.remix.live',
-  langchain: 'https://langchain.api.remix.live',
-  langsmith: 'https://langsmith.api.remix.live',
-};
+/**
+ * Default endpoint URLs — used when NX_ENDPOINTS_URL is not set.
+ * Mirrors the production /.well-known/remix-config manifest at https://api.remix.live.
+ */
+const defaultUrls: EndpointUrls = buildUrls('https://api.remix.live');
 
 // --- Resolution ---
-const prefix = process.env.NX_ENDPOINTS_URL;
+const prefix = ''
 
 const resolvedUrls: EndpointUrls = prefix
   ? buildUrls(prefix)
@@ -217,12 +187,9 @@ export function updateEndpoints(config: RemixConfig): void {
   // Handle mcpCorsProxy alias
   if (config.services.mcp) {
     endpointUrls.mcpCorsProxy = `${base}${config.services.mcp}`;
-  }
-
-  // SSO must always point to auth.api.remix.live (separate auth domain)
+  } // SSO must always point to auth.api.remix.live (separate auth domain)
   endpointUrls.sso = 'https://auth.api.remix.live/sso';
- 
-}
+ }
 
 /**
  * Initialize endpoints from service discovery.

@@ -1,5 +1,5 @@
 import { Plugin } from '@remixproject/engine'
-import { AuthUser, AuthProvider as AuthProviderType, ApiClient, SSOApiService, CreditsApiService, PermissionsApiService, BillingApiService, InviteApiService, TestPoolApiService, Credits, InviteValidateResponse, InviteRedeemResponse, RegistrationMode, RegistrationModeResponse, LoginMode, LoginModeResponse, ACCESS_POLICY_ERROR_CODES, AccessPolicy, AccessPolicyResponse, AppConfig, PoolCheckoutResponse, PoolReleaseResponse, PoolStatusResponse } from '@remix-api'
+import { AuthUser, AuthProvider as AuthProviderType, ApiClient, SSOApiService, CreditsApiService, PermissionsApiService, BillingApiService, ProductsApiService, InviteApiService, TestPoolApiService, EthSkillsApiService, Credits, InviteValidateResponse, InviteRedeemResponse, RegistrationMode, RegistrationModeResponse, LoginMode, LoginModeResponse, ACCESS_POLICY_ERROR_CODES, AccessPolicy, AccessPolicyResponse, AppConfig, PoolCheckoutResponse, PoolReleaseResponse, PoolStatusResponse } from '@remix-api'
 import { endpointUrls } from '@remix-endpoints-helper'
 import { QueryParams } from '@remix-project/remix-lib'
 import { getAddress } from 'ethers'
@@ -9,7 +9,7 @@ const profile = {
   name: 'auth',
   displayName: 'Authentication',
   description: 'Handles SSO authentication and credits',
-  methods: ['login', 'logout', 'getUser', 'getCredits', 'refreshCredits', 'linkAccount', 'getLinkedAccounts', 'unlinkAccount', 'getApiClient', 'getSSOApi', 'getCreditsApi', 'getPermissionsApi', 'getBillingApi', 'checkPermission', 'hasPermission', 'getAllPermissions', 'refreshPermissions', 'checkPermissions', 'getFeaturesByCategory', 'getFeatureLimit', 'getPaddleConfig', 'fetchGitHubToken', 'disconnectGitHub', 'getInviteApi', 'validateInviteToken', 'redeemInviteToken', 'getPendingInviteToken', 'setPendingInviteToken', 'setPendingInviteValidation', 'clearPendingInviteToken', 'getPendingInviteValidation', 'isAuthenticated', 'getToken', 'getRegistrationMode', 'getLoginMode', 'refreshLoginMode', 'getAccessPolicy', 'refreshAccessPolicy', 'notifyEmailOtpLogin', 'getAppConfig', 'refreshAppConfig', 'getAppConfigValue', 'poolCheckout', 'poolRelease', 'poolStatus', 'poolReleaseAll', 'isPoolAvailable'],
+  methods: ['login', 'logout', 'getUser', 'getCredits', 'refreshCredits', 'linkAccount', 'getLinkedAccounts', 'unlinkAccount', 'getApiClient', 'getSSOApi', 'getCreditsApi', 'getPermissionsApi', 'getBillingApi', 'getProductsApi', 'getEthSkillsApi', 'checkPermission', 'hasPermission', 'getAllPermissions', 'refreshPermissions', 'checkPermissions', 'getFeaturesByCategory', 'getFeatureLimit', 'getPaddleConfig', 'fetchGitHubToken', 'disconnectGitHub', 'getInviteApi', 'validateInviteToken', 'redeemInviteToken', 'getPendingInviteToken', 'setPendingInviteToken', 'setPendingInviteValidation', 'clearPendingInviteToken', 'getPendingInviteValidation', 'isAuthenticated', 'getToken', 'getRegistrationMode', 'getLoginMode', 'refreshLoginMode', 'getAccessPolicy', 'refreshAccessPolicy', 'notifyEmailOtpLogin', 'getAppConfig', 'refreshAppConfig', 'getAppConfigValue', 'poolCheckout', 'poolRelease', 'poolStatus', 'poolReleaseAll', 'isPoolAvailable'],
   events: ['authStateChanged', 'creditsUpdated', 'accountLinked', 'gitHubTokenReady', 'inviteTokenDetected', 'inviteTokenRedeemed', 'registrationModeChanged', 'loginModeChanged', 'accessPolicyChanged', 'appConfigChanged']
 }
 
@@ -22,7 +22,9 @@ export class AuthPlugin extends Plugin {
   private creditsApi: CreditsApiService
   private permissionsApi: PermissionsApiService
   private billingApi: BillingApiService
+  private productsApi: ProductsApiService
   private inviteApi: InviteApiService
+  private ethSkillsApi: EthSkillsApiService
   private testPoolApi: TestPoolApiService | null = null
   private activePoolSession: { sessionId: string; accountId: string } | null = null
   private refreshTimer: number | null = null
@@ -32,6 +34,13 @@ export class AuthPlugin extends Plugin {
   private cachedLoginMessage: string = ''
   private cachedAccessPolicy: AccessPolicyResponse | null = null
   private cachedAppConfig: AppConfig | null = null
+  /**
+   * Fresh permissions cached after refreshPermissions(). When set, takes
+   * precedence over the assistantState snapshot in getAllPermissions() so
+   * that consumers reading right after a redeem/plan-change see the new
+   * feature_groups instead of the stale cached snapshot.
+   */
+  private freshPermissions: any | null = null
 
   /** Debug-gated logger – silent when DEBUG is false */
   private log(...args: any[]) {
@@ -57,16 +66,26 @@ export class AuthPlugin extends Plugin {
     const billingClient = new ApiClient(endpointUrls.billing)
     this.billingApi = new BillingApiService(billingClient)
 
+    // Products API (separate base URL: /products)
+    const productsClient = new ApiClient(endpointUrls.products)
+    this.productsApi = new ProductsApiService(productsClient)
+
     // Invite API (no auth required for validation, but needed for redemption)
     const inviteClient = new ApiClient(endpointUrls.invite)
     this.inviteApi = new InviteApiService(inviteClient)
+
+    // Eth Skills API (served via the MCP CORS proxy, authenticated)
+    const ethSkillsClient = new ApiClient(endpointUrls.ethskills)
+    this.ethSkillsApi = new EthSkillsApiService(ethSkillsClient)
 
     // Set up token refresh callback for auto-renewal
     this.apiClient.setTokenRefreshCallback(() => this.refreshAccessToken())
     creditsClient.setTokenRefreshCallback(() => this.refreshAccessToken())
     permissionsClient.setTokenRefreshCallback(() => this.refreshAccessToken())
     billingClient.setTokenRefreshCallback(() => this.refreshAccessToken())
+    productsClient.setTokenRefreshCallback(() => this.refreshAccessToken())
     inviteClient.setTokenRefreshCallback(() => this.refreshAccessToken())
+    ethSkillsClient.setTokenRefreshCallback(() => this.refreshAccessToken())
   }
 
   private clearRefreshTimer() {
@@ -142,6 +161,13 @@ export class AuthPlugin extends Plugin {
   }
 
   /**
+   * Get the typed Products API service
+   */
+  async getProductsApi(): Promise<ProductsApiService> {
+    return this.productsApi
+  }
+
+  /**
    * Get Paddle configuration for checkout (fetched from backend)
    */
   async getPaddleConfig(): Promise<{ clientToken: string | null; environment: 'sandbox' | 'production' }> {
@@ -172,12 +198,13 @@ export class AuthPlugin extends Plugin {
    */
   async checkPermission(feature: string): Promise<{ allowed: boolean; limit?: number; unit?: string }> {
     try {
-      const response = await this.permissionsApi.checkFeature(feature)
-      if (response.ok && response.data) {
+      const snap: any = await this.call('assistantState' as any, 'getSnapshot')
+      const perm = snap?.permissions?.features?.[feature]
+      if (perm && typeof perm === 'object') {
         return {
-          allowed: response.data.allowed,
-          limit: response.data.limit_value,
-          unit: response.data.limit_unit
+          allowed: perm.is_enabled === true,
+          limit: perm.limit_value,
+          unit: perm.limit_unit
         }
       }
       return { allowed: false }
@@ -202,24 +229,55 @@ export class AuthPlugin extends Plugin {
    * @returns Full permissions response including feature_groups
    */
   async getAllPermissions(): Promise<any> {
+    this.log('[AuthPlugin] Fetching all permissions for user')
     try {
+      // Prefer the fresh cache populated by refreshPermissions() so callers
+      // right after a redeem/plan-change see the new entitlements, not the
+      // (still-stale) assistantState snapshot.
+      if (this.freshPermissions) return this.freshPermissions
+
+      const snap: any = await this.call('assistantState' as any, 'getSnapshot')
+      if (snap?.permissions) return snap.permissions
+
+      // assistantState may not be hydrated yet right after page reload.
+      // Fall back to the permissions API so AuthContext/top-menu data
+      // (feature groups, plan badges) doesn't flap to empty.
       const response = await this.permissionsApi.getPermissions()
-      if (response.ok && response.data) {
-        return response.data
-      }
-      return { features: []}
+      if (response.ok && response.data) return response.data
+
+      return { features: [], feature_groups: []}
     } catch (error) {
       console.error('[AuthPlugin] Get all permissions failed:', error)
-      return { features: []}
+      return { features: [], feature_groups: []}
     }
   }
 
   /**
-   * Re-emit authStateChanged so consumers (e.g. AuthContext) refetch
-   * permissions / feature groups. Call after invite redemption, plan
-   * changes, or anything that mutates the user's entitlements.
+   * Re-fetch permissions from the backend and re-emit authStateChanged
+   * so consumers (e.g. AuthContext) pick up the new feature_groups /
+   * features. Call after invite redemption, plan changes, or anything
+   * that mutates the user's entitlements.
+   *
+   * We deliberately fetch the permissions API directly here (instead of
+   * round-tripping through assistantState) so this method is self-
+   * contained and can never cycle back through another plugin. The fresh
+   * result is stashed on `this.freshPermissions` so the subsequent
+   * `getAllPermissions` call from AuthContext returns the new data
+   * instead of the (still-stale) assistantState snapshot.
    */
   async refreshPermissions(): Promise<void> {
+    try {
+      await this.getToken() // ensure permissionsApi has the current bearer
+      const response = await this.permissionsApi.getPermissions()
+      if (response.ok && response.data) {
+        this.freshPermissions = response.data
+        this.log('[AuthPlugin] refreshPermissions – fetched fresh permissions')
+      } else {
+        this.log('[AuthPlugin] refreshPermissions – API returned no data:', response.error)
+      }
+    } catch (e) {
+      this.log('[AuthPlugin] refreshPermissions – fetch failed, falling back to cached snapshot:', e)
+    }
     const user = await this.getUser()
     const token = await this.getToken()
     if (user && token) {
@@ -239,11 +297,18 @@ export class AuthPlugin extends Plugin {
    */
   async checkPermissions(features: string[]): Promise<Record<string, { allowed: boolean; limit_value?: number; limit_unit?: string }>> {
     try {
-      const response = await this.permissionsApi.checkFeatures(features)
-      if (response.ok && response.data) {
-        return response.data.results
+      const snap: any = await this.call('assistantState' as any, 'getSnapshot')
+      const perms = snap?.permissions?.features || {}
+      const result: Record<string, { allowed: boolean; limit_value?: number; limit_unit?: string }> = {}
+      for (const feature of features) {
+        const perm = perms?.[feature]
+        result[feature] = {
+          allowed: perm?.is_enabled === true,
+          limit_value: perm?.limit_value,
+          limit_unit: perm?.limit_unit
+        }
       }
-      return {}
+      return result
     } catch (error) {
       console.error('[AuthPlugin] Check permissions failed:', error)
       return {}
@@ -257,11 +322,17 @@ export class AuthPlugin extends Plugin {
    */
   async getFeaturesByCategory(category: string): Promise<{ feature_name: string; allowed: boolean; limit_value?: number; limit_unit?: string }[]> {
     try {
-      const response = await this.permissionsApi.getFeaturesInCategory(category)
-      if (response.ok && response.data) {
-        return response.data.features
-      }
-      return []
+      const snap: any = await this.call('assistantState' as any, 'getSnapshot')
+      const perms = snap?.permissions?.features || {}
+      const prefix = `${category}:`
+      return Object.entries(perms)
+        .filter(([name]) => name.startsWith(prefix))
+        .map(([feature_name, perm]: [string, any]) => ({
+          feature_name,
+          allowed: perm?.is_enabled === true,
+          limit_value: perm?.limit_value,
+          limit_unit: perm?.limit_unit
+        }))
     } catch (error) {
       console.error('[AuthPlugin] Get features by category failed:', error)
       return []
@@ -275,11 +346,12 @@ export class AuthPlugin extends Plugin {
    */
   async getFeatureLimit(feature: string): Promise<{ limit?: number; unit?: string }> {
     try {
-      const response = await this.permissionsApi.checkFeature(feature)
-      if (response.ok && response.data) {
+      const snap: any = await this.call('assistantState' as any, 'getSnapshot')
+      const perm = snap?.permissions?.features?.[feature]
+      if (perm && typeof perm === 'object') {
         return {
-          limit: response.data.limit_value,
-          unit: response.data.limit_unit
+          limit: perm.limit_value,
+          unit: perm.limit_unit
         }
       }
       return {}
@@ -642,6 +714,8 @@ export class AuthPlugin extends Plugin {
       if (inviteToken) {
         loginUrl += `&invite_token=${encodeURIComponent(inviteToken)}`
       }
+
+      this.log('[AuthPlugin] Login URL:', loginUrl)
 
       // Open popup directly (must be in user click event)
       const popup = window.open(
@@ -1026,7 +1100,9 @@ export class AuthPlugin extends Plugin {
     this.creditsApi.setToken(token)
     this.permissionsApi.setToken(token)
     this.billingApi.setToken(token)
+    this.productsApi.setToken(token)
     this.inviteApi.setToken(token)
+    this.ethSkillsApi.setToken(token)
   }
 
   private clearAuthTokenFromApiClients(): void {
@@ -1036,7 +1112,9 @@ export class AuthPlugin extends Plugin {
     this.creditsApi.setToken('')
     this.permissionsApi.setToken('')
     this.billingApi.setToken('')
+    this.productsApi.setToken('')
     this.inviteApi.setToken('')
+    this.ethSkillsApi.setToken('')
   }
 
   /**
@@ -1078,6 +1156,7 @@ export class AuthPlugin extends Plugin {
         this.permissionsApi.setToken(newAccessToken)
         this.billingApi.setToken(newAccessToken)
         this.inviteApi.setToken(newAccessToken)
+        this.ethSkillsApi.setToken(newAccessToken)
 
         this.log('[AuthPlugin] Access token refreshed successfully')
         // Reschedule next proactive refresh
@@ -1112,7 +1191,7 @@ export class AuthPlugin extends Plugin {
 
       this.log('[AuthPlugin] Fetching credits using typed API')
 
-      const response = await this.creditsApi.getBalance()
+      const response = await this.creditsApi.getBalance({ includeQuotas: true })
 
       if (response.ok && response.data) {
         return response.data
@@ -1411,6 +1490,7 @@ export class AuthPlugin extends Plugin {
     localStorage.removeItem('remix_user')
     this.clearAuthTokenFromApiClients()
     this.clearRefreshTimer()
+    this.freshPermissions = null
   }
 
   // Convert address to EIP-55 checksum format using ethers
@@ -1914,6 +1994,14 @@ export class AuthPlugin extends Plugin {
    */
   getInviteApi(): InviteApiService {
     return this.inviteApi
+  }
+
+  /**
+   * Get the Eth Skills API service (lists/loads skills from the
+   * authenticated `ethskills` backend via the MCP CORS proxy).
+   */
+  getEthSkillsApi(): EthSkillsApiService {
+    return this.ethSkillsApi
   }
 
   /**

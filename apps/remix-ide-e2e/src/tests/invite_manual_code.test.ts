@@ -3,12 +3,14 @@ import { NightwatchBrowser } from 'nightwatch'
 import init from '../helpers/init'
 import { releaseAccount } from '../helpers/pool'
 
+// DEPRECATED TEST SUITE — the manual invite code flow is currently disabled in open mode, and these tests are not currently maintained. Keeping the code here for reference in case we want to re-enable manual invites in the future.
+
 require('dotenv').config()
 
 const poolApiKey = process.env.E2E_POOL_API_KEY || ''
 const INVITE_CODE = process.env.E2E_INVITE_CODE || ''
 
-module.exports = {
+const test = {
     '@disabled': true,
 
     before: function (browser: NightwatchBrowser, done: VoidFunction) {
@@ -131,3 +133,6 @@ module.exports = {
             .waitForElementVisible('*[data-id="feature-badge-name-e2e-beta"]', 10000)
     },
 }
+
+// MANUAL INVITES ARE OFF IN 'OPEN MODE'
+module.exports = {} 

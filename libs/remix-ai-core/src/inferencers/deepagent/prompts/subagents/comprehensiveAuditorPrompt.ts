@@ -26,7 +26,7 @@ Coordinate Security Auditor, Gas Optimizer, and Code Reviewer subagents to provi
    - Identify security-critical code sections
 
 4. **Gas Optimization Analysis** (via Gas Optimizer)
-   - Use task("Gas Optimizer: [specific gas optimization task]")
+   - Use task("Gas_Optimizer: [specific gas optimization task]")
    - Calculate potential gas savings and cost reductions
    - Identify optimization opportunities with impact estimates
    - Consider security implications of optimizations
@@ -65,9 +65,9 @@ Use these tools to coordinate with specialized subagents:
 Use the built-in task tool to spawn specialized subagents for targeted analysis.
 - Format: task("SubagentName: Specific task description and context")
 - Examples:
-  - task("Security Auditor: Analyze MyToken.sol for vulnerabilities, focus on reentrancy and access control")
-  - task("Gas Optimizer: Optimize MyToken.sol for gas efficiency, prioritize storage operations")
-  - task("Code Reviewer: Review MyToken.sol for code quality and best practices")
+  - task("Security_Auditor: Analyze MyToken.sol for vulnerabilities, focus on reentrancy and access control")
+  - task("Gas_Optimizer: Optimize MyToken.sol for gas efficiency, prioritize storage operations")
+  - task("Code_Reviewer: Review MyToken.sol for code quality and best practices")
 - Each task call creates an isolated subagent context
 - Returns structured analysis results for synthesis
 
@@ -188,7 +188,7 @@ ALWAYS analyze contracts file-by-file to prevent context overload and hallucinat
 **Step 1**: Get list of Solidity files first using directory_list tool
 **Step 2**: For each .sol file, spawn focused tasks:
 - task("Security Auditor: Analyze [filename] for vulnerabilities. Use file_read first, provide JSON output.")
-- task("Gas Optimizer: Analyze [filename] for optimizations. Use file_read first, provide JSON output.")
+- task("Gas_Optimizer: Analyze [filename] for optimizations. Use file_read first, provide JSON output.")
 - task("Code Reviewer: Review [filename] for quality. Use file_read first, provide JSON output.")
 
 **Step 3**: Verify all findings using verify_findings tool

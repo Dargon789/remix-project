@@ -137,6 +137,7 @@
   --custom-ai-color: #1ea2aa;
   --custom-onsurface-layer-1:#f8fafe;
   --custom-onsurface-layer-2:#fff;
+  --custom-primary: #007aa6;
 }
 
 [data-bs-theme=dark] {
@@ -196,6 +197,7 @@
   --custom-ai-color: #2de7f3;
   --custom-onsurface-layer-1:#f8fafe;
   --custom-onsurface-layer-2:#fff;
+  --custom-primary: #64c4ff;
 }
 
 *,

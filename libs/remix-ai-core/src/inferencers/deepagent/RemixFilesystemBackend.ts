@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 import { Plugin } from '@remixproject/engine'
 import EventEmitter from 'events'
 import { ToolApprovalRequest, ToolApprovalResponse } from '../../types/humanInTheLoop'
@@ -100,7 +101,7 @@ export class RemixFilesystemBackend {
       // Return success immediately — approval will come later via flush
       return { occurrences }
     } catch (err) {
-      console.error('[HITL][Backend] edit() error:', err)
+      remixAILogger.error('[HITL][Backend] edit() error:', err)
       return { error: err.message }
     }
   }
@@ -179,17 +180,13 @@ export class RemixFilesystemBackend {
     }
   }
 
-  async read(file_path: string, offset?: number, limit?: number): Promise<string | { error: string }> {
+  async read(file_path: string, _offset?: number, _limit?: number): Promise<string | { error: string }> {
+    // NOTE: offset and limit parameters are ignored - always return full file content
+    // This prevents the AI from making multiple turns to read a file in chunks
     try {
-      const content = await this.read_file(file_path)
-      if (typeof content !== 'string') {
-        return content
-      }
-      if (offset === undefined) offset = 0
-      if (limit === undefined) limit = content.length
-      return content.substring(offset, offset + limit)
+      return await this.read_file(file_path)
     } catch (error) {
-      return { error: `Failed to read file ${file_path} with offset and limit: ${error.message}` }
+      return { error: `Failed to read file ${file_path}: ${error.message}` }
     }
   }
 
@@ -203,7 +200,7 @@ export class RemixFilesystemBackend {
       try {
         const currentWs = await this.plugin.call('filePanel' as any, 'getCurrentWorkspace')
         if (currentWs?.name && normalizedPath.startsWith(currentWs.name + '/')) {
-          console.warn(`[QuickDapp] Stripping workspace prefix from path: ${normalizedPath}`)
+          remixAILogger.warn(`[QuickDapp] Stripping workspace prefix from path: ${normalizedPath}`)
           normalizedPath = normalizedPath.substring(currentWs.name.length)
         }
       } catch (e) { /* ignore workspace check failure */ }
@@ -231,7 +228,7 @@ export class RemixFilesystemBackend {
 
       return { success: true }
     } catch (error) {
-      console.error('[HITL][Backend] write_file ERROR:', path, error)
+      remixAILogger.error('[HITL][Backend] write_file ERROR:', path, error)
       return { error: `Failed to write file ${path}: ${error.message}` }
     }
   }
@@ -282,7 +279,7 @@ export class RemixFilesystemBackend {
 
       return { success: true }
     } catch (error) {
-      console.error('[HITL][Backend] edit_file() ERROR:', error)
+      remixAILogger.error('[HITL][Backend] edit_file() ERROR:', error)
       return { error: `Failed to edit file ${path}: ${error.message}` }
     }
   }

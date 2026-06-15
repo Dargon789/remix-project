@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * Validation Middleware for Remix MCP Server
  */
@@ -619,7 +620,7 @@ export class ValidationMiddleware extends BaseMiddleware {
           return;
         }
       } catch (error) {
-        console.error('[ValidationMiddleware] Error checking workspace:', error);
+        remixAILogger.error('[ValidationMiddleware] Error checking workspace:', error);
         result.warnings.push({
           field: 'workspace',
           code: 'WORKSPACE_CHECK_FAILED',

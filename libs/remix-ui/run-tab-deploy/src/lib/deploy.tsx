@@ -86,7 +86,7 @@ function DeployWidget({ plugin }: DeployWidgetProps) {
       })
     })
 
-    plugin.on('blockchain', 'networkStatus', async ({ error, network }) => {
+    plugin.on('blockchain', 'networkStatus', async ({ error, network }: any) => {
       if (error) {
         const netUI = 'can\'t detect network'
 
@@ -103,16 +103,6 @@ function DeployWidget({ plugin }: DeployWidgetProps) {
 
       dispatch({ type: 'SET_DETECTED_NETWORK', payload: netUI })
     })
-
-    // plugin.on('desktopHost', 'chainChanged', (context) => {
-    //   //console.log('desktopHost chainChanged', context)
-    //   fillAccountsList(plugin, dispatch)
-    //   updateInstanceBalance(plugin, dispatch)
-    // })
-
-    // plugin.on('desktopHost', 'disconnected', () => {
-    //   setExecutionContext(plugin, dispatch, { context: 'vm-cancun', fork: '' })
-    // })
 
     // plugin.on('manager', 'pluginDeactivated', (plugin: Plugin) => {
     //   if (plugin.name === 'remixd') {

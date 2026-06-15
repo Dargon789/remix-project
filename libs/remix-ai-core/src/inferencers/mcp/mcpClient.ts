@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import EventEmitter from "events";
 import {
@@ -22,7 +23,7 @@ function trackMatomoEvent(category: string, action: string, name?: string) {
       }
     }
   } catch (error) {
-    console.debug('Matomo tracking failed:', error);
+    remixAILogger.debug('Matomo tracking failed:', error);
   }
 }
 
@@ -42,11 +43,32 @@ export class MCPClient {
   private toolListCache?: { tools: IMCPTool[], timestamp: number }; // Cache for HTTP servers
   private readonly CACHE_TTL = 120000; // 120 seconds cache TTL
   private sessionId: string
+  // Optional bearer-token provider. Resolved fresh on every outgoing
+  // request so we always pick up the current JWT (refreshes, logouts).
+  // Returns null when the user is anonymous — in that case we omit
+  // the Authorization header rather than sending "Bearer null".
+  private getAuthToken?: () => Promise<string | null>;
 
-  constructor(server: IMCPServer, remixMCPServer?: any) {
+  constructor(server: IMCPServer, remixMCPServer?: any, getAuthToken?: () => Promise<string | null>) {
     this.server = server;
     this.eventEmitter = new EventEmitter();
     this.remixMCPServer = remixMCPServer;
+    this.getAuthToken = getAuthToken;
+  }
+
+  private async authHeaders(): Promise<Record<string, string>> {
+    if (!this.getAuthToken) return {};
+    try {
+      const token = await this.getAuthToken();
+      if (token && typeof token === 'string') {
+        return { Authorization: `Bearer ${token}` };
+      }
+    } catch (e) {
+      // Auth plugin not active or token fetch failed — fall through
+      // anonymous. The MCP server will reject with 401 if it requires auth.
+      remixAILogger.debug('[MCPClient] auth token fetch failed:', e);
+    }
+    return {};
   }
 
   async connect(): Promise<IMCPInitializeResult> {
@@ -153,7 +175,7 @@ export class MCPClient {
               this.handleSSEMessage(response);
             }
           } catch (error) {
-            console.error(`[MCP] Error parsing SSE message:`, error);
+            remixAILogger.error(`[MCP] Error parsing SSE message:`, error);
           }
         };
 
@@ -223,7 +245,7 @@ export class MCPClient {
               this.handleWebSocketMessage(response);
             }
           } catch (error) {
-            console.error(`[MCP] Error parsing WebSocket message:`, error);
+            remixAILogger.error(`[MCP] Error parsing WebSocket message:`, error);
           }
         };
 
@@ -250,6 +272,7 @@ export class MCPClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json, text/event-stream', // Required by some MCP servers
+      ...(await this.authHeaders()),
     };
 
     // Include session ID if it exists for this endpoint
@@ -299,6 +322,7 @@ export class MCPClient {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/event-stream', // Required by some MCP servers
+        ...(await this.authHeaders()),
       },
       body: JSON.stringify({
         jsonrpc: '2.0',

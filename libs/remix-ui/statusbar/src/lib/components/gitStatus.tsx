@@ -35,7 +35,7 @@ export default function GitStatus({ plugin, gitBranchName, setGitBranchName }: G
         : intl.formatMessage({ id: 'git.checkout' }) + ': ' + appContext.appState.currentBranch.name}`}
     >
       <div
-        className="d-flex flex-row ps-3 text-white justify-content-center align-items-center remixui_statusbar_gitstatus"
+        className="d-flex flex-row ps-3 text-body justify-content-center align-items-center remixui_statusbar_gitstatus"
         onClick={async () => await openDgit()}
       >
         {!appContext.appState.needsGitInit ? <span className="fa-regular fa-code-branch ms-1"></span>

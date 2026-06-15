@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 
 import { Plugin } from '@remixproject/engine';
 import { IMCPToolCall } from '../../types/mcp';
@@ -260,7 +261,7 @@ export class SecurityMiddleware extends BaseMiddleware {
     }
 
     const pathArgs = ['path', 'from', 'to', 'sourceFile'];
-    console.log(`[SecurityMiddleware] Validating file operation arguments for call: ${call.name}`);
+    remixAILogger.log(`[SecurityMiddleware] Validating file operation arguments for call: ${call.name}`);
     for (const pathArg of pathArgs) {
       if (args[pathArg]) {
         const pathResult = this.validateFilePath(args[pathArg]);
@@ -271,7 +272,7 @@ export class SecurityMiddleware extends BaseMiddleware {
     }
 
     // Check file content size
-    console.log(`[SecurityMiddleware] Validating file content size for call: ${call.name}`);
+    remixAILogger.log(`[SecurityMiddleware] Validating file content size for call: ${call.name}`);
     if (args.content && typeof args.content === 'string') {
       if (args.content.length > this.config.maxFileSize) {
         return {
@@ -283,13 +284,13 @@ export class SecurityMiddleware extends BaseMiddleware {
     }
 
     // Check file type restrictions
-    console.log(`[SecurityMiddleware] Validating file type for call: ${args}`);
+    remixAILogger.log(`[SecurityMiddleware] Validating file type for call: ${args}`);
     if (args.type === 'directory') {
-      console.log(`[SecurityMiddleware] Directory operations are allowed without file type checks.`);
+      remixAILogger.log(`[SecurityMiddleware] Directory operations are allowed without file type checks.`);
       return { allowed: true, risk: 'low' };
     }
 
-    console.log(`[SecurityMiddleware] Validating file type for path: ${args.path}`);
+    remixAILogger.log(`[SecurityMiddleware] Validating file type for path: ${args.path}`);
     if (args.path && this.config.allowedFileTypes.length > 0) {
       const extension = args.path.split('.').pop()?.toLowerCase();
       if (extension && !this.config.allowedFileTypes.includes(extension)) {
@@ -568,7 +569,7 @@ export class SecurityMiddleware extends BaseMiddleware {
 
       return { allowed: true, risk: 'high' };
     } catch (error) {
-      console.error('[SecurityMiddleware] Error validating mainnet operation:', error);
+      remixAILogger.error('[SecurityMiddleware] Error validating mainnet operation:', error);
       // If we can't determine network, allow the operation but log it
       return { allowed: true, risk: 'medium' };
     }
@@ -584,7 +585,7 @@ export class SecurityMiddleware extends BaseMiddleware {
 
       return false;
     } catch (error) {
-      console.error('[SecurityMiddleware] Error detecting network:', error);
+      remixAILogger.error('[SecurityMiddleware] Error detecting network:', error);
       return false;
     }
   }
@@ -601,7 +602,7 @@ export class SecurityMiddleware extends BaseMiddleware {
 
       return result;
     } catch (error) {
-      console.log('[SecurityMiddleware] Error showing confirmation modal:', error);
+      remixAILogger.log('[SecurityMiddleware] Error showing confirmation modal:', error);
       return false;
     }
   }
@@ -621,12 +622,12 @@ export class SecurityMiddleware extends BaseMiddleware {
     if (this.toolRegistry) {
       const toolDefinition = this.toolRegistry.get(toolName);
       if (toolDefinition && toolDefinition.permissions && toolDefinition.permissions.length > 0) {
-        console.log(`[SecurityMiddleware] Tool '${toolName}' requires permissions:`, toolDefinition.permissions);
+        remixAILogger.log(`[SecurityMiddleware] Tool '${toolName}' requires permissions:`, toolDefinition.permissions);
         return toolDefinition.permissions;
       }
     }
 
-    console.log(`[SecurityMiddleware] Tool '${toolName}' has no specific permissions defined, granting all permissions (*)`);
+    remixAILogger.log(`[SecurityMiddleware] Tool '${toolName}' has no specific permissions defined, granting all permissions (*)`);
     return ['*'];
   }
 
@@ -725,7 +726,7 @@ export class SecurityMiddleware extends BaseMiddleware {
     }
 
     if (riskLevel === 'high') {
-      console.warn('High-risk security event:', entry);
+      remixAILogger.warn('High-risk security event:', entry);
     }
   }
 
@@ -757,7 +758,7 @@ export class SecurityMiddleware extends BaseMiddleware {
     }
 
     if (entriesToDelete.length > 0 || timestampsCleanedCount > 0) {
-      console.log(`[SecurityMiddleware] Cleaned up ${entriesToDelete.length} idle users and ${timestampsCleanedCount} expired timestamps`);
+      remixAILogger.log(`[SecurityMiddleware] Cleaned up ${entriesToDelete.length} idle users and ${timestampsCleanedCount} expired timestamps`);
     }
   }
 

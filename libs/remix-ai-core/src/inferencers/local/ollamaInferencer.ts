@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 import { AIRequestType, ICompletions, IGeneration, IParams } from "../../types/types";
 import { CompletionParams, GenerationParams } from "../../types/models";
 import { discoverOllamaHost, listModels } from "./ollama";
@@ -75,7 +76,7 @@ export class OllamaInferencer extends RemoteInferencer implements ICompletions, 
       trackMatomoEvent('ai', 'remixAI', `ollama_initialize_success:${this.model_name}`);
     } catch (error) {
       trackMatomoEvent('ai', 'remixAI', `ollama_model_selection_error:${error.message || 'unknown_error'}`);
-      console.warn('Could not auto-select model. Make sure you have at least one model installed:', error);
+      remixAILogger.warn('Could not auto-select model. Make sure you have at least one model installed:', error);
     }
   }
 
@@ -198,7 +199,7 @@ export class OllamaInferencer extends RemoteInferencer implements ICompletions, 
         return hasInsertSupport;
       }
     } catch (error) {
-      console.warn(`Failed to check model insert support: ${error}`);
+      remixAILogger.warn(`Failed to check model insert support: ${error}`);
     }
     return false;
   }

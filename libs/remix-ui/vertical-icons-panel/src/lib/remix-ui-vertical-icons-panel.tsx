@@ -3,6 +3,7 @@ import { Plugin } from '@remixproject/engine'
 import './remix-ui-vertical-icons-panel.css'
 import IconList from './components/IconList'
 import Home from './components/Home'
+import { HelpMenu } from './components/HelpMenu'
 import { verticalScrollReducer } from './reducers/verticalScrollReducer'
 import { Chevron } from './components/Chevron'
 import { IconRecord } from './types'
@@ -10,6 +11,7 @@ import { AppContext, onLineContext } from '@remix-ui/app'
 import { CustomTooltip } from '@remix-ui/helper'
 import { Registry } from '@remix-project/remix-lib'
 import { desktopConnectionType } from '@remix-api'
+import { FormattedMessage } from 'react-intl'
 
 export interface RemixUiVerticalIconsPanelProps {
   verticalIconsPlugin: Plugin
@@ -27,6 +29,7 @@ const RemixUiVerticalIconsPanel = ({ verticalIconsPlugin, icons }: RemixUiVertic
   const iconPanelRef = useRef<any>()
   const [activateScroll, dispatchScrollAction] = useReducer(verticalScrollReducer, initialState)
   const [theme, setTheme] = useState<string>('dark')
+  const [helpMenuOpen, setHelpMenuOpen] = useState<boolean>(false)
   const online = useContext(onLineContext)
   const appContext = useContext(AppContext)
 
@@ -114,6 +117,19 @@ const RemixUiVerticalIconsPanel = ({ verticalIconsPlugin, icons }: RemixUiVertic
             )
           ) : null}
         </div>
+      </div>
+      <div className="remixui_help-container">
+        <CustomTooltip placement="right" tooltipText={<FormattedMessage id="home.helpAndResources" defaultMessage="Help & Resources" />}>
+          <button
+            className="remixui_help-btn"
+            data-id="helpMenuButton"
+            aria-expanded={helpMenuOpen}
+            onClick={() => setHelpMenuOpen((prev) => !prev)}
+          >
+            <i className="fas fa-question-circle" aria-hidden="true"></i>
+          </button>
+        </CustomTooltip>
+        {helpMenuOpen && <HelpMenu onClose={() => setHelpMenuOpen(false)} />}
       </div>
     </div>
   )

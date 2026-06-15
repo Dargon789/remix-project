@@ -148,7 +148,7 @@ export const defaultMCPConfig: MCPConfig = {
   },
   logging: {
     level: 'info',
-    console: true
+    console: false
   }
 }
 

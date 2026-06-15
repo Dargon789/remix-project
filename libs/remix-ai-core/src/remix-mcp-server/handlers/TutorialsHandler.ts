@@ -1,3 +1,4 @@
+import { remixAILogger } from '../../helpers/logger'
 /**
  * Code Analysis Tool Handlers for Remix MCP Server
  */
@@ -109,7 +110,7 @@ export class TutorialsListHandler extends BaseToolHandler {
       this.setCachedConfig(JSON.stringify(response.data));
       return response.data
     } catch (error) {
-      console.error('Failed to load tutorials config:', error);
+      remixAILogger.error('Failed to load tutorials config:', error);
     }
   }
 
@@ -131,7 +132,7 @@ export class TutorialsListHandler extends BaseToolHandler {
 
       return cachedData;
     } catch (error) {
-      console.error('Error reading from localStorage:', error);
+      remixAILogger.error('Error reading from localStorage:', error);
       return null;
     }
   }
@@ -144,7 +145,7 @@ export class TutorialsListHandler extends BaseToolHandler {
       localStorage.setItem(TutorialsListHandler.CACHE_KEY, data);
       localStorage.setItem(TutorialsListHandler.CACHE_EXPIRY_KEY, expiryTime.toString());
     } catch (error) {
-      console.error('Error writing to localStorage:', error);
+      remixAILogger.error('Error writing to localStorage:', error);
     }
   }
 }

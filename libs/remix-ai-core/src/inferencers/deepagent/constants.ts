@@ -11,12 +11,6 @@ export const DEFAULT_TIMEOUT_MS = 300000
 /** Maximum tool executions per request */
 export const MAX_TOOL_EXECUTIONS = 10
 
-/** Default model provider */
-export const DEFAULT_MODEL_PROVIDER = 'mistralai' as const
-
-/** Default model ID */
-export const DEFAULT_MODEL_ID = 'mistral-medium-latest'
-
 /** Supported model providers */
 export const SUPPORTED_PROVIDERS = ['anthropic', 'mistralai', 'ollama'] as const
 

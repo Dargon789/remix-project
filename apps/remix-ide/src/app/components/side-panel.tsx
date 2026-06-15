@@ -19,7 +19,7 @@ export class SidePanel extends AbstractPanel {
   sideelement: any
   loggedState: any
   dispatch: React.Dispatch<any> = () => {}
-  isHidden: boolean
+  isHidden: boolean = false;
 
   constructor() {
     super(sidePanel)
@@ -113,7 +113,7 @@ export class SidePanel extends AbstractPanel {
       this.events.emit('leftSidePanelShown')
     })
     // Force opening
-    this.on('menuicons', 'showContent', (name) => {
+    this.on('menuicons', 'showContent', (name: string) => {
       if (!this.plugins[name]) return
 
       const panelStates = JSON.parse(window.localStorage.getItem('panelStates') || '{}')
@@ -122,7 +122,7 @@ export class SidePanel extends AbstractPanel {
 
       // Only respect hidden state if trying to open the SAME plugin that was active when panel was closed
       // This allows opening panel with a DIFFERENT plugin (like clicking "Learn More" to open helpPlugin)
-      if (this.isHidden && savedIsHidden === true && savedPluginName === name) {
+      if (this.isHidden && savedIsHidden === true) {
         this.showContent(name)
         return
       }
@@ -152,24 +152,24 @@ export class SidePanel extends AbstractPanel {
     })
   }
 
-  focus(name) {
+  focus(name: string) {
     this.emit('focusChanged', name)
     super.focus(name)
   }
 
-  removeView(profile) {
+  removeView(profile: any) {
     if (this.plugins[profile.name] && this.plugins[profile.name].active) this.call('menuicons', 'select', 'filePanel')
     super.removeView(profile)
     this.renderComponent()
   }
 
-  addView(profile, view) {
+  addView(profile: any, view: any) {
     super.addView(profile, view)
     this.call('menuicons', 'linkContent', profile)
     this.renderComponent()
   }
 
-  async pinView (profile) {
+  async pinView (profile: any) {
     if (!this.plugins[profile.name]) {
       console.warn(`[SidePanel] pinView called for unregistered plugin: ${profile.name}`)
       return
@@ -184,7 +184,7 @@ export class SidePanel extends AbstractPanel {
     this.renderComponent()
   }
 
-  async unPinView (profile, view) {
+  async unPinView (profile: any, view: any) {
     const activePlugin = this.currentFocus()
     if (activePlugin === profile.name) throw new Error(`Plugin ${profile.name} already unpinned`)
     this.loggedState = await this.call('pluginStateLogger', 'getPluginState', profile.name)
@@ -202,7 +202,7 @@ export class SidePanel extends AbstractPanel {
    * Display content and update the header
    * @param {String} name The name of the plugin to display
    */
-  async showContent(name) {
+  async showContent(name: string) {
     super.showContent(name)
     this.emit('focusChanged', name)
     // Save active plugin to panelStates

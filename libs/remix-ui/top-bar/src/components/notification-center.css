@@ -12,7 +12,7 @@
 
 .notification-bell-icon {
   position: relative;
-  font-size: 1.3rem;
+  font-size: 1rem;
   cursor: pointer;
   color: var(--bs-body-color, #a2a3bd);
   padding: 4px 8px;

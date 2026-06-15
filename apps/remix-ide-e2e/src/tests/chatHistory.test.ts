@@ -2,12 +2,78 @@
 
 import { NightwatchBrowser } from 'nightwatch'
 import init from '../helpers/init'
+import { releaseAccount } from '../helpers/pool'
 const regExp = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-module.exports = {
+const poolApiKey = process.env.E2E_POOL_API_KEY || ''
+
+
+const test = {
   '@disabled': true,
   before: function (browser: NightwatchBrowser, done: VoidFunction) {
-    init(browser, done, 'http://127.0.0.1:8080', true)
+    if (!poolApiKey) {
+      console.error('[TestPoolLogin] E2E_POOL_API_KEY not set — cannot run pool test')
+      return done()
+    }
+
+    // Pass the pool key + enableLogin in the hash so the auth plugin can use it.
+    // No fake token injection — the real login flow will do the checkout.
+    const url = `http://127.0.0.1:8080#e2e_pool_key=${poolApiKey}&e2e_feature_groups=e2e-unlimited-quota`
+    init(browser, done, url, true)
   },
+
+  after: async function (browser: NightwatchBrowser, done: VoidFunction) {
+    // Read the pool session that the auth plugin stored in sessionStorage
+    try {
+      const result: any = await new Promise((resolve) => {
+        browser.execute(function () {
+          return sessionStorage.getItem('remix_pool_session')
+        }, [], (res: any) => resolve(res))
+      })
+
+      if (result && result.value) {
+        const session = JSON.parse(result.value)
+        console.log(`[TestPoolLogin] Releasing pool session: ${session.sessionId}`)
+        await releaseAccount(session.sessionId)
+      }
+    } catch (err: any) {
+      console.error(`[TestPoolLogin] Release failed: ${err.message}`)
+    }
+    browser.end()
+    done()
+  },
+
+  'Should enable login and show sign-in button': function (browser: NightwatchBrowser) {
+    browser
+      // enableLogin must be set for the Sign In button to appear
+      .execute(function () {
+        localStorage.setItem('enableLogin', 'true')
+      })
+      .refreshPage()
+      .pause(5000)
+      .waitForElementVisible('*[data-id="login-button"]', 15000)
+      .assert.elementPresent('*[data-id="login-button"]')
+  },
+
+  'Should login via the test pool through the real UI flow': function (browser: NightwatchBrowser) {
+    browser
+      // Open the login modal
+      .click('*[data-id="login-button"]')
+      .pause(3000)
+      // The modal should detect the e2e_pool_key and show the "E2E Test Pool" button
+      .waitForElementVisible({
+        selector: '//button[contains(., "E2E Test Pool")]',
+        locateStrategy: 'xpath',
+        timeout: 15000
+      })
+      // Click the test pool login button — this triggers a real pool checkout
+      .click({
+        selector: '//button[contains(., "E2E Test Pool")]',
+        locateStrategy: 'xpath'
+      })
+      // Wait for the login to complete (modal closes, tokens get stored)
+      .pause(5000)
+  },
+
 
   // ==================== GROUP 1: Basic Conversation Operations ====================
 
@@ -178,7 +244,19 @@ module.exports = {
       })
       .pause(500)
       .click('*[data-id="toggle-history-btn"]')
-      .click('*[data-id="toggle-archived-btn"]')
+      .pause(500)
+      // The previous "unarchive" test left the sidebar in archived view
+      // (button text becomes "Show Active"); switch back to the active
+      // view so the newly-created conversation is visible.
+      .execute(function () {
+        const btn = document.querySelector('[data-id="toggle-archived-btn"]') as HTMLElement | null
+        if (btn && btn.textContent && btn.textContent.includes('Show Active')) {
+          btn.click()
+          return true
+        }
+        return false
+      }, [], function () { /* no-op */ })
+      .pause(300)
       .execute(function () {
         const items = document.querySelectorAll('[data-id^="conversation-item-"]')
         return items.length > 0 ? items[0].getAttribute('data-id')?.replace('conversation-item-', '') : null
@@ -885,3 +963,6 @@ module.exports = {
       })
   }
 }
+
+
+module.exports = {}

@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Modal, Button, Alert, Spinner } from 'react-bootstrap';
 import { ethers } from 'ethers';
 import { parseEnsRegistrationError } from '../../utils/ens-utils';
+import { endpointUrls } from '@remix-endpoints-helper';
 
-const REMIX_ENDPOINT_ENS = 'https://quickdapp-ens.api.remix.live';
+const REMIX_ENDPOINT_ENS = endpointUrls.ensService;
 
 interface EnsRegistrationModalProps {
   show: boolean;
@@ -82,7 +83,7 @@ const EnsRegistrationModal: React.FC<EnsRegistrationModalProps> = ({
       <Modal.Header closeButton={!isRegistering}>
         <Modal.Title className="d-flex align-items-center" style={{ fontSize: '1.1rem' }}>
           <i className="fas fa-link me-2"></i>
-          Register ENS Subdomain
+          Register ENS Name
         </Modal.Title>
       </Modal.Header>
 
@@ -146,7 +147,7 @@ const EnsRegistrationModal: React.FC<EnsRegistrationModalProps> = ({
         {isRegistering && (
           <div className="text-center py-2 text-muted">
             <Spinner animation="border" size="sm" className="me-2" />
-            Registering on Arbitrum...
+            Registering ENS name...
           </div>
         )}
       </Modal.Body>

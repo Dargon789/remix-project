@@ -53,6 +53,7 @@ function DeployPortraitView() {
   }, [])
 
   const selectedContract = useMemo(() => {
+    //@ts-ignore
     return widgetState.contracts.contractList[widgetState.selectedContractIndex] || null
   }, [widgetState.contracts.contractList, widgetState.selectedContractIndex])
 
@@ -269,6 +270,22 @@ function DeployPortraitView() {
     window.localStorage.setItem('deploy-verify-contract-checked', JSON.stringify(isChecked))
   }
 
+  function lastWordRemover(networkName: string) : string {
+    const cutUpName = networkName.split(' ');
+    let newNetName = '';
+    const last = cutUpName.length - 1;
+    if (cutUpName[last] === 'network') {
+      const temp = cutUpName.slice(0, last);
+      newNetName = temp.join(' ');
+      return newNetName;
+    }
+    return networkName;
+  }
+
+  function wordRemover(networkName: string) : string {
+    return networkName.includes('vm-') ? networkName.split(' ').slice(2).join(' ') : networkName
+  }
+
   return (
     <>
       <div className="card mx-2" style={{ backgroundColor: 'var(--custom-onsurface-layer-1)', '--theme-text-color': themeQuality === 'dark' ? 'white' : 'black' } as React.CSSProperties}>
@@ -276,11 +293,16 @@ function DeployPortraitView() {
           trackMatomoEvent?.({ category: 'udapp', action: 'deployCardToggle', name: isExpanded ? 'collapsed' : 'expanded', isClick: true })
           setIsExpanded(!isExpanded)
         }} style={{ cursor: 'pointer' }}>
-          <div className='d-flex align-items-center gap-2'>
-            <h6 className="my-auto" style={{ color: themeQuality === 'dark' ? 'white' : 'black', margin: 0 }}>
+          <div className='d-flex align-items-center gap-2' data-id="deploy-widget-header">
+            <h6 className="my-auto" style={{ color: themeQuality.trim() === 'dark' ? 'white' : 'black', margin: 0 }}>
               <FormattedMessage id="udapp.deploy" defaultMessage="Deploy" />
             </h6>
-            <span className="small text-secondary">{ widgetState.networkDetected }</span>
+            <CustomTooltip
+              placement="top"
+              tooltipText={widgetState.networkDetected}
+            >
+              <span className="badge rounded-pill text-bg-info text-light text-truncate" style={{ color: themeQuality.trim() === 'dark' ? '#000' : 'white', maxWidth: '170px' }}>{ wordRemover(lastWordRemover(widgetState.networkDetected)) }</span>
+            </CustomTooltip>
           </div>
           <i className={`fas fa-chevron-${isExpanded ? 'down' : 'right'}`} style={{ color: 'var(--bs-tertiary-color)' }}></i>
         </div>
@@ -432,6 +454,7 @@ function DeployPortraitView() {
               </Dropdown>
               <ContractKebabMenu
                 show={isContractMenuOpen && contractKebabIconRef.current !== null}
+                //@ts-ignore
                 target={contractKebabIconRef.current}
                 onHide={() => setIsContractMenuOpen(false)}
                 onCopyABI={getABI}
@@ -541,7 +564,7 @@ function DeployPortraitView() {
               selectedContract?.isUpgradeable && selectedContract?.deployOptions && selectedContract.deployOptions.inputs && selectedContract.deployOptions.inputs.length > 0 && deployWithProxy && (
                 <div className='border-top mt-3'>
                   {
-                    selectedContract.deployOptions.inputs.map((input, index) => {
+                    selectedContract.deployOptions.inputs.map((input: any, index: number) => {
                       const isExpanded = expandedProxyInputs.has(index)
                       const currentValue = proxyInputValues[index] || ''
                       return (
@@ -621,7 +644,7 @@ function DeployPortraitView() {
               constructorInterface?.type === 'constructor' && constructorInterface?.inputs.length > 0 && (
                 <div className='border-top pb-3'>
                   {
-                    constructorInterface?.inputs.map((input, index) => {
+                    constructorInterface?.inputs.map((input: any, index: any) => {
                       const isExpanded = expandedInputs.has(index)
                       const currentValue = inputValues[index] || ''
                       return (

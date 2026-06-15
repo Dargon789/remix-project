@@ -1,6 +1,6 @@
 /* eslint-disable @nrwl/nx/enforce-module-boundaries */
 import { useState, useEffect, useCallback } from 'react'
-import { ChatHistoryStorageManager } from '@remix/remix-ai-core'
+import { ChatHistoryStorageManager, remixAILogger } from '@remix/remix-ai-core'
 import { ConversationMetadata, ChatMessage } from '../lib/types'
 
 interface UseChatHistoryProps {
@@ -68,7 +68,7 @@ export const useChatHistory = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load conversations'
       setError(errorMessage)
-      console.error('Failed to load conversations:', err)
+      remixAILogger.error('Failed to load conversations:', err)
     } finally {
       setLoading(false)
     }
@@ -91,7 +91,7 @@ export const useChatHistory = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create conversation'
       setError(errorMessage)
-      console.error('Failed to create conversation:', err)
+      remixAILogger.error('Failed to create conversation:', err)
       return null
     } finally {
       setLoading(false)
@@ -119,7 +119,7 @@ export const useChatHistory = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load conversation'
       setError(errorMessage)
-      console.error('Failed to load conversation:', err)
+      remixAILogger.error('Failed to load conversation:', err)
     } finally {
       setLoading(false)
     }
@@ -146,7 +146,7 @@ export const useChatHistory = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete conversation'
       setError(errorMessage)
-      console.error('Failed to delete conversation:', err)
+      remixAILogger.error('Failed to delete conversation:', err)
     } finally {
       setLoading(false)
     }
@@ -176,7 +176,7 @@ export const useChatHistory = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to archive conversation'
       setError(errorMessage)
-      console.error('Failed to archive conversation:', err)
+      remixAILogger.error('Failed to archive conversation:', err)
     } finally {
       setLoading(false)
     }
@@ -206,7 +206,7 @@ export const useChatHistory = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to add message'
       setError(errorMessage)
-      console.error('Failed to add message:', err)
+      remixAILogger.error('Failed to add message:', err)
     }
   }, [storageManager, currentConversationId, loadConversations])
 
@@ -231,7 +231,7 @@ export const useChatHistory = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update sentiment'
       setError(errorMessage)
-      console.error('Failed to update message sentiment:', err)
+      remixAILogger.error('Failed to update message sentiment:', err)
     }
   }, [storageManager])
 
@@ -244,7 +244,7 @@ export const useChatHistory = ({
     try {
       return await storageManager.searchConversations(query)
     } catch (err) {
-      console.error('Failed to search conversations:', err)
+      remixAILogger.error('Failed to search conversations:', err)
       return []
     }
   }, [storageManager])
@@ -264,7 +264,7 @@ export const useChatHistory = ({
 
       return archivedIds
     } catch (err) {
-      console.error('Failed to auto-archive:', err)
+      remixAILogger.error('Failed to auto-archive:', err)
       return []
     }
   }, [storageManager, loadConversations])

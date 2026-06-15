@@ -1,3 +1,4 @@
+import { remixAILogger } from '../helpers/logger'
 // security checks
 import * as fs from 'fs';
 
@@ -124,7 +125,7 @@ export class SecurityAgent {
     try {
       this.processFile(file);
     } catch (error) {
-      console.error('Error checking for vulnerabilities after compilation: ', error);
+      remixAILogger.error('Error checking for vulnerabilities after compilation: ', error);
     }
 
     // check for security vulnerabilities
@@ -174,7 +175,7 @@ export class SecurityAgent {
       }
 
     } catch (error) {
-      console.error('Error processing file: ', error);
+      remixAILogger.error('Error processing file: ', error);
     }
   }
 

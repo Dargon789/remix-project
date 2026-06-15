@@ -22,7 +22,13 @@ import { NightwatchBrowser } from 'nightwatch'
 
 require('dotenv').config()
 
-const API_URL = process.env.REMIX_API_URL || 'https://auth.api.remix.live'
+// IMPORTANT: keep in sync with the base the browser passes to
+// `initEndpoints(...)` in apps/remix-ide/src/app/components/preload.tsx.
+// While the app is hard-pinned to staging there, this Node-side helper
+// must point at the same host or verify-manifest returns 404
+// (workspace lives on staging, but we'd be querying prod).
+// TODO: drop the staging default once the app stops hard-coding it.
+const API_URL = process.env.REMIX_API_URL || 'https://api.remix.live'
 
 export interface SyncVerifyResult {
   ok: boolean
