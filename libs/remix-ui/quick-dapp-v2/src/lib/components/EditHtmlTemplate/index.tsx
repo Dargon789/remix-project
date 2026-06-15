@@ -491,7 +491,7 @@ window.addEventListener('unhandledrejection', function(e) {
     try {
       const srcFiles = await plugin.call('fileManager', 'readdir', 'src');
       if (srcFiles) {
-        fileList = Object.keys(srcFiles).map(f => f.replace(/^src\//, 'src/'));
+        fileList = Object.keys(srcFiles);
       }
     } catch (e) {
       console.warn('[QuickDapp] Could not read DApp files:', e);

@@ -138,7 +138,7 @@ const BaseAppWizard: React.FC = () => {
     }
 
     if (!input.startsWith('<')) {
-      const stripped = input.replace(/<[^>]*>/g, '').trim();
+      const stripped = input.replace(/[<>]/g, '').trim();
       if (stripped && /^[\w.:-]+$/.test(stripped)) {
         return stripped;
       }
