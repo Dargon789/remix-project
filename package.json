@@ -265,7 +265,7 @@
     "siwe": "^3.0.0",
     "snarkjs": "^0.7.0",
     "sol2uml": "^2.5.24",
-    "solhint": "^6.2.0",
+    "solhint": "^3.4.1",
     "solidity-comments-extractor": "^0.0.8",
     "sonner": "^2.0.7",
     "string-similarity": "^4.0.4",
