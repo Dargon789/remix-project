@@ -1,45 +1,101 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useContext } from 'react'
 import { useAuth } from '../../../app/src/lib/remix-app/context/auth-context'
+import { AppContext } from '../../../app/src/lib/remix-app/context/context'
 import { LoginModal } from './modals/login-modal'
+import { startSignInFlow } from './start-sign-in'
 import { UserBadge } from './user-badge'
 import { UserMenuCompact } from './user-menu-compact'
 import { UserMenuFull } from './user-menu-full'
 import { AuthProviderType } from '@remix-ui/app'
+import { QueryParams } from '@remix-project/remix-lib'
 
 interface LoginButtonProps {
   className?: string
   showCredits?: boolean
   variant?: 'button' | 'badge' | 'compact'
+  signInDataId?: string
   plugin?: any
+  cloneGitRepository?: () => void
+  publishToGist?: () => void
 }
 
 export const LoginButton: React.FC<LoginButtonProps> = ({
   className = '',
   showCredits = true,
   variant = 'button',
-  plugin
+  signInDataId = 'login-button',
+  plugin,
+  cloneGitRepository,
+  publishToGist
 }) => {
+  const appContext = useContext(AppContext)
   const { isAuthenticated, user, credits, logout, login } = useAuth()
   const [showModal, setShowModal] = useState(false)
+  const [themes, setThemes] = useState<Array<{ name: string; quality: string }>>([])
+  const [currentTheme, setCurrentTheme] = useState<string>('')
+  const signInButtonMode = appContext?.appConfig?.['auth.sign_in_button_mode'] || 'hidden'
+  const isDesktopApp = typeof window !== 'undefined' && (window as any).electronAPI !== undefined
+
+  useEffect(() => {
+    if (plugin && typeof plugin.call === 'function') {
+      (async () => {
+        try {
+          const themeModule = await plugin.call('theme', 'getThemes')
+          if (themeModule) {
+            setThemes(themeModule)
+          }
+          const active = await plugin.call('theme', 'currentTheme')
+          if (active) {
+            setCurrentTheme(active.name)
+          }
+        } catch (err) {
+          console.log('[LoginButton] Theme module not available:', err)
+        }
+      })()
+    }
+  }, [plugin])
+
+  useEffect(() => {
+    if (isDesktopApp || isAuthenticated) return
+
+    const params = new QueryParams().get() as Record<string, string>
+    if (params.desktop_auth) {
+      setShowModal(true)
+    }
+  }, [isDesktopApp, isAuthenticated])
+
+  const handleSignIn = async () => {
+    await startSignInFlow(plugin, () => setShowModal(true), 'Sign In')
+  }
+
+  const pollForCurrentTheme = async () => {
+    const active = await plugin.call('theme', 'currentTheme')
+    if (active) {
+      setCurrentTheme(active.name)
+    }
+  }
 
   const handleLogout = async () => {
     await logout()
+    if (plugin && typeof plugin.call === 'function') {
+      plugin.call('matomo', 'trackEvent', 'auth', 'logout', 'Sign Out', undefined).catch(() => {})
+    }
   }
 
   const handleManageAccounts = () => {
-    // Open Settings plugin via plugin manager (no window events)
+    // Open the Settings tab on the account section. The legacy `account`
+    // overlay plugin was removed when Plan Manager became the sole billing
+    // surface; profile/credits/connected-accounts still live in Settings.
     if (plugin && typeof plugin.call === 'function') {
-      (async () => {
+      plugin.call('matomo', 'trackEvent', 'userMenu', 'manageAccounts', 'Manage Accounts', undefined).catch(() => {})
+      ;(async () => {
         try {
           const isActive = await plugin.call('manager', 'isActive', 'settings')
           if (!isActive) await plugin.call('manager', 'activatePlugin', 'settings')
           await plugin.call('tabs', 'focus', 'settings')
-          // Focus the Account section of settings via plugin API
-          await plugin.call('settings', 'showSection', 'account')
-          // TODO: If settings plugin exposes API to select a specific section,
-          // call it here to navigate to 'account-authentication'.
+          try { await plugin.call('settings', 'showSection', 'account') } catch { /* optional API */ }
         } catch (err) {
-          console.error('[LoginButton] Failed to open Settings via plugin:', err)
+          console.error('[LoginButton] Failed to open Settings:', err)
         }
       })()
     }
@@ -57,7 +113,8 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
       'apple': 'Apple',
       'discord': 'Discord',
       'coinbase': 'Coinbase Wallet',
-      'siwe': 'Ethereum'
+      'siwe': 'Ethereum',
+      'base': 'Base'
     }
     return providerNames[provider] || provider
   }
@@ -70,17 +127,36 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
     return user.sub
   }
 
+  const handleThemeChange = async (themeName: string) => {
+    if (plugin && typeof plugin.call === 'function') {
+      try {
+        await plugin.call('theme', 'switchTheme', themeName)
+        setCurrentTheme(themeName)
+      } catch (err) {
+        console.error('[LoginButton] Failed to switch theme:', err)
+      }
+    }
+  }
+
   if (!isAuthenticated) {
+    if (signInButtonMode === 'hidden') return null
+
     return (
       <>
         <button
           className={`btn btn-sm btn-primary ${className}`}
-          onClick={() => setShowModal(true)}
-          data-id="login-button"
+          style={{ whiteSpace: 'nowrap' }}
+          onClick={handleSignIn}
+          data-id={signInDataId}
         >
-          Sign In
+          <span className="d-inline-flex align-items-center">
+            <span className="me-1">Sign In</span>
+            {signInButtonMode === 'beta' && (
+              <span className="ms-2 user-menu-compact-beta-tag">BETA</span>
+            )}
+          </span>
         </button>
-        {showModal && <LoginModal onClose={() => setShowModal(false)} />}
+        {showModal && <LoginModal onClose={() => setShowModal(false)} plugin={plugin} />}
       </>
     )
   }
@@ -88,7 +164,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
   if (variant === 'badge') {
     return (
       <UserBadge
-        user={user}
+        user={user!}
         credits={credits}
         showCredits={showCredits}
         className={className}
@@ -103,7 +179,7 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
   if (variant === 'compact') {
     return (
       <UserMenuCompact
-        user={user}
+        user={user!}
         credits={credits}
         showCredits={showCredits}
         className={className}
@@ -111,13 +187,20 @@ export const LoginButton: React.FC<LoginButtonProps> = ({
         onManageAccounts={handleManageAccounts}
         getProviderDisplayName={getProviderDisplayName}
         getUserDisplayName={getUserDisplayName}
+        themes={themes}
+        currentTheme={currentTheme}
+        onThemeChange={handleThemeChange}
+        plugin={plugin}
+        cloneGitRepository={cloneGitRepository}
+        publishToGist={publishToGist}
+        pollForCurrentTheme={pollForCurrentTheme}
       />
     )
   }
 
   return (
     <UserMenuFull
-      user={user}
+      user={user!}
       credits={credits}
       showCredits={showCredits}
       className={className}

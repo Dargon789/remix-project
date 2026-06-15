@@ -3,7 +3,7 @@ import { FormattedMessage, useIntl } from 'react-intl'
 import { diffLines } from 'diff'
 import { isArray } from 'lodash'
 import Editor, { DiffEditor, loader, Monaco } from '@monaco-editor/react'
-import { AppContext, AppModal } from '@remix-ui/app'
+import { AppContext, AppModal, useAuth } from '@remix-ui/app'
 import { MatomoEvent, EditorEvent, AIEvent } from '@remix-api'
 //@ts-ignore
 import { TrackingContext } from '@remix-ide/tracking'
@@ -33,6 +33,8 @@ import type { IPosition, IRange } from 'monaco-editor'
 import { GenerationParams } from '@remix/remix-ai-core';
 import { RemixInLineCompletionProvider } from './providers/inlineCompletionProvider'
 import { RemixTSCompletionProvider } from './providers/tsCompletionProvider'
+import { TooltipPopOver, openContextualTooltip } from './tooltipPopOver'
+
 const _paq = (window._paq = window._paq || []) // eslint-disable-line
 
 // Key for localStorage
@@ -128,6 +130,16 @@ export type PluginType = {
   call: (plugin: string, method: string, arg1?: any, arg2?: any, arg3?: any, arg4?: any) => any
 }
 
+export type DiffSession = {
+  id: string
+  originalPath: string
+  modifiedPath: string
+  originalContent: string
+  modifiedContent: string
+  filePath: string
+  createdAt: number
+}
+
 export type EditorAPIType = {
   findMatches: (uri: string, value: string) => any
   getFontSize: () => number
@@ -141,6 +153,13 @@ export type EditorAPIType = {
   clearErrorMarkers: (sources: string[] | { [fileName: string]: any }, from: string) => void
   getPositionAt: (offset: number) => monacoTypes.IPosition
   showCustomDiff: (file: string, content: string) => Promise<void>
+  clearAllBreakpoints: () => void
+  hasUnacceptedChanges: () => boolean
+  acceptDiff: () => Promise<boolean>
+  discardDiff: () => Promise<boolean>
+  getDiffSessions: () => Promise<DiffSession[]>
+  setActiveDiff: (diffId: string) => Promise<boolean>
+  closeDiffSession: (diffId: string) => Promise<boolean>
 }
 
 /* eslint-disable-next-line */
@@ -170,13 +189,18 @@ export const EditorUI = (props: EditorUIProps) => {
   const trackMatomoEvent = <T extends MatomoEvent = EditorEvent>(event: T) => {
     baseTrackEvent?.<T>(event)
   }
+  const { features } = useAuth()
+  const hasContextualEditorFeature = features['ai:contextual-editor']?.is_enabled === true
   const changedTypeMap = useRef<ChangeTypeMap>({})
   const pendingCustomDiff = useRef({})
+  const currentBreakpointsRef = useRef<Record<string, Record<number, any>>>({})
   const [, setCurrentBreakpoints] = useState({})
   const [isSplit, setIsSplit] = useState(true)
   const [currentDiffFile, setCurrentDiffFile] = useState(props.currentDiffFile || '')
   const [decoratorListCollection, setDecoratorListCollection] = useState<Record<string, monacoTypes.editor.IEditorDecorationsCollection>>({})
   const [disposedWidgets, setDisposedWidgets] = useState<Record<string, Record<string, monacoTypes.IRange[]>>>({})
+  const [diffSessions, setDiffSessions] = useState<DiffSession[]>([])
+  const [activeDiffId, setActiveDiffId] = useState<string | null>(null)
   const defaultEditorValue = `
   \t\t\t\t\t\t\t ____    _____   __  __   ___  __  __   ___   ____    _____
   \t\t\t\t\t\t\t|  _ \\  | ____| |  \\/  | |_ _| \\ \\/ /  |_ _| |  _ \\  | ____|
@@ -194,8 +218,8 @@ export const EditorUI = (props: EditorUIProps) => {
   \t\t\t\t\t\t\t\t${intl.formatMessage({ id: 'editor.importantLinks.text1' })}: https://remix.live/\n
   \t\t\t\t\t\t\t\t${intl.formatMessage({ id: 'editor.importantLinks.text2' })}: https://remix-ide.readthedocs.io/en/latest/\n
   \t\t\t\t\t\t\t\tGithub: https://github.com/ethereum/remix-project\n
-  \t\t\t\t\t\t\t\tDiscord: https://discord.gg/qhpCQGWkmf\n
-  \t\t\t\t\t\t\t\tMedium: https://medium.com/remix-ide\n
+  \t\t\t\t\t\t\t\tDiscord: https://discord.gg/MzhfCGstNA\n
+  \t\t\t\t\t\t\t\tSubstack: https://ethereumremix.substack.com\n
   \t\t\t\t\t\t\t\tX: https://x.com/ethereumremix\n
   `
   const pasteCodeRef = useRef(false)
@@ -208,6 +232,9 @@ export const EditorUI = (props: EditorUIProps) => {
   const currentUrlRef = useRef('')
   const currentDecoratorListCollectionRef = useRef({})
   const inlineCompletionProviderRef = useRef<RemixInLineCompletionProvider|null>(null)
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastHoverPositionRef = useRef<monacoTypes.IPosition | null>(null)
+  const [tooltipData, setTooltipData] = useState<{keyword: string, position: {x: number, y: number}, contextLines?: string, isSelectedText?: boolean} | null>(null)
 
   // const currentDecorations = useRef({ sourceAnnotationsPerFile: {}, markerPerFile: {} }) // decorations that are currently in use by the editor
   // const registeredDecorations = useRef({}) // registered decorations
@@ -337,7 +364,7 @@ export const EditorUI = (props: EditorUIProps) => {
       ],
       colors: {
         // see https://code.visualstudio.com/api/references/theme-color for more settings
-        'editor.background': lightColor,
+        'editor.background': secondaryColor,
         'editorSuggestWidget.background': lightColor,
         'editorSuggestWidget.selectedBackground': secondaryColor,
         'editorSuggestWidget.selectedForeground': textColor,
@@ -345,7 +372,7 @@ export const EditorUI = (props: EditorUIProps) => {
         'editorSuggestWidget.focusHighlightForeground': infoColor,
         'editor.lineHighlightBorder': textbackground,
         'editor.lineHighlightBackground': textbackground === darkColor ? lightColor : secondaryColor,
-        'editorGutter.background': lightColor,
+        'editorGutter.background': secondaryColor,
         //'editor.selectionHighlightBackground': secondaryColor,
         'minimap.background': lightColor,
         'menu.foreground': textColor,
@@ -382,6 +409,14 @@ export const EditorUI = (props: EditorUIProps) => {
       if (file + '-ai' !== currentDiffFile) {
         removeAllWidgets()
       }
+      // Clear tooltip when switching files
+      setTooltipData(null)
+      // Clear any pending hover timeouts
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current)
+        hoverTimeoutRef.current = null
+      }
+      lastHoverPositionRef.current = null
     })
   }, [])
 
@@ -407,15 +442,16 @@ export const EditorUI = (props: EditorUIProps) => {
    * currentFileRef.current is the previous file, props.currentFile is the new file.
    */
   useEffect(() => {
+    // Process pending diffs for the new file (works even on first file open when currentFileRef is undefined)
+    if (props.currentFile && pendingCustomDiff.current[props.currentFile]) {
+      const pendingDiff = pendingCustomDiff.current[props.currentFile]
+
+      showCustomDiff(pendingDiff, props.currentFile, editorRef.current, monacoRef.current, addDecoratorCollection, addAcceptDeclineWidget, setDecoratorListCollection, acceptHandler, rejectHandler, acceptAllHandler, rejectAllHandler, setCurrentDiffFile, changedTypeMap.current)
+      delete pendingCustomDiff.current[props.currentFile]
+    }
+
     if (currentFileRef.current) {
       if (props.currentFile !== currentFileRef.current) {
-
-        // add the widgets that are still pending to be applied
-        const pendingDiff = pendingCustomDiff.current[props.currentFile]
-        if (pendingDiff) {
-          showCustomDiff(pendingDiff, props.currentFile, editorRef.current, monacoRef.current, addDecoratorCollection, addAcceptDeclineWidget, setDecoratorListCollection, acceptHandler, rejectHandler, acceptAllHandler, rejectAllHandler, setCurrentDiffFile, changedTypeMap.current)
-          delete pendingCustomDiff.current[props.currentFile]
-        }
         // restore the widgets if they exist to the new file and were already applied
         const restoredWidgets = disposedWidgets[props.currentFile]
         if (restoredWidgets) {
@@ -446,6 +482,15 @@ export const EditorUI = (props: EditorUIProps) => {
 
   useEffect(() => {
     if (!(editorRef.current || diffEditorRef.current ) || !props.currentFile) return
+
+    // Clear tooltip when file changes
+    setTooltipData(null)
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    lastHoverPositionRef.current = null
+
     currentFileRef.current = props.currentFile
     props.plugin.call('fileManager', 'getUrlFromPath', currentFileRef.current).then((url) => (currentUrlRef.current = url.file))
 
@@ -482,6 +527,58 @@ export const EditorUI = (props: EditorUIProps) => {
       monacoRef.current.editor.setModelLanguage(file.model, 'markdown')
     }
   }, [props.currentFile, props.isDiff])
+
+  // Load and sync diff sessions
+  useEffect(() => {
+    if (props.isDiff) {
+      const loadDiffSessions = async () => {
+        try {
+          const sessions = await props.editorAPI.getDiffSessions()
+          setDiffSessions(sessions)
+          if (sessions.length > 0) {
+            // Set the first session as active if no active session is set
+            if (!activeDiffId) {
+              setActiveDiffId(sessions[0].id)
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load diff sessions:', error)
+        }
+      }
+      loadDiffSessions()
+    }
+  }, [props.isDiff])
+
+  const handleTabSwitch = async (diffId: string) => {
+    try {
+      const success = await props.editorAPI.setActiveDiff(diffId)
+      if (success) {
+        setActiveDiffId(diffId)
+      }
+    } catch (error) {
+      console.error('Failed to switch diff tab:', error)
+    }
+  }
+
+  const handleCloseDiff = async (diffId: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    try {
+      const success = await props.editorAPI.closeDiffSession(diffId)
+      if (success) {
+        const updatedSessions = diffSessions.filter(session => session.id !== diffId)
+        setDiffSessions(updatedSessions)
+        if (activeDiffId === diffId) {
+          if (updatedSessions.length > 0) {
+            setActiveDiffId(updatedSessions[0].id)
+          } else {
+            setActiveDiffId(null)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to close diff session:', error)
+    }
+  }
 
   const convertToMonacoDecoration = (decoration: lineText | sourceAnnotation | sourceMarker, typeOfDecoration: string) => {
     if (typeOfDecoration === 'sourceAnnotationsPerFile') {
@@ -565,6 +662,22 @@ export const EditorUI = (props: EditorUIProps) => {
       currentDecorations: model.deltaDecorations(currentDecorations, decorations),
       registeredDecorations: newRegisteredDecorations,
     }
+  }
+
+  props.editorAPI.hasUnacceptedChanges = () => {
+    return false
+    /* keeping the previous logic, the current logic shows a diff editor and doesn't pollute the editor content.
+    let found = false
+    if (disposedWidgets && Object.keys(disposedWidgets).length > 0) {
+      found = !!Object.keys(disposedWidgets).find(file => {
+        const widgets = disposedWidgets[file]
+        if (widgets && Object.keys(widgets).length > 0) {
+          return true
+        }
+      })
+    }
+    return !!found
+    */
   }
 
   props.editorAPI.keepDecorationsFor = (filePath: string, plugin: string, typeOfDecoration: string, registeredDecorations: any, currentDecorations: any) => {
@@ -738,20 +851,88 @@ export const EditorUI = (props: EditorUIProps) => {
           )
           prevState[currentFile][position.lineNumber] = decorationIds[0]
         }
+        currentBreakpointsRef.current = { ...prevState }
         return prevState
       })
     }
+  }
+
+  props.editorAPI.clearAllBreakpoints = () => {
+    const breakpoints = currentBreakpointsRef.current
+
+    // Clear decorations by finding and removing all breakpoint decorations from all models
+    if (monacoRef.current) {
+      const allModels = monacoRef.current.editor.getModels()
+
+      // Clear breakpoint decorations from ALL models
+      for (const model of allModels) {
+        // Get all decorations from this model
+        const allDecorations = model.getAllDecorations()
+
+        // Find decorations with the breakpoint glyph class
+        const breakpointDecorations = allDecorations.filter(decoration =>
+          decoration.options.glyphMarginClassName &&
+          decoration.options.glyphMarginClassName.includes('fa-circle')
+        )
+
+        if (breakpointDecorations.length > 0) {
+          // Remove the breakpoint decorations
+          const decorationIds = breakpointDecorations.map(d => d.id)
+          model.deltaDecorations(decorationIds, [])
+        }
+      }
+
+      // Emit clear events for each breakpoint
+      for (const file in breakpoints) {
+        if (breakpoints[file]) {
+          for (const line in breakpoints[file]) {
+            props.events.onBreakPointCleared(file, parseInt(line))
+          }
+        }
+      }
+    }
+
+    // Reset breakpoint tracking
+    currentBreakpointsRef.current = {}
+    setCurrentBreakpoints({})
   }
 
   props.editorAPI.showCustomDiff = async (file: string, content: string) => {
     const currentContent = await props.plugin.call('fileManager', 'readFile', file)
     const diff = diffLines(currentContent, content)
     const changes: ChangeType[] = extractLineNumberRangesWithText(diff)
-    if (props.currentFile === file) {
+
+    // Use fileManager.getCurrentFile() instead of props.currentFile (React prop lags behind)
+    let activeFile: string | undefined
+    try {
+      activeFile = await props.plugin.call('fileManager', 'getCurrentFile')
+    } catch (e) { /* ignore */ }
+
+    if (activeFile === file) {
       showCustomDiff(changes, file, editorRef.current, monacoRef.current, addDecoratorCollection, addAcceptDeclineWidget, setDecoratorListCollection, acceptHandler, rejectHandler, acceptAllHandler, rejectAllHandler, setCurrentDiffFile, changedTypeMap.current)
     } else {
       pendingCustomDiff.current[file] = changes
     }
+  }
+
+  props.editorAPI.acceptDiff = async (): Promise<boolean> => {
+    return await props.plugin.call('editor', 'acceptDiff')
+  }
+
+  props.editorAPI.discardDiff = async (): Promise<boolean> => {
+    return await props.plugin.call('editor', 'discardDiff')
+  }
+
+  props.editorAPI.getDiffSessions = async (): Promise<DiffSession[]> => {
+    return await props.plugin.call('editor', 'getDiffSessions')
+  }
+
+  props.editorAPI.setActiveDiff = async (diffId: string): Promise<boolean> => {
+    return await props.plugin.call('editor', 'setActiveDiff', diffId)
+  }
+
+  props.editorAPI.closeDiffSession = async (diffId: string): Promise<boolean> => {
+    return await props.plugin.call('editor', 'closeDiffSession', diffId)
   }
 
   function removeAllWidgets() {
@@ -794,16 +975,73 @@ export const EditorUI = (props: EditorUIProps) => {
     })
 
     editor.onDidChangeModelContent((e) => {
-      if (inlineCompletionProviderRef.current && inlineCompletionProviderRef.current.currentCompletion) {
+      if (inlineCompletionProviderRef.current) {
         const changes = e.changes;
-        // Check if the change matches the current completion
-        if (changes.some(change => change.text === inlineCompletionProviderRef.current.currentCompletion.item.insertText)) {
-          inlineCompletionProviderRef.current.currentCompletion.onAccepted()
-          inlineCompletionProviderRef.current.currentCompletion.accepted = true
-          trackMatomoEvent<AIEvent>({ category: 'ai', action: 'remixAI', name: 'Copilot_Completion_Accepted', isClick: true })
-        }
+
+        // Check all active sessions for matches
+        inlineCompletionProviderRef.current.sessionMetadata.forEach((metadata, sessionId) => {
+          if (!metadata.item || !metadata.item.insertText) {
+            return;
+          }
+
+          if (!metadata.accepted) {
+            const isMatch = changes.some(change => change.text === metadata.item.insertText);
+
+            if (isMatch) {
+              metadata.onAccepted();
+              trackMatomoEvent<AIEvent>({ category: 'ai', action: 'remixAI', name: 'Copilot_Completion_Accepted', isClick: true })
+            }
+          }
+        });
       }
     });
+
+    // Add hover detection with 3-second delay
+    editor.onMouseMove((e) => {
+      const position = e.target?.position
+      if (position) {
+        // Check if position changed
+        const positionChanged = !lastHoverPositionRef.current ||
+          lastHoverPositionRef.current.lineNumber !== position.lineNumber ||
+          lastHoverPositionRef.current.column !== position.column
+
+        if (positionChanged) {
+          if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current)
+            hoverTimeoutRef.current = null
+          }
+          lastHoverPositionRef.current = position
+
+          // Start new timeout for this position
+          hoverTimeoutRef.current = setTimeout(() => {
+            openContextualTooltip(position, editorRef, monacoRef, setTooltipData, trackMatomoEvent)
+          }, 2500) // 2.5 seconds
+        }
+      }
+    })
+
+    // Clear timeout when mouse leaves the editor (with delay to allow tooltip interaction)
+    editor.onMouseLeave(() => {
+      // Add a longer delay to allow moving mouse to tooltip
+      setTimeout(() => {
+        // Check if mouse is over tooltip before closing
+        const tooltipElement = document.querySelector('.web3-tooltip-popup')
+        const isMouseOverTooltip = tooltipElement && tooltipElement.matches(':hover')
+
+        // Check if there's currently selected text (don't close tooltip for selected text)
+        const selection = editor.getSelection()
+        const hasSelectedText = selection && !selection.isEmpty()
+
+        if (!isMouseOverTooltip && !hasSelectedText) {
+          if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current)
+            hoverTimeoutRef.current = null
+          }
+          lastHoverPositionRef.current = null
+          closeTooltip()
+        }
+      }, 300) // Longer delay to allow reaching tooltip
+    })
 
     editor.onDidPaste(async (e) => {
       const shouldShowWarning = localStorage.getItem(HIDE_PASTE_WARNING_KEY) !== 'true';
@@ -1219,6 +1457,27 @@ export const EditorUI = (props: EditorUIProps) => {
     document.body.appendChild(loadedElement)
   }
 
+  const closeTooltip = () => {
+    setTooltipData(null)
+  }
+
+  const handleClearSelection = () => {
+    // Clear the selection in the editor to prevent popover from re-appearing
+    if (editorRef.current) {
+      const selection = editorRef.current.getSelection()
+      if (selection && !selection.isEmpty()) {
+        // Move cursor to end of selection and clear selection
+        const endPosition = selection.getEndPosition()
+        editorRef.current.setSelection({
+          startLineNumber: endPosition.lineNumber,
+          startColumn: endPosition.column,
+          endLineNumber: endPosition.lineNumber,
+          endColumn: endPosition.column
+        })
+      }
+    }
+  }
+
   function handleEditorWillMount(monaco) {
 
     monacoRef.current = monaco
@@ -1466,6 +1725,11 @@ export const EditorUI = (props: EditorUIProps) => {
     decoratorList.clear()
     setDecoratorListCollection(decoratorListCollection => {
       const { [widgetId]: _, ...rest } = decoratorListCollection
+      // If all widgets processed individually, emit accepted event
+      if (Object.keys(rest).length === 0) {
+
+        ;(props.plugin as any).emit('customDiffAccepted', currentDiffFile)
+      }
       return rest
     })
   }
@@ -1505,6 +1769,11 @@ export const EditorUI = (props: EditorUIProps) => {
     decoratorList.clear()
     setDecoratorListCollection(decoratorListCollection => {
       const { [widgetId]: _, ...rest } = decoratorListCollection
+      // If all widgets processed individually, emit rejected event
+      if (Object.keys(rest).length === 0) {
+
+        ;(props.plugin as any).emit('customDiffRejected', currentDiffFile)
+      }
       return rest
     })
   }
@@ -1520,6 +1789,9 @@ export const EditorUI = (props: EditorUIProps) => {
         getId: () => widgetId
       })
     })
+
+    // Notify HITL that all changes were accepted (no-op if nobody listens)
+    ;(props.plugin as any).emit('customDiffAccepted', currentDiffFile)
   }
 
   function rejectAllHandler() {
@@ -1533,6 +1805,10 @@ export const EditorUI = (props: EditorUIProps) => {
         getId: () => widgetId
       })
     })
+
+    // Notify HITL that all changes were rejected (no-op if nobody listens)
+
+    ;(props.plugin as any).emit('customDiffRejected', currentDiffFile)
   }
 
   function addDecoratorCollection (widgetId: string, ranges: monacoTypes.IRange[]): monacoTypes.editor.IEditorDecorationsCollection {
@@ -1598,6 +1874,49 @@ export const EditorUI = (props: EditorUIProps) => {
 
   return (
     <div className="w-100 h-100 d-flex flex-column-reverse">
+      {props.isDiff && (
+        <>
+          {/* Action Buttons */}
+          <div className="d-flex justify-content-center gap-2 p-2 border-bottom">
+            <button
+              className="btn btn-success btn-sm"
+              onClick={async () => {
+                const result = await props.editorAPI.acceptDiff()
+                if (result) {
+                  // Refresh diff sessions after accepting
+                  const sessions = await props.editorAPI.getDiffSessions()
+                  setDiffSessions(sessions)
+                  if (sessions.length === 0) {
+                    setActiveDiffId(null)
+                  }
+                }
+              }}
+              title="Accept all changes and close diff view"
+              disabled={diffSessions.length === 0}
+            >
+              Accept All Changes
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={async () => {
+                const result = await props.editorAPI.discardDiff()
+                if (result) {
+                  // Refresh diff sessions after discarding
+                  const sessions = await props.editorAPI.getDiffSessions()
+                  setDiffSessions(sessions)
+                  if (sessions.length === 0) {
+                    setActiveDiffId(null)
+                  }
+                }
+              }}
+              title="Discard all changes and close diff view"
+              disabled={diffSessions.length === 0}
+            >
+              Discard Changes
+            </button>
+          </div>
+        </>
+      )}
       <DiffEditor
         originalLanguage={'remix-solidity'}
         modifiedLanguage={'remix-solidity'}
@@ -1640,6 +1959,20 @@ export const EditorUI = (props: EditorUIProps) => {
             }}
           />
         </span>
+      )}
+
+      {/* Web3 Keyword Tooltip */}
+      {tooltipData && hasContextualEditorFeature && (
+        <TooltipPopOver
+          keyword={tooltipData.keyword}
+          position={tooltipData.position}
+          onClose={closeTooltip}
+          onClearSelection={handleClearSelection}
+          visible={true}
+          plugin={props.plugin}
+          contextLines={tooltipData.contextLines}
+          isSelectedText={tooltipData.isSelectedText}
+        />
       )}
     </div>
   )

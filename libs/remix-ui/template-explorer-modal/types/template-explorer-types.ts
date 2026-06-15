@@ -28,6 +28,7 @@ export interface TemplateExplorerWizardState {
     mintable?: boolean
     burnable?: boolean
     pausable?: boolean
+    permit?: boolean
   }
   contractAccessControl: AccessControlType
   contractUpgradability: {
@@ -40,6 +41,7 @@ export interface TemplateExplorerWizardState {
   tokenName?: string
   gitUrl?: string
   manageCategory: 'Template' | 'Files'
+  creating: boolean
 }
 
 export type WizardStep = 'template' | 'finishSetup' | 'wizard' | 'import' | 'genAI' | 'generic' | 'remixdefault' | 'cookbook' | 'back' | 'reset' | 'ModifyWorkspace' | 'confirm' | 'scripts' | 'aiFileGeneration' | 'importFiles' | 'importHttps' | 'gitClone'
@@ -101,6 +103,8 @@ export enum TemplateExplorerWizardAction {
   IMPORT_FILES = 'IMPORT_FILES',
   IMPORT_HTTPS = 'IMPORT_HTTPS',
   SET_GIT_URL = 'SET_GIT_URL',
+  UPDATE_ERC20_PERMIT = 'UPDATE_ERC20_PERMIT',
+  SET_CREATING = 'SET_CREATING'
 }
 
 export interface TemplateItem {
@@ -114,8 +118,10 @@ export interface TemplateItem {
     mintable?: boolean
     burnable?: boolean
     pausable?: boolean
+    permit?: boolean
   }
   templateType?: TemplateType
+  requiresCustomization?: boolean // If true, show customization UI in Files mode instead of immediately adding artifacts
 }
 
 export type TemplateType = {
@@ -183,7 +189,8 @@ export enum ContractWizardAction {
   INITIALIZE_AS_GIT_REPO_UPDATE = 'INITIALIZE_AS_GIT_REPO_UPDATE',
   TOKEN_NAME_UPDATE = 'TOKEN_NAME_UPDATE',
   CONTRACT_NAME_UPDATE = 'CONTRACT_NAME_UPDATE',
-  CONTRACT_TAG_UPDATE = 'CONTRACT_TAG_UPDATE'
+  CONTRACT_TAG_UPDATE = 'CONTRACT_TAG_UPDATE',
+  UPDATE_ERC20_PERMIT = 'UPDATE_ERC20_PERMIT'
 }
 
 export interface ContractTypeStrategy {
@@ -192,6 +199,7 @@ export interface ContractTypeStrategy {
     mintable?: boolean
     burnable?: boolean
     pausable?: boolean
+    permit?: boolean
   }
   contractAccessControl: AccessControlType
   contractUpgradability: {

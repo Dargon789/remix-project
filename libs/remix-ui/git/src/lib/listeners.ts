@@ -3,7 +3,7 @@ import React from "react";
 import { setCanUseApp, setLoading, setRepoName, setGItHubToken, setLog, setGitHubUser, setUserEmails, setTimestamp, setDesktopWorkingDir, setVersion } from "../state/gitpayload";
 import { gitActionDispatch, gitUIPanels, storage } from "../types";
 import { Plugin } from "@remixproject/engine";
-import { getBranches, getFileStatusMatrix, loadGitHubUserFromToken, getRemotes, gitlog, setPlugin, setStorage, init } from "./gitactions";
+import { getBranches, getFileStatusMatrix, loadGitHubUserFromToken, getRemotes, gitlog, setPlugin, setStorage, init, getBranchDifferences } from "./gitactions";
 import { Profile } from "@remixproject/plugin-utils";
 import { CustomRemixApi, trackMatomoEvent } from "@remix-api";
 import { saveToken, statusChanged } from "./pluginActions";
@@ -165,7 +165,7 @@ export const setCallBacks = (viewPlugin: Plugin, gitDispatcher: React.Dispatch<g
       gitDispatch(setTimestamp(Date.now()))
     }, 10)
     loadFileQueue.enqueue(async () => {
-      getBranches()
+      await getBranches()
     }, 20)
     gitDispatch(setLog({
       message: 'Committed changes...',
@@ -266,6 +266,17 @@ export const setCallBacks = (viewPlugin: Plugin, gitDispatcher: React.Dispatch<g
       name: 'ON_LOGIN_EVENT',
       isClick: false
     })
+  })
+
+  // Listen for GitHub token bridged from SSO login/link
+  plugin.on('auth', 'gitHubTokenReady', async (data: { token: string | null }) => {
+    if (data.token) {
+      console.log('[Git] GitHub token received from SSO, loading user...')
+      await loadGitHubUserFromToken()
+    } else {
+      console.log('[Git] GitHub token cleared via SSO disconnect')
+      await loadGitHubUserFromToken() // Will clear the state since token is gone
+    }
   })
 
   callBackEnabled = true;

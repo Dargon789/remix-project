@@ -41,8 +41,10 @@ export interface SettingsSection {
   key: string
   label: string
   description: string,
+  requiresAuth?: boolean, // Flag to indicate this section requires authentication
   subSections: {
     title?: string,
+    description?: string,
     options: {
       name: keyof SettingsState,
       label: string,
@@ -116,8 +118,18 @@ export interface SettingsState {
   'mcp/servers/enable': ConfigState,
   'mcp-server-management': ConfigState,
   'account-manager': ConfigState,
-  'ollama-config': ConfigState,
-  'ollama-endpoint': ConfigState,
+  'profile-section': ConfigState,
+  'credits-balance': ConfigState,
+  'connected-accounts': ConfigState,
+  'billing-section': ConfigState,
+  // Ollama configuration is temporarily disabled - will be enabled later
+  // 'ollama-config': ConfigState,
+  // 'ollama-endpoint': ConfigState,
+  'deepagent-api-keys-config': ConfigState,
+  'deepagent-anthropic-api-key': ConfigState,
+  'deepagent-mistral-api-key': ConfigState,
+  'deepagent-openai-api-key': ConfigState,
+  'deepagent-moonshot-api-key': ConfigState,
   toaster: ConfigState
 }
 export interface SettingsActionPayloadTypes {

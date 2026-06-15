@@ -25,7 +25,7 @@ const profile = {
   icon: 'assets/img/fileManager.webp',
   permission: true,
   version: packageJson.version,
-  methods: ['closeAllFiles', 'closeFile', 'file', 'exists', 'open', 'writeFile', 'writeMultipleFiles', 'writeFileNoRewrite',
+  methods: ['closeAllFiles', 'closeFile', 'file', 'exists', 'open', 'openFile', 'writeFile', 'writeMultipleFiles', 'writeFileNoRewrite',
     'readFile', 'copyFile', 'copyDir', 'rename', 'mkdir', 'readdir', 'dirList', 'fileList', 'remove', 'getCurrentFile', 'getFile',
     'getFolder', 'setFile', 'switchFile', 'refresh', 'getProviderOf', 'getProviderByName', 'getPathFromUrl', 'getUrlFromPath',
     'saveCurrentFile', 'setBatchFiles', 'isGitRepo', 'isFile', 'isDirectory', 'hasGitSubmodule', 'copyFolderToJson', 'diff',
@@ -629,7 +629,7 @@ export default class FileManager extends Plugin {
     if (this.currentRequest) {
       const canCall = await this.askUserPermission(`writeFile`, `modifying ${path} ...`)
       const required = this.appManager.isRequired(this.currentRequest.from)
-      if (canCall && !required) {
+      if (canCall && !required && !options?.silent) {
         // inform the user about modification after permission is granted and even if permission was saved before
         this.call('notification', 'toast', fileChangedToastMsg(this.currentRequest.from, path))
       }

@@ -71,17 +71,29 @@ export class StorageMonitorPlugin extends Plugin {
     super(profile)
   }
 
+  private isDebugEnabled(): boolean {
+    try {
+      return localStorage.getItem('remix-storage-debug') === 'true'
+    } catch {
+      return false
+    }
+  }
+
+  private log(...args: any[]): void {
+    if (this.isDebugEnabled()) console.log(...args)
+  }
+
   async onActivation(): Promise<void> {
     // Skip storage monitoring for desktop mode
     if (isElectron()) {
-      console.log('Storage monitor: Skipping for desktop mode')
+      this.log('Storage monitor: Skipping for desktop mode')
       return
     }
 
     // Run storage calculation in background after a short delay
     // to ensure the app is fully loaded
     setTimeout(() => {
-      this.calculateStorageStats().catch(console.error)
+      this.calculateStorageStats().catch(error => this.log('Storage monitor: Error calculating workspace storage stats:', error))
     }, 5000)
   }
 
@@ -105,7 +117,7 @@ export class StorageMonitorPlugin extends Plugin {
         }
       }
     } catch (e) {
-      console.log('Error calculating directory size:', e)
+      this.log('Error calculating directory size:', e)
     }
     return totalSize
   }
@@ -129,12 +141,12 @@ export class StorageMonitorPlugin extends Plugin {
       const fs = (window as any).remixFileSystem
 
       if (!fs) {
-        console.log('Storage monitor: No filesystem available')
+        this.log('Storage monitor: No filesystem available')
         return null
       }
 
       if (!await fs.exists('/.workspaces')) {
-        console.log('Storage monitor: No workspaces found')
+        this.log('Storage monitor: No workspaces found')
         return null
       }
 
@@ -193,7 +205,7 @@ export class StorageMonitorPlugin extends Plugin {
       }
 
       if (workspaceStatsList.length === 0) {
-        console.log('Storage monitor: No valid workspaces found')
+        this.log('Storage monitor: No valid workspaces found')
         return null
       }
 
@@ -264,13 +276,13 @@ export class StorageMonitorPlugin extends Plugin {
           isClick: false
         })
       } catch (error) {
-        console.log('Storage monitor: Error tracking event', error)
+        this.log('Storage monitor: Error tracking event', error)
       }
 
-      console.log('Storage monitor: Summary', summary)
+      this.log('Storage monitor: Summary', summary)
       return summary
     } catch (e) {
-      console.log('Storage monitor: Error calculating workspace storage stats:', e)
+      this.log('Storage monitor: Error calculating workspace storage stats:', e)
       return null
     }
   }
