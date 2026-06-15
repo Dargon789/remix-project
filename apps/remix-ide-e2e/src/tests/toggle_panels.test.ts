@@ -21,9 +21,7 @@ module.exports = {
       .waitForElementVisible('*[data-id="movePluginToLeft"]')
       .waitForElementVisible('*[data-id="toggleRightSidePanelIcon"]')
       .waitForElementVisible('.codicon-layout-sidebar-right')
-      .waitForElementVisible('*[data-id="remix-ai-assistant-starter-beginner-0"]')
-      .waitForElementVisible('*[data-id="remix-ai-assistant-starter-intermediate-1"]')
-      .waitForElementVisible('*[data-id="remix-ai-assistant-starter-expert-2"]')
+      .assistantWaitForReady()
       .click('*[data-id="movePluginToLeft"]')
       .waitForElementVisible('*[data-pinnedPlugin="movePluginToRight-remixaiassistant"]')
       .waitForElementVisible('.codicon-layout-sidebar-right-off') // check the icon toggling on top bar
@@ -76,27 +74,28 @@ module.exports = {
       .click('*[data-id="hideRightSidePanel"]')
       .waitForElementVisible('.codicon-layout-sidebar-right-off')
       .waitForElementNotVisible('#right-side-panel')
-      .clickLaunchIcon('udapp')
-      .waitForElementVisible('*[data-pinnedplugin="movePluginToRight-udapp"]')
+      .clickLaunchIcon('search')
+      .waitForElementVisible('*[data-pinnedplugin="movePluginToRight-search"]')
+      .waitForElementVisible('*[data-id="movePluginToRight"]')
       .click('*[data-id="movePluginToRight"]')
       .waitForElementVisible('#right-side-panel')
-      .waitForElementVisible('*[data-pinnedplugin="movePluginToLeft-udapp"]')
+      .waitForElementVisible('*[data-pinnedplugin="movePluginToLeft-search"]')
       .waitForElementVisible('.codicon-layout-sidebar-right')
       .waitForElementVisible('*[data-pinnedplugin="movePluginToRight-solidity"]')
   },
   'Click vertical icon of pinned plugin to unhide right side panel #group1': function (browser: NightwatchBrowser) {
     browser
       .refreshPage()
-      .waitForElementVisible('*[data-pinnedplugin="movePluginToLeft-udapp"]')
+      .waitForElementVisible('*[data-pinnedplugin="movePluginToLeft-search"]')
       .waitForElementVisible('#right-side-panel')
       .click('*[data-id="hideRightSidePanel"]')
       .waitForElementVisible('.codicon-layout-sidebar-right-off')
       .waitForElementNotVisible('#right-side-panel')
-      // Click the vertical icon for the pinned plugin (udapp)
-      .click('*[data-id="verticalIconsKindudapp"]')
+      // Click the vertical icon for the pinned plugin (search)
+      .click('*[data-id="verticalIconsKindsearch"]')
       .waitForElementVisible('#right-side-panel')
       .waitForElementVisible('.codicon-layout-sidebar-right')
-      .waitForElementVisible('*[data-pinnedplugin="movePluginToLeft-udapp"]')
+      .waitForElementVisible('*[data-pinnedplugin="movePluginToLeft-search"]')
   },
   'Hide left side panel using toggle icon on top bar #group1': function (browser: NightwatchBrowser) {
     browser
@@ -204,7 +203,7 @@ module.exports = {
       .waitForElementNotVisible('#side-panel')
       // Open the workspace dropdown
       .waitForElementVisible('*[data-id="workspacesSelect"]')
-      .click('*[data-id="workspacesSelect"]')
+      .clickWorkspaceDropdown()
       .pause(2000)
       // Click on "Create Workspace" menu item
       .waitForElementVisible('*[data-id="workspacecreate"]')

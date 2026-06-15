@@ -25,6 +25,9 @@ export * from './events/file-events';
 export * from './events/blockchain-events';
 export * from './events/plugin-events';
 export * from './events/tools-events';
+export * from './events/user-events';
+export * from './events/nudge-events';
+export * from './events/help-events';
 
 // Import types for union
 import type { AIEvent, RemixAIAssistantEvent } from './events/ai-events';
@@ -35,6 +38,9 @@ import type { FileExplorerEvent, WorkspaceEvent, StorageEvent, BackupEvent, Work
 import type { BlockchainEvent, UdappEvent, RunEvent } from './events/blockchain-events';
 import type { PluginEvent, ManagerEvent, PluginManagerEvent, AppEvent, MatomoManagerEvent, PluginPanelEvent, MigrateEvent } from './events/plugin-events';
 import type { DebuggerEvent, EditorEvent, SolidityUnitTestingEvent, SolidityStaticAnalyzerEvent, DesktopDownloadEvent, XTERMEvent, SolidityScriptEvent, RemixGuideEvent, TemplateSelectionEvent, ScriptExecutorEvent, GridViewEvent, SolidityUMLGenEvent, ScriptRunnerPluginEvent, CircuitCompilerEvent, NoirCompilerEvent, ContractVerificationEvent, LearnethEvent, TemplateExplorerModalEvent, QuickDappV2Event } from './events/tools-events';
+import type { AuthEvent, UserMenuEvent, CloudWorkspaceEvent, WalkthroughEvent, NotificationEvent, FeedbackEvent } from './events/user-events';
+import type { NudgeEvent } from './events/nudge-events';
+import type { HelpEvent } from './events/help-events';
 
 // Union type of all Matomo events - includes base properties for compatibility
 export type MatomoEvent = (
@@ -101,6 +107,20 @@ export type MatomoEvent = (
   | ContractVerificationEvent
   | LearnethEvent
   | QuickDappV2Event
+
+  // User lifecycle & engagement events
+  | AuthEvent
+  | UserMenuEvent
+  | CloudWorkspaceEvent
+  | WalkthroughEvent
+  | NotificationEvent
+  | FeedbackEvent
+
+  // Nudge / feature discovery events
+  | NudgeEvent
+
+  // Help / guides events
+  | HelpEvent
 ) & {
   // Ensure all events have these base properties for backward compatibility
   name?: string;

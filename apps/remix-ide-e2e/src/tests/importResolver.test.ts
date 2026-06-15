@@ -60,12 +60,12 @@ module.exports = {
                 {
                     packagePath: '@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol',
                     versionComment: '5.0.0',
-                    description: 'Should find OpenZeppelin v5.4.0 ERC20Burnable.sol in build-info'
+                    description: 'Should find OpenZeppelin v5.0.0 ERC20Burnable.sol in build-info'
                 },
                 {
                     packagePath: '@openzeppelin/contracts/access/AccessControl.sol',
-                    versionComment: '5.4.0',
-                    description: 'Should find OpenZeppelin v5.4.0 AccessControl.sol in build-info'
+                    versionComment: '5.6.0',
+                    description: 'Should find OpenZeppelin v5.6.0 AccessControl.sol in build-info'
                 }
             ])
     },
@@ -447,7 +447,7 @@ module.exports = {
             .waitForElementVisible('*[data-id="treeViewDivDraggableItem.deps/npm"]', 60000)
             .waitForElementVisible('*[data-id="treeViewLitreeViewItem.deps/npm/.resolution-index.json"]', 60000)
             .openFile('.deps/npm/.resolution-index.json')
-            .pause()
+            .pause(2000)
             .getEditorValue((content) => {
                 try {
                     const idx = JSON.parse(content)
@@ -803,7 +803,7 @@ contract CommentedImports is ERC20 {
             })
     },
 
-    'Test raw.githubusercontent.com imports #pr #group12': function (browser: NightwatchBrowser) {
+    'Test raw.githubusercontent.com imports #group12': function (browser: NightwatchBrowser) {
         browser
             .addFile('RawGitHubTest.sol', cdnImportsSource['RawGitHubTest.sol'])
             .clickLaunchIcon('solidity')

@@ -1,11 +1,16 @@
 /* eslint-disable @nrwl/nx/enforce-module-boundaries */
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import BasicLogo from '../components/BasicLogo'
+//@ts-ignore
 import '../css/topbar.css'
-import { Button, Dropdown } from 'react-bootstrap'
-import { CustomToggle, CustomTopbarMenu } from 'libs/remix-ui/helper/src/lib/components/custom-dropdown'
+import { Dropdown } from 'react-bootstrap'
+import { CustomToggle } from 'libs/remix-ui/helper/src/lib/components/custom-dropdown'
 import { WorkspaceMetadata } from 'libs/remix-ui/workspace/src/lib/types'
+import { CloudToggle } from 'libs/remix-ui/workspace/src/lib/cloud/cloud-sync-status-icon'
+import { enableCloud, disableCloud } from 'libs/remix-ui/workspace/src/lib/cloud/cloud-workspace-actions'
+import { cloudStore } from 'libs/remix-ui/workspace/src/lib/cloud/cloud-store'
 import { AppContext, platformContext } from 'libs/remix-ui/app/src/lib/remix-app/context/context'
+import { useAuth } from 'libs/remix-ui/app/src/lib/remix-app/context/auth-context'
 import { FormattedMessage, useIntl } from 'react-intl'
 import { TopbarContext } from '../context/topbarContext'
 import { WorkspacesDropdown } from '../components/WorkspaceDropdown'
@@ -17,9 +22,13 @@ import { GitHubLogin } from '../components/gitLogin'
 import { CustomTooltip } from 'libs/remix-ui/helper/src/lib/components/custom-tooltip'
 import { useCloneRepositoryModal } from '../components/CloneRepositoryModal'
 import { TrackingContext } from '@remix-ide/tracking'
-import { MatomoEvent, TopbarEvent, WorkspaceEvent } from '@remix-api'
+import { MatomoEvent, TopbarEvent, WorkspaceEvent, LoginMode, LoginModeResponse } from '@remix-api'
 import { LoginButton } from '@remix-ui/login'
+import { LoginModal } from 'libs/remix-ui/login/src/lib/modals/login-modal'
 import { appActionTypes } from 'libs/remix-ui/app/src/lib/remix-app/actions/app'
+import { NotificationBell } from '../components/NotificationBell'
+import { FeedbackPanel } from '../components/FeedbackPanel'
+import { BetaPromoPill } from '../components/BetaPromoPill'
 
 export function RemixUiTopbar() {
   const intl = useIntl()
@@ -37,6 +46,7 @@ export function RemixUiTopbar() {
   const ROOT_PATH = '/'
 
   const [currentWorkspace, setCurrentWorkspace] = useState<string>(NO_WORKSPACE)
+  //@ts-ignore
   const [currentMenuItemName, setCurrentMenuItemName] = useState<string>(null)
   const [currentTheme, setCurrentTheme] = useState<any>(null)
   const [latestReleaseNotesUrl, setLatestReleaseNotesUrl] = useState<string>('')
@@ -45,14 +55,35 @@ export function RemixUiTopbar() {
   const subMenuIconRef = useRef<any>(null)
   const [showSubMenuFlyOut, setShowSubMenuFlyOut] = useState<boolean>(false)
   useOnClickOutside([subMenuIconRef], () => setShowSubMenuFlyOut(false))
-  const workspaceRenameInput = useRef()
+  const workspaceRenameInput: any = useRef<HTMLInputElement>()
   const [leftPanelHidden, setLeftPanelHidden] = useState<boolean>(false)
   const [bottomPanelHidden, setBottomPanelHidden] = useState<boolean>(false)
   const [rightPanelHidden, setRightPanelHidden] = useState<boolean>(false)
 
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [enableLogin, setEnableLogin] = useState<boolean>(false);
+  const [loginMode, setLoginMode] = useState<LoginMode | null>(null);
+  const [loginModeMessage, setLoginModeMessage] = useState<string>('');
+  const [adminOverride, setAdminOverride] = useState<boolean>(false);
+  const [cloudEnabled, setCloudEnabled] = useState<boolean>(true); // default true until config loaded
+  const [feedbackFormUrl, setFeedbackFormUrl] = useState<string | null>(null);
+  const [feedbackPanelOpen, setFeedbackPanelOpen] = useState<boolean>(false);
+  const [showCloudLoginModal, setShowCloudLoginModal] = useState<boolean>(false);
+  const [isNonMaximizedWindow, setIsNonMaximizedWindow] = useState(false)
+  const [compactRightLabels, setCompactRightLabels] = useState(false)
+  const [compactPanelControl, setCompactPanelControl] = useState(false)
+  const [panelControlMenuOpen, setPanelControlMenuOpen] = useState(false)
+  const sectionRef = useRef<HTMLElement>(null)
+  const panelControlRef = useRef<HTMLDivElement>(null)
+  const rightSideRef = useRef<HTMLDivElement>(null)
+  const labelsCompactRef = useRef(false)
+  const panelCompactRef = useRef(false)
+  // Selenium/Nightwatch sets navigator.webdriver; same signal BotDetector uses.
+  // E2E tests target data-ids on the inline panel toggles, so never collapse them under e2e.
+  const isE2E = typeof navigator !== 'undefined' && (navigator as any).webdriver === true
+
+  // Auth state for cloud backup/restore and support link
+  const { isAuthenticated, token, features } = useAuth()
 
   // Use the clone repository modal hook
   const { showCloneModal } = useCloneRepositoryModal({
@@ -66,24 +97,175 @@ export function RemixUiTopbar() {
     return <GitHubCallback />;
   }
 
+  // Derive whether login UI should be shown based on ACL login mode
+  // 'open' or 'feature_group' => show normally
+  // 'admins_only' => hidden unless admin override
+  // 'closed' => hidden entirely
+  // null (not yet fetched) => hidden (safe default)
+  const showLoginUI = (() => {
+    if (!loginMode) return false
+    if (loginMode === 'closed') return false
+    if (loginMode === 'admins_only') return adminOverride
+    return true // 'open' or 'feature_group'
+  })()
+
+  const cloudEnabledByConfig = appContext?.appConfig?.['cloud.enabled'] !== false
+  const cloudVisibilityMode = appContext?.appConfig?.['cloud.button_visibility'] || 'authenticated_users'
+  const notificationMode = appContext?.appConfig?.['notifications.mode'] || 'all_users'
+  const supportEnabled = appContext?.appConfig?.['app.supportenabled'] !== false
+  const showJoinBetaTopButton = appContext?.appConfig?.['show_join_beta_top_button'] !== false
+
+  const isVisibleByAudience = (mode: 'off' | 'authenticated_users' | 'all_users', authenticated: boolean): boolean => {
+    if (mode === 'off') return false
+    if (mode === 'authenticated_users') return authenticated
+    return true
+  }
+
+  const hasCloudStoragePermission = features['storage:s3']?.is_enabled === true
+  const showCloudToggle = showLoginUI && cloudEnabledByConfig && cloudEnabled && hasCloudStoragePermission && isVisibleByAudience(cloudVisibilityMode, isAuthenticated)
+  const showNotificationBell = isVisibleByAudience(notificationMode, isAuthenticated)
+
+  const measureTopbarLayout = () => {
+    const maximizedViewportWidth = window.screen?.availWidth || window.innerWidth
+    const nonMaximizedTolerance = 120
+    const shouldUseCompactLayout = window.innerWidth < maximizedViewportWidth - nonMaximizedTolerance
+
+    setIsNonMaximizedWindow(shouldUseCompactLayout)
+  }
+
   useEffect(() => {
-    const checkLoginEnabled = () => {
-      const enabled = localStorage.getItem('enableLogin') === 'true';
-      setEnableLogin(enabled);
-    };
-    checkLoginEnabled();
-    // Listen for storage changes
-    window.addEventListener('storage', checkLoginEnabled);
-    return () => window.removeEventListener('storage', checkLoginEnabled);
+    measureTopbarLayout()
+    window.addEventListener('resize', measureTopbarLayout)
+
+    return () => {
+      window.removeEventListener('resize', measureTopbarLayout)
+    }
+  }, [])
+
+  useEffect(() => { labelsCompactRef.current = compactRightLabels }, [compactRightLabels])
+  useEffect(() => { panelCompactRef.current = compactPanelControl }, [compactPanelControl])
+
+  const measure = useCallback(() => {
+    if (!panelControlRef.current || !rightSideRef.current) return
+    const gap =
+      rightSideRef.current.getBoundingClientRect().left -
+      panelControlRef.current.getBoundingClientRect().right
+
+    const labelsCompact = labelsCompactRef.current
+    const panelCompact = panelCompactRef.current
+
+    if (!labelsCompact && gap < 24) return setCompactRightLabels(true)
+    if (labelsCompact && !panelCompact && gap < 24) return setCompactPanelControl(true)
+    if (panelCompact && gap > 100) return setCompactPanelControl(false)
+    if (labelsCompact && !panelCompact && gap > 90) return setCompactRightLabels(false)
+  }, [])
+
+  useEffect(() => {
+    if (!sectionRef.current) return
+    let frameId: number
+
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frameId)
+      frameId = requestAnimationFrame(measure)
+    })
+    observer.observe(sectionRef.current)
+    measure()
+
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frameId)
+    }
+  }, [measure])
+
+  // Re-measure when our own compact state changes.
+  useEffect(() => {
+    const id = requestAnimationFrame(measure)
+    return () => cancelAnimationFrame(id)
+  }, [measure, compactRightLabels, compactPanelControl])
+
+  useEffect(() => {
+    // Fetch login mode from auth plugin
+    const fetchLoginMode = async () => {
+      try {
+        const result: LoginModeResponse = await plugin.call('auth', 'getLoginMode')
+        setLoginMode(result.mode)
+        setLoginModeMessage(result.message || '')
+      } catch (e) {
+        console.warn('[Topbar] Failed to fetch login mode:', e)
+        // Fallback: check legacy localStorage flag
+        const legacyEnabled = localStorage.getItem('enableLogin') === 'true'
+        setLoginMode(legacyEnabled ? 'open' : null)
+      }
+    }
+    fetchLoginMode()
+
+    // Listen for login mode changes
+    const handleLoginModeChanged = (result: LoginModeResponse) => {
+      setLoginMode(result.mode)
+      setLoginModeMessage(result.message || '')
+    }
+    plugin.on('auth', 'loginModeChanged', handleLoginModeChanged)
+
+    // Admin backdoor: Ctrl+Shift+Alt+L to toggle admin override
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.altKey && e.key === 'L') {
+        e.preventDefault()
+        setAdminOverride(prev => {
+          const next = !prev
+          console.log(`[Topbar] Admin login override ${next ? 'enabled' : 'disabled'}`)
+          return next
+        })
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      plugin.off('auth', 'loginModeChanged')
+      window.removeEventListener('keydown', handleKeyDown)
+    }
   }, []);
+
+  useEffect(() => {
+    const enabled = appContext?.appConfig?.['cloud.enabled']
+    if (enabled !== undefined) {
+      setCloudEnabled(enabled as boolean)
+    }
+  }, [appContext?.appConfig])
+
+  // Listen to feedback plugin for form URL
+  useEffect(() => {
+    const initFeedback = async () => {
+      try {
+        const isActive = await plugin.call('manager', 'isActive', 'feedback')
+        if (isActive) {
+          const form = await plugin.call('feedback', 'getFeedbackForm')
+          if (form && form.url) setFeedbackFormUrl(form.url)
+        }
+      } catch (e) {
+        console.debug('[Topbar] Feedback plugin not ready yet')
+      }
+    }
+    initFeedback()
+
+    plugin.on('feedback', 'feedbackFormChanged', (form: any) => {
+      setFeedbackFormUrl(form?.url || null)
+    })
+
+    plugin.on('feedback', 'openFeedbackForm', (url: string) => {
+      if (url) {
+        setFeedbackFormUrl(url)
+        setFeedbackPanelOpen(true)
+      }
+    })
+    return () => {
+      plugin.off('feedback', 'feedbackFormChanged')
+      plugin.off('feedback', 'openFeedbackForm')
+    }
+  }, [])
 
   const handleLoginSuccess = (user: GitHubUser, token: string) => {
     setUser(user);
     setError(null);
-  };
-
-  const handleLoginError = (error: string) => {
-    setError(error);
   };
 
   async function openTemplateExplorer(): Promise<void> {
@@ -94,11 +276,6 @@ export function RemixUiTopbar() {
     })
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('github_token');
-    setUser(null);
-  };
-
   const toggleDropdown = (isOpen: boolean) => {
     setShowDropdown(isOpen)
     if (isOpen) {
@@ -108,14 +285,14 @@ export function RemixUiTopbar() {
 
   useEffect(() => {
     const current = localStorage.getItem('currentWorkspace')
-    setCurrentWorkspace(current)
+    setCurrentWorkspace(current as any)
   }, [plugin.filePanel.workspaces])
 
   useEffect(() => {
     const run = async () => {
       const [url, currentReleaseVersion] = await plugin.getLatestReleaseNotesUrl()
-      setLatestReleaseNotesUrl(url)
-      setCurrentReleaseVersion(currentReleaseVersion)
+      setLatestReleaseNotesUrl(url as any)
+      setCurrentReleaseVersion(currentReleaseVersion as any)
     }
     run()
   }, [])
@@ -195,20 +372,31 @@ export function RemixUiTopbar() {
       fetchWorkspaceDirectory(ROOT_PATH)
       setCurrentWorkspace(LOCALHOST)
     }
-  }, [global.fs.browser.currentWorkspace, global.fs.localhost.sharedFolder, global.fs.mode, showDropdown])
+  }, [global.fs.browser.currentWorkspace, global.fs.browser.workspaceSwitchVersion, global.fs.localhost.sharedFolder, global.fs.mode, showDropdown])
 
   useEffect(() => {
-    if (global.fs.browser.currentWorkspace && !global.fs.browser.workspaces.find(({ name }) => name === global.fs.browser.currentWorkspace)) {
+    if (global.fs.browser.currentWorkspace && !global.fs.browser.workspaces.find(({ name }: any) => name === global.fs.browser.currentWorkspace)) {
       if (global.fs.browser.workspaces.length > 0) {
         switchWorkspace(global.fs.browser.workspaces[global.fs.browser.workspaces.length - 1].name)
       } else {
         switchWorkspace(NO_WORKSPACE)
       }
     }
+    updateMenuItems()
   }, [global.fs.browser.workspaces, global.fs.browser.workspaces.length])
 
   useEffect(() => {
-    plugin.on('theme', 'themeChanged', (theme) => {
+    const handleWorkspaceChanged = () => updateMenuItems()
+    plugin.on('filePanel', 'workspaceDeleted', handleWorkspaceChanged)
+    plugin.on('filePanel', 'workspaceCreated', handleWorkspaceChanged)
+    return () => {
+      plugin.off('filePanel', 'workspaceDeleted')
+      plugin.off('filePanel', 'workspaceCreated')
+    }
+  }, [])
+
+  useEffect(() => {
+    plugin.on('theme', 'themeChanged', (theme: any) => {
       setCurrentTheme(theme)
     })
     return () => {
@@ -241,10 +429,11 @@ export function RemixUiTopbar() {
     const menuItems = (workspaces || await plugin.getWorkspaces()).map((workspace) => ({
       name: workspace.name,
       isGitRepo: workspace.isGitRepo,
-      isGist: workspace.isGist,
+      isGist: (workspace as any).isGist,
       branches: workspace.branches,
       currentBranch: workspace.currentBranch,
       hasGitSubmodules: workspace.hasGitSubmodules,
+      remoteId: workspace.remoteId,
       submenu: subItems
     }))
     setMenuItems(menuItems)
@@ -255,8 +444,8 @@ export function RemixUiTopbar() {
     // @ts-ignore: Object is possibly 'null'.
     const workspaceName = workspaceRenameInput.current.value
     try {
-      await renameWorkspace(currMenuName, workspaceName)
-    } catch (e) {
+      await renameWorkspace(currMenuName!, workspaceName)
+    } catch (e: any) {
       global.modal(
         intl.formatMessage({ id: 'filePanel.workspace.rename' }),
         e.message,
@@ -271,7 +460,7 @@ export function RemixUiTopbar() {
   const onFinishDownloadWorkspace = async () => {
     try {
       await handleDownloadWorkspace()
-    } catch (e) {
+    } catch (e: any) {
       global.modal(
         intl.formatMessage({ id: 'filePanel.workspace.download' }),
         e.message,
@@ -284,8 +473,9 @@ export function RemixUiTopbar() {
   }
   const onFinishDeleteWorkspace = async (workspaceName?: string) => {
     try {
-      await deleteWorkspace(workspaceName)
-    } catch (e) {
+      await deleteWorkspace(workspaceName!)
+      await updateMenuItems()
+    } catch (e: any) {
       global.modal(
         intl.formatMessage({ id: 'filePanel.workspace.delete' }),
         e.message,
@@ -300,7 +490,7 @@ export function RemixUiTopbar() {
   const deleteCurrentWorkspace = (workspaceName?: string) => {
     global.modal(
       intl.formatMessage({ id: 'filePanel.workspace.delete' }),
-      intl.formatMessage({ id: 'filePanel.workspace.deleteConfirm' }),
+      intl.formatMessage({ id: 'filePanel.workspace.deleteConfirm' }, { currentWorkspace: workspaceName }),
       intl.formatMessage({ id: 'filePanel.ok' }),
       () => onFinishDeleteWorkspace(workspaceName),
       intl.formatMessage({ id: 'filePanel.cancel' })
@@ -322,10 +512,11 @@ export function RemixUiTopbar() {
       console.error(e)
     }
   }
+
   const onFinishDeleteAllWorkspaces = async () => {
     try {
       await deleteAllWorkspacesAction()
-    } catch (e) {
+    } catch (e: any) {
       global.modal(
         intl.formatMessage({ id: 'filePanel.workspace.deleteAll' }),
         e.message,
@@ -426,7 +617,7 @@ export function RemixUiTopbar() {
       await switchToWorkspace(name)
       handleExpandPath([])
       trackMatomoEvent<WorkspaceEvent>({ category: 'workspace', action: 'switchWorkspace', name: name, isClick: true })
-    } catch (e) {
+    } catch (e: any) {
       global.modal(
         intl.formatMessage({ id: 'filePanel.workspace.switch' }),
         e.message,
@@ -442,7 +633,7 @@ export function RemixUiTopbar() {
 
     return (
       <>
-        {global.fs.browser.workspaces.map(({ name, isGitRepo }, index) => (
+        {global.fs.browser.workspaces.map(({ name, isGitRepo }: any, index: number) => (
           <div
             key={index}
             className="d-flex justify-content-between w-100"
@@ -470,11 +661,11 @@ export function RemixUiTopbar() {
   }
 
   const ShowNonLocalHostMenuItems = () => {
-    const cachedFilter = global.fs.browser.workspaces.filter(x => !x.name.includes('localhost'))
+    const cachedFilter = global.fs.browser.workspaces.filter((x: any) => !x.name.includes('localhost'))
     return (
       <div className="">
         {
-          currentWorkspace === LOCALHOST && cachedFilter.length > 0 ? cachedFilter.map(({ name, isGitRepo }, index) => (
+          currentWorkspace === LOCALHOST && cachedFilter.length > 0 ? cachedFilter.map(({ name, isGitRepo }: any, index: number) => (
             <Dropdown.Item
               key={index}
               onClick={() => {
@@ -490,14 +681,60 @@ export function RemixUiTopbar() {
     )
   }
 
+  const panelControls = [
+    {
+      id: 'toggleLeftSidePanelIcon',
+      tooltip: 'Toggle Left Side Panel',
+      label: 'Left Side Panel',
+      iconClass: `codicon codicon-layout-sidebar-left${leftPanelHidden ? '-off' : ''}`,
+      isActive: !leftPanelHidden,
+      onClick: () => {
+        if (leftPanelHidden) trackMatomoEvent({ category: 'topbar', action: 'leftSidePanel', name: 'showLeftSidePanelClicked', isClick: true })
+        else trackMatomoEvent({ category: 'topbar', action: 'leftSidePanel', name: 'hideLeftSidePanelClicked', isClick: true })
+        plugin.call('sidePanel', 'togglePanel')
+      }
+    },
+    {
+      id: 'toggleBottomPanelIcon',
+      tooltip: 'Toggle Bottom Panel',
+      label: 'Bottom Panel',
+      iconClass: `codicon codicon-layout-panel${bottomPanelHidden ? '-off' : ''}`,
+      isActive: !bottomPanelHidden,
+      onClick: () => {
+        if (bottomPanelHidden) trackMatomoEvent({ category: 'topbar', action: 'terminalPanel', name: 'showTerminalPanelClicked', isClick: true })
+        else trackMatomoEvent({ category: 'topbar', action: 'terminalPanel', name: 'hideTerminalPanelClicked', isClick: true })
+        plugin.call('terminal', 'togglePanel')
+      }
+    },
+    {
+      id: 'toggleRightSidePanelIcon',
+      tooltip: 'Toggle Right Side Panel',
+      label: 'Right Side Panel',
+      iconClass: `codicon codicon-layout-sidebar-right${rightPanelHidden ? '-off' : ''}`,
+      isActive: !rightPanelHidden,
+      onClick: async () => {
+        if (rightPanelHidden) trackMatomoEvent({ category: 'topbar', action: 'rightSidePanel', name: 'showRightSidePanelClicked', isClick: true })
+        else trackMatomoEvent({ category: 'topbar', action: 'rightSidePanel', name: 'hideRightSidePanelClicked', isClick: true })
+
+        const currentPlugin = await plugin.call('rightSidePanel', 'currentFocus')
+        if (!currentPlugin) {
+          plugin.call('notification', 'toast', 'No plugin pinned on the Right Side Panel.')
+          return
+        }
+        plugin.call('rightSidePanel', 'togglePanel')
+      }
+    }
+  ]
+
   return (
     <section
+      ref={sectionRef}
       className="h-100 d-flex bg-light border flex-nowrap px-2"
     >
-      <div className="d-flex flex-row align-items-center justify-content-between w-100">
+      <div className="d-flex flex-row align-items-center justify-content-between w-100" style={{ minWidth: 0 }}>
         <div
           className="d-flex flex-row align-items-center m-1"
-          style={{ minWidth: '33%' }}
+          style={{ minWidth: 0, flex: isNonMaximizedWindow ? '0.78 1 0' : '1 1 0' }}
         >
           <div
             className="d-flex align-items-center justify-content-between me-3 cursor-pointer"
@@ -535,98 +772,160 @@ export function RemixUiTopbar() {
               window.open(latestReleaseNotesUrl, '_blank')
             }}
             style={{
-              // padding: '0.25rem 0.5rem',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
               color: currentTheme && !checkIfLightTheme(currentTheme.name) ? 'var(--white)' : 'var(--text)'
             }}
           >
             {currentReleaseVersion}
           </span>
+          {showCloudLoginModal && <LoginModal onClose={() => setShowCloudLoginModal(false)} plugin={plugin} />}
         </div>
-        <div className="m-1 justify-content-center d-flex align-self-center " style={{ minWidth: '33%' }}>
-          <WorkspacesDropdown
-            menuItems={menuItems}
-            toggleDropdown={toggleDropdown}
-            showDropdown={showDropdown}
-            currentWorkspace={currentWorkspace}
-            NO_WORKSPACE={NO_WORKSPACE}
-            switchWorkspace={switchWorkspace}
-            ShowNonLocalHostMenuItems={ShowNonLocalHostMenuItems}
-            CustomToggle={CustomToggle}
-            showSubMenuFlyOut={showSubMenuFlyOut}
-            setShowSubMenuFlyOut={setShowSubMenuFlyOut}
-            createWorkspace={createWorkspace}
-            renameCurrentWorkspace={renameCurrentWorkspace}
-            downloadCurrentWorkspace={downloadCurrentWorkspace}
-            deleteCurrentWorkspace={deleteCurrentWorkspace}
-            downloadWorkspaces={downloadWorkspaces}
-            restoreBackup={restoreBackup}
-            deleteAllWorkspaces={deleteAllWorkspaces}
-            setCurrentMenuItemName={setCurrentMenuItemName}
-            setMenuItems={setMenuItems}
-            connectToLocalhost={() => switchWorkspace(LOCALHOST)}
-            openTemplateExplorer={openTemplateExplorer}
-          />
-          <div className="d-flex ms-4 gap-2 align-items-center" >
-            <CustomTooltip placement="bottom-start" tooltipText={`Toggle Left Side Panel`}>
-              <div
-                className={`codicon codicon-layout-sidebar-left${leftPanelHidden ? '-off' : ''} fs-5`}
-                data-id="toggleLeftSidePanelIcon"
-                onClick={() => {
-                  if (leftPanelHidden) trackMatomoEvent({ category: 'topbar', action: 'leftSidePanel', name: 'showLeftSidePanelClicked', isClick: true })
-                  else trackMatomoEvent({ category: 'topbar', action: 'leftSidePanel', name: 'hideLeftSidePanelClicked', isClick: true })
-                  plugin.call('sidePanel', 'togglePanel')
-                }
-                }
-              ></div>
-            </CustomTooltip>
-            <CustomTooltip placement="bottom-start" tooltipText={`Toggle Bottom Panel`}>
-              <div
-                className={`codicon codicon-layout-panel${bottomPanelHidden ? '-off' : ''} fs-5`}
-                data-id="toggleBottomPanelIcon"
-                onClick={() => {
-                  if (bottomPanelHidden) trackMatomoEvent({ category: 'topbar', action: 'terminalPanel', name: 'showTerminalPanelClicked', isClick: true })
-                  else trackMatomoEvent({ category: 'topbar', action: 'terminalPanel', name: 'hideTerminalPanelClicked', isClick: true })
-                  plugin.call('terminal', 'togglePanel')
-                }
-                }
-              ></div>
-            </CustomTooltip>
-            <CustomTooltip placement="bottom-start" tooltipText={`Toggle Right Side Panel`}>
-              <div
-                className={`codicon codicon-layout-sidebar-right${rightPanelHidden ? '-off' : ''} fs-5`}
-                data-id="toggleRightSidePanelIcon"
-                onClick={() => {
-                  if (rightPanelHidden) trackMatomoEvent({ category: 'topbar', action: 'rightSidePanel', name: 'showRightSidePanelClicked', isClick: true })
-                  else trackMatomoEvent({ category: 'topbar', action: 'rightSidePanel', name: 'hideRightSidePanelClicked', isClick: true })
-                  plugin.call('rightSidePanel', 'togglePanel')
-                }
-                }
-              ></div>
-            </CustomTooltip>
+        <div className="m-1 d-flex align-self-center" style={{ minWidth: 0, flex: isNonMaximizedWindow ? '1.22 1 0' : '1 1 0' }}>
+          <div
+            className="d-flex align-items-center flex-nowrap"
+            style={{ minWidth: 0, width: '100%', justifyContent: isNonMaximizedWindow ? 'flex-start' : 'center' }}
+          >
+            <WorkspacesDropdown
+              menuItems={menuItems}
+              toggleDropdown={toggleDropdown}
+              showDropdown={showDropdown}
+              currentWorkspace={currentWorkspace}
+              NO_WORKSPACE={NO_WORKSPACE}
+              switchWorkspace={switchWorkspace}
+              ShowNonLocalHostMenuItems={ShowNonLocalHostMenuItems}
+              CustomToggle={CustomToggle}
+              showSubMenuFlyOut={showSubMenuFlyOut}
+              setShowSubMenuFlyOut={setShowSubMenuFlyOut}
+              createWorkspace={createWorkspace}
+              renameCurrentWorkspace={renameCurrentWorkspace}
+              downloadCurrentWorkspace={downloadCurrentWorkspace}
+              deleteCurrentWorkspace={deleteCurrentWorkspace}
+              downloadWorkspaces={downloadWorkspaces}
+              restoreBackup={restoreBackup}
+              deleteAllWorkspaces={deleteAllWorkspaces}
+              setCurrentMenuItemName={setCurrentMenuItemName}
+              setMenuItems={setMenuItems}
+              connectToLocalhost={() => switchWorkspace(LOCALHOST)}
+              openTemplateExplorer={openTemplateExplorer}
+              onMigrateToCloud={() => cloudStore.emit('showMigrationDialog')}
+            />
+            {showCloudToggle && (
+              <CloudToggle
+                className="ms-2"
+                onEnableCloud={() => enableCloud()}
+                onDisableCloud={() => disableCloud()}
+                theme={currentTheme?.quality}
+              />)}
+            <div
+              ref={panelControlRef}
+              data-id="panel-control"
+              className="d-flex gap-1 align-items-center"
+              style={{ marginLeft: isNonMaximizedWindow ? '0.75rem' : '1.5rem', flexShrink: 0 }}
+            >
+              {compactPanelControl && !isE2E ? (
+                <Dropdown onToggle={setPanelControlMenuOpen}>
+                  <Dropdown.Toggle
+                    as={CustomToggle}
+                    id="panel-control-compact"
+                    data-id="panel-control-compact-toggle"
+                    icon=""
+                    useDefaultIcon={false}
+                    className="btn btn-link p-0 border-0 shadow-none"
+                  >
+                    <CustomTooltip placement="bottom-start" tooltipText="Control layout" hide={panelControlMenuOpen}>
+                      <i className="codicon codicon-layout fs-6" />
+                    </CustomTooltip>
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu>
+                    {panelControls.map(ctrl => (
+                      <Dropdown.Item key={ctrl.id} onClick={ctrl.onClick} data-id={`${ctrl.id}-menuItem`}>
+                        <i className={`${ctrl.iconClass} me-2`} />
+                        {ctrl.label}
+                      </Dropdown.Item>
+                    ))}
+                  </Dropdown.Menu>
+                </Dropdown>
+              ) : (
+                panelControls.map(ctrl => (
+                  <CustomTooltip key={ctrl.id} placement="bottom-start" tooltipText={ctrl.tooltip}>
+                    <div
+                      className={`panel-control-btn${ctrl.isActive ? ' active' : ''}`}
+                      data-id={ctrl.id}
+                      onClick={ctrl.onClick}
+                    >
+                      <i className={`${ctrl.iconClass} fs-6`} />
+                    </div>
+                  </CustomTooltip>
+                ))
+              )}
+            </div>
           </div>
         </div>
         <div
+          ref={rightSideRef}
           className="d-flex flex-row align-items-center justify-content-end flex-nowrap"
-          style={{ minWidth: '33%' }}
+          style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}
         >
-          <>
-            <GitHubLogin
-              cloneGitRepository={showCloneModal}
-              logOutOfGithub={logOutOfGithub}
-              publishToGist={publishToGist}
-              loginWithGitHub={loginWithGitHub}
-            />
-            {enableLogin && (
+          <div className="d-flex flex-row align-items-center flex-nowrap" style={{ whiteSpace: 'nowrap' }}>
+            <div style={{ whiteSpace: 'nowrap' }}>
+              <GitHubLogin
+                cloneGitRepository={showCloneModal}
+                logOutOfGithub={logOutOfGithub}
+                publishToGist={publishToGist}
+                loginWithGitHub={loginWithGitHub}
+                theme={currentTheme?.quality}
+              />
+            </div>
+
+            {showLoginUI && (
               <LoginButton
                 plugin={plugin}
                 variant="compact"
                 showCredits={true}
-                className="ms-3"
+                signInDataId="login-button"
+                className="ms-3 text-nowrap"
+                cloneGitRepository={showCloneModal}
+                publishToGist={publishToGist}
               />
             )}
-          </>
+          </div>
+          {showJoinBetaTopButton && <BetaPromoPill plugin={plugin} />}
+          {showNotificationBell && <NotificationBell className="ms-3" />}
+          {supportEnabled && isAuthenticated && token && (
+            <CustomTooltip placement="bottom" tooltipText="Premium Support">
+              <span
+                className="btn btn-sm d-flex align-items-center gap-1 ms-3"
+                style={{ cursor: 'pointer', padding: '0.25rem 0.6rem', color: 'var(--text)' }}
+                onClick={() => {
+                  window.open(`https://support.remix.live/login?token=${encodeURIComponent(token)}`, '_blank')
+                  trackMatomoEvent({ category: 'topbar', action: 'support', name: 'SupportOpened', isClick: true })
+                }}
+                data-id="topbar-supportBtn"
+              >
+                <i className="fas fa-headset"></i>
+                {!compactRightLabels && <span>Support</span>}
+              </span>
+            </CustomTooltip>
+          )}
+          {feedbackFormUrl && (
+            <CustomTooltip placement="bottom" tooltipText="Send Feedback">
+              <span
+                className="btn btn-sm btn-primary d-flex align-items-center gap-1 ms-3"
+                style={{ cursor: 'pointer', padding: '0.25rem 0.6rem' }}
+                onClick={() => {
+                  setFeedbackPanelOpen(true)
+                  trackMatomoEvent({ category: 'topbar', action: 'feedback', name: 'FeedbackOpened', isClick: true })
+                }}
+                data-id="topbar-feedbackIcon"
+              >
+                <i className="fas fa-bug"></i>
+                {!compactRightLabels && <span>Feedback</span>}
+              </span>
+            </CustomTooltip>
+          )}
           <span
-            style={{ fontSize: '1.5rem', cursor: 'pointer' }}
+            style={{ fontSize: '1rem', cursor: 'pointer' }}
             className="ms-3"
             onClick={async () => {
               const isActive = await plugin.call('manager', 'isActive', 'settings')
@@ -640,6 +939,16 @@ export function RemixUiTopbar() {
           </span>
         </div>
       </div>
+      {feedbackFormUrl && (
+        <FeedbackPanel
+          isOpen={feedbackPanelOpen}
+          onClose={() => {
+            setFeedbackPanelOpen(false)
+            trackMatomoEvent({ category: 'topbar', action: 'feedback', name: 'FeedbackClosed', isClick: true })
+          }}
+          formUrl={feedbackFormUrl}
+        />
+      )}
     </section>
   )
 }

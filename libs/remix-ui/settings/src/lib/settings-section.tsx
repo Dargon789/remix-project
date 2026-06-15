@@ -8,6 +8,7 @@ import type { ViewPlugin } from '@remixproject/engine-web'
 import { CustomTooltip } from '@remix-ui/helper'
 import { IMCPServerManager } from './mcp-server-manager'
 import { ProfileSection, CreditsBalance, ConnectedAccounts } from './account-settings'
+import { validateApiKeyFormat, testApiKey, getProviderFromSettingKey, type ModelProvider } from '@remix/remix-ai-core'
 
 type SettingsSectionUIProps = {
   plugin: ViewPlugin,
@@ -22,9 +23,90 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
   const [formUIData, setFormUIData] = useState<{ [key in keyof SettingsState]: Record<keyof SettingsState, string> }>({} as any)
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true) // Default to true for non-auth sections
   const [authLoading, setAuthLoading] = useState<boolean>(false)
+  // API key validation state
+  const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({})
+  const [apiKeyTestStatus, setApiKeyTestStatus] = useState<Record<string, 'idle' | 'testing' | 'valid' | 'invalid'>>({})
   const theme = useContext(ThemeContext)
   const isDark = theme.name === 'dark'
   const intl = useIntl()
+
+  const isApiKeySetting = (name: string): boolean => {
+    return name.includes('deepagent-') && name.includes('-api-key')
+  }
+
+  const validateApiKey = (name: string, value: string): string | null => {
+    if (!isApiKeySetting(name) || !value) return null
+    const provider = getProviderFromSettingKey(name)
+    if (!provider) return null
+
+    const result = validateApiKeyFormat(provider, value)
+    return result.isValid ? null : (result.error || 'Invalid API key format')
+  }
+
+  const handleTestApiKey = async (optionName: string, toggleOptionName: string) => {
+    // Look up value from form data (keyed by optionName -> toggleOptionName) or from state
+    const value = formUIData[optionName as keyof SettingsState]?.[toggleOptionName as keyof SettingsState] ||
+                  (state[toggleOptionName as keyof SettingsState]?.value as string) || ''
+    if (!value) {
+      console.log('[Settings] No value found for API key test:', { optionName, toggleOptionName })
+      return
+    }
+
+    const provider = getProviderFromSettingKey(toggleOptionName)
+    if (!provider) {
+      console.log('[Settings] Could not determine provider from:', toggleOptionName)
+      return
+    }
+
+    console.log('[Settings] Testing API key for provider:', provider)
+    setApiKeyTestStatus(prev => ({ ...prev, [toggleOptionName]: 'testing' }))
+
+    try {
+      const result = await testApiKey(provider, value)
+      console.log('[Settings] API key test result:', result)
+      setApiKeyTestStatus(prev => ({ ...prev, [toggleOptionName]: result.isValid ? 'valid' : 'invalid' }))
+      if (!result.isValid && result.error) {
+        setApiKeyErrors(prev => ({ ...prev, [toggleOptionName]: result.error || '' }))
+      } else {
+        setApiKeyErrors(prev => ({ ...prev, [toggleOptionName]: '' }))
+      }
+    } catch (error: any) {
+      console.error('[Settings] API key test error:', error)
+      setApiKeyTestStatus(prev => ({ ...prev, [toggleOptionName]: 'invalid' }))
+      setApiKeyErrors(prev => ({ ...prev, [toggleOptionName]: error?.message || 'Test failed' }))
+    }
+
+    // Reset status after 5 seconds
+    setTimeout(() => {
+      setApiKeyTestStatus(prev => ({ ...prev, [toggleOptionName]: 'idle' }))
+    }, 5000)
+  }
+
+  // Test all API keys that have values
+  const handleTestAllApiKeys = async (optionName: string, toggleOptions: { name: keyof SettingsState; type: 'text' | 'password' }[]) => {
+    const apiKeyOptions = toggleOptions.filter(opt => isApiKeySetting(opt.name as string))
+    let testedCount = 0
+    let validCount = 0
+
+    for (const opt of apiKeyOptions) {
+      const value = formUIData[optionName as keyof SettingsState]?.[opt.name] ||
+                    (state[opt.name]?.value as string) || ''
+      if (value) {
+        testedCount++
+        await handleTestApiKey(optionName, opt.name as string)
+        // Check if the test was valid
+        if (apiKeyTestStatus[opt.name as string] === 'valid') {
+          validCount++
+        }
+      }
+    }
+
+    if (testedCount === 0) {
+      dispatch({ type: 'SET_TOAST_MESSAGE', payload: { value: 'No API keys to test' } })
+    } else {
+      dispatch({ type: 'SET_TOAST_MESSAGE', payload: { value: `Tested ${testedCount} API key(s)` } })
+    }
+  }
 
   useEffect(() => {
     if (section) {
@@ -86,31 +168,55 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
         Object.keys(formUIData[name]).forEach((key) => {
           dispatch({ type: 'SET_VALUE', payload: { name: key, value: '' } })
         })
-        dispatch({ type: 'SET_TOAST_MESSAGE', payload: { value: 'Credentials removed' } })
+        dispatch({ type: 'SET_TOAST_MESSAGE', payload: { value: intl.formatMessage({ id: 'settings.credentialsRemoved' }) } })
       }
       if (name === 'copilot/suggest/activate') plugin.emit('copilotChoiceUpdated', newValue)
       if (name === 'matomo-perf-analytics') plugin.call('settings', 'updateMatomoPerfAnalyticsChoice', newValue)
       if (name === 'text-wrap') plugin.emit('textWrapChoiceUpdated', newValue)
+      if (name === 'mcp/servers/enable') plugin.call('remixAI', newValue ? 'enableMCPEnhancement' : 'disableMCPEnhancement')
     } else {
       console.error('Setting does not exist: ', name)
     }
   }
 
   const handleButtonClick = (buttonOptions: ButtonOptions) => {
-    if (buttonOptions.action === 'link') {
+    if (buttonOptions && buttonOptions.action === 'link') {
       window.open(buttonOptions.link, '_blank')
     }
   }
 
   const handleFormUIData = (optionName: keyof SettingsState, toggleOptionName: keyof SettingsState, value: string) => {
     setFormUIData(formUIData => ({ ...formUIData, [optionName]: { ...formUIData[optionName], [toggleOptionName]: value } }))
+
+    // Validate API key format on change
+    const error = validateApiKey(toggleOptionName as string, value)
+    if (error) {
+      setApiKeyErrors(prev => ({ ...prev, [toggleOptionName]: error }))
+    } else {
+      setApiKeyErrors(prev => ({ ...prev, [toggleOptionName]: '' }))
+    }
+    // Reset test status on change
+    setApiKeyTestStatus(prev => ({ ...prev, [toggleOptionName]: 'idle' }))
   }
 
   const saveFormUIData = (optionName: keyof SettingsState) => {
+    // Check for API key validation errors before saving
+    const keys = Object.keys(formUIData[optionName] || {})
+    for (const key of keys) {
+      if (isApiKeySetting(key) && formUIData[optionName][key]) {
+        const error = validateApiKey(key, formUIData[optionName][key])
+        if (error) {
+          setApiKeyErrors(prev => ({ ...prev, [key]: error }))
+          dispatch({ type: 'SET_TOAST_MESSAGE', payload: { value: intl.formatMessage({ id: 'settings.apiKeyFormatError' }) + ': ' + error } })
+          return // Don't save if there are validation errors
+        }
+      }
+    }
+
     Object.keys(formUIData[optionName]).forEach((key) => {
       dispatch({ type: 'SET_VALUE', payload: { name: key, value: formUIData[optionName][key] } })
     })
-    dispatch({ type: 'SET_TOAST_MESSAGE', payload: { value: 'Credentials updated' } })
+    dispatch({ type: 'SET_TOAST_MESSAGE', payload: { value: intl.formatMessage({ id: 'settings.credentialsUpdated' }) } })
   }
 
   return (
@@ -122,9 +228,9 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
       {section.requiresAuth && authLoading && (
         <div className="pt-3">
           <div className="spinner-border spinner-border-sm" role="status">
-            <span className="sr-only">Loading...</span>
+            <span className="sr-only"><FormattedMessage id="settings.loading" /></span>
           </div>
-          <span className="ms-2">Loading...</span>
+          <span className="ms-2"><FormattedMessage id="settings.loading" /></span>
         </div>
       )}
 
@@ -133,7 +239,7 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
         <div className="pt-3">
           <div className="alert alert-warning" role="alert">
             <i className="fas fa-exclamation-triangle me-2"></i>
-            Not logged in. Please log in with Google, GitHub, Discord, or wallet to manage accounts.
+            <FormattedMessage id="settings.notLoggedIn" />
           </div>
         </div>
       )}
@@ -144,8 +250,8 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
 
         return (
           <div key={subSectionIndex} className='pt-3'>
-            {subSection.title && <h5 className={`${isDark ? 'text-white' : 'text-black'}`} style={{ fontSize: '1.2rem' }}>{subSection.title}</h5>}
-            {subSection.description && <p className={`text-muted mb-3`} style={{ fontSize: '0.85rem' }}>{subSection.description}</p>}
+            {subSection.title && <h5 className={`${isDark ? 'text-white' : 'text-black'}`} style={{ fontSize: '1.2rem' }}><FormattedMessage id={subSection.title} /></h5>}
+            {subSection.description && <p className={`text-muted mb-3`} style={{ fontSize: '0.85rem' }}><FormattedMessage id={subSection.description} /></p>}
             <div className={`card ${isDark ? 'text-light' : 'text-dark'} border-0 ${isLastItem ? 'mb-4' : ''}`}>
               <div className={`card-body ${section.key === 'account' ? 'pt-1' : ''}`} style={section.key === 'account' ? {} : { padding: '0.75rem' }}>
                 {subSection.options.map((option, optionIndex) => {
@@ -173,7 +279,7 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
                           <div className="ms-auto">
                             {option.type === 'toggle' && <ToggleSwitch id={option.name} isOn={toggleValue} onClick={() => handleToggle(option.name)} disabled = {option.name === "matomo-analytics" ? true : false}/>}
                             {option.type === 'select' && <div style={{ minWidth: '110px' }}><SelectDropdown value={selectValue} options={option.selectOptions} name={option.name} dispatch={dispatch as any} /></div>}
-                            {option.type === 'button' && <button className="btn btn-secondary btn-sm" onClick={() => handleButtonClick(option.buttonOptions)}><FormattedMessage id={option.buttonOptions.label} /></button>}
+                            {option.type === 'button' && <button className="btn btn-secondary btn-sm" onClick={() => handleButtonClick(option.buttonOptions)}><FormattedMessage id={option.buttonOptions?.label} /></button>}
                             {option.type === 'custom' && option.customComponent === 'mcpServerManager' && <span></span>}
                             {option.type === 'custom' && option.customComponent === 'profileSection' && <span></span>}
                             {option.type === 'custom' && option.customComponent === 'creditsBalance' && <span></span>}
@@ -204,14 +310,14 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
                       )}
                       {
                         option.footnote ? option.footnote.link ?
-                          <a href={option.footnote.link} className={`mt-1 ${option.footnote.styleClass}`} target="_blank" rel="noopener noreferrer">{option.footnote.text}</a>
+                          <a href={option.footnote.link} className={`mt-1 ${option.footnote.styleClass}`} target="_blank" rel="noopener noreferrer"><FormattedMessage id={option.footnote.text} /></a>
                           :
-                          <span className={`text-secondary mt-1 ${option.footnote.styleClass}`}>{option.footnote.text}</span>
+                          <span className={`text-secondary mt-1 ${option.footnote.styleClass}`}><FormattedMessage id={option.footnote.text} /></span>
                           : null
                       }
                       {option.toggleUIDescription && toggleValue && <span className="text-secondary mt-1">{option.toggleUIDescription}</span>}
                       {option.toggleUIOptions && toggleValue && option.toggleUIOptions.map((toggleOption, toggleOptionIndex) => {
-                        const isLastOption = toggleOptionIndex === option.toggleUIOptions.length - 1
+                        const isLastOption = toggleOptionIndex === (option.toggleUIOptions as any).length - 1
                         const inputValue = state[toggleOption.name] && typeof state[toggleOption.name].value === 'string' ? state[toggleOption.name].value as string : ''
 
                         return state[toggleOption.name] && (
@@ -227,7 +333,21 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
                                 placeholder={intl.formatMessage({ id: `settings.${toggleOption.name}` })}
                               />
                             </div>
-                            {isLastOption && <div className="d-flex pt-3">
+                            {/* Show validation error for API keys */}
+                            {isApiKeySetting(toggleOption.name as string) && apiKeyErrors[toggleOption.name as string] && (
+                              <div className="text-danger small mt-1">
+                                <i className="fas fa-exclamation-circle me-1"></i>
+                                {apiKeyErrors[toggleOption.name as string]}
+                              </div>
+                            )}
+                            {/* Show test status indicator for API keys */}
+                            {isApiKeySetting(toggleOption.name as string) && apiKeyTestStatus[toggleOption.name as string] === 'valid' && (
+                              <div className="text-success small mt-1">
+                                <i className="fas fa-check-circle me-1"></i>
+                                <FormattedMessage id="settings.apiKeyValid" />
+                              </div>
+                            )}
+                            {isLastOption && <div className="d-flex pt-3 gap-2">
                               <input
                                 className="btn btn-sm btn-primary"
                                 id={`settingsTabSave${option.name}`}
@@ -235,8 +355,28 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
                                 onClick={() => saveFormUIData(option.name)}
                                 value={intl.formatMessage({ id: 'settings.save' })}
                                 type="button"
-                                // disabled={!formUIData[option.name]}
                               ></input>
+                              {/* Test button for API key settings */}
+                              {option.toggleUIOptions?.some(opt => isApiKeySetting(opt.name as string)) && (
+                                <button
+                                  className="btn btn-sm btn-secondary"
+                                  onClick={() => handleTestAllApiKeys(option.name as string, option.toggleUIOptions || [])}
+                                  disabled={option.toggleUIOptions?.some(opt =>
+                                    isApiKeySetting(opt.name as string) && apiKeyTestStatus[opt.name as string] === 'testing'
+                                  )}
+                                >
+                                  {option.toggleUIOptions?.some(opt =>
+                                    isApiKeySetting(opt.name as string) && apiKeyTestStatus[opt.name as string] === 'testing'
+                                  ) ? (
+                                      <>
+                                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                        <FormattedMessage id="settings.testing" />
+                                      </>
+                                    ) : (
+                                      <FormattedMessage id="settings.testApiKey" />
+                                    )}
+                                </button>
+                              )}
                             </div>
                             }
                           </div>

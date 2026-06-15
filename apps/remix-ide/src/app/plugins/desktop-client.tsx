@@ -101,10 +101,9 @@ export class DesktopClient extends ViewPlugin {
     this.state.disableconnect = true
     this.renderComponent()
     try {
-      this.blockchain.changeExecutionContext({ context: provider.name, fork: '' }, null, null, () => {
-        this.state.disableconnect = false
-        this.renderComponent()
-      })
+      await this.blockchain.changeExecutionContext({ context: provider.name, fork: '' })
+      this.state.disableconnect = false
+      this.renderComponent()
     } catch (e) {
       console.error('Error connecting to provider', e)
     }
@@ -236,16 +235,16 @@ export class DesktopClient extends ViewPlugin {
       } else {
         await this.isInjected()
         try {
-          const provider = this.blockchain.web3().currentProvider
+          const provider = this.blockchain.getProviderObject().provider
 
-          let result = await provider.sendAsync(parsed)
+          let result = await provider.send(parsed)
 
           console.log('Sending result back to server', result)
           this.ws.send(stringifyWithBigInt(result))
 
         } catch (e) {
 
-          console.log('No provider...', parsed)
+          console.log('No provider...', parsed, e)
           this.ws.send(stringifyWithBigInt({
             jsonrpc: '2.0',
             result: 'error',

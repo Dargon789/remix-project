@@ -26,7 +26,8 @@ export const initialState: TemplateExplorerWizardState = {
   contractOptions: {
     mintable: false,
     burnable: false,
-    pausable: false
+    pausable: false,
+    permit: true,
   },
   contractAccessControl: '',
   contractUpgradability: {
@@ -38,7 +39,8 @@ export const initialState: TemplateExplorerWizardState = {
   gitUrl: '',
   tokenName: 'MyToken',
   contractName: 'MyToken',
-  manageCategory: 'Template'
+  manageCategory: 'Template',
+  creating: false
 }
 
 export const templateExplorerReducer = (state: TemplateExplorerWizardState, action: any) => {
@@ -111,6 +113,9 @@ export const templateExplorerReducer = (state: TemplateExplorerWizardState, acti
   case ContractWizardAction.CONTRACT_OPTIONS_UPDATE: {
     return { ...state, contractOptions: action.payload }
   }
+  case ContractWizardAction.UPDATE_ERC20_PERMIT: {
+    return { ...state, contractOptions: { ...state.contractOptions, permit: action.payload } }
+  }
   case ContractWizardAction.CONTRACT_CODE_UPDATE: {
     return { ...state, contractCode: action.payload }
   }
@@ -128,6 +133,9 @@ export const templateExplorerReducer = (state: TemplateExplorerWizardState, acti
   }
   case ContractWizardAction.CONTRACT_TAG_UPDATE: {
     return { ...state, contractTag: action.payload }
+  }
+  case TemplateExplorerWizardAction.SET_CREATING: {
+    return { ...state, creating: action.payload }
   }
   default: {
     return { ...state, contractCode: getErc20ContractCode('erc20', state) }
