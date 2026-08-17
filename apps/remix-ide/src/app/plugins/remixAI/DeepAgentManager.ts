@@ -88,8 +88,9 @@ export class DeepAgentManager {
         remixAILogger.log('[RemixAI Plugin] Using user-provided API keys for DeepAgent')
       }
       const resolvedModelId = await this.resolveOllamaModelId(plugin.selectedModel.provider, plugin.selectedModelId)
-      // Don't use remote fallback for Ollama - user explicitly chose local models
-      const fallbackInferencer = plugin.selectedModel.provider === 'ollama' ? null : plugin.remoteInferencer
+      // Solcoder fallback disabled: DeepAgent errors surface to the user
+      // instead of silently retrying against the remote (solcoder) path.
+      const fallbackInferencer = null
 
       // Clean up old instance if it exists
       if (plugin.deepAgentInferencer && typeof plugin.deepAgentInferencer.cleanup === 'function') {
@@ -107,7 +108,7 @@ export class DeepAgentManager {
         },
         fallbackInferencer,
         plugin.mcpInferencer,
-        { provider: plugin.selectedModel.provider as 'anthropic' | 'mistralai' | 'openai' | 'moonshot' | 'ollama', modelId: resolvedModelId }
+        { provider: plugin.selectedModel.provider as 'anthropic' | 'mistralai' | 'openai' | 'moonshot' | 'openrouter' | 'ollama' | 'bedrock', modelId: resolvedModelId, routeProvider: plugin.selectedModel.routeProvider }
       )
 
       await plugin.deepAgentInferencer.initialize()
@@ -283,6 +284,7 @@ export class DeepAgentManager {
   }
 
   private async doReinitialize(): Promise<void> {
+    console.log('[DeepAgentManager] doReinitialize: starting reinitialization of DeepAgentInferencer')
     const plugin = this.deps.plugin
     const hasSelectedModel = !!(plugin.selectedModel && plugin.selectedModelId)
 
@@ -308,8 +310,9 @@ export class DeepAgentManager {
           remixAILogger.log('[RemixAI Plugin] Using user-provided API keys for DeepAgent (reinitialize)')
         }
         const resolvedModelId = await this.resolveOllamaModelId(plugin.selectedModel.provider, plugin.selectedModelId)
-        // Don't use remote fallback for Ollama - user explicitly chose local models
-        const fallbackInferencer = plugin.selectedModel.provider === 'ollama' ? null : plugin.remoteInferencer
+        // Solcoder fallback disabled: DeepAgent errors surface to the user
+        // instead of silently retrying against the remote (solcoder) path.
+        const fallbackInferencer = null
 
         // Clean up old instance if it exists
         if (plugin.deepAgentInferencer && typeof plugin.deepAgentInferencer.cleanup === 'function') {
@@ -327,7 +330,7 @@ export class DeepAgentManager {
           },
           fallbackInferencer,
           plugin.mcpInferencer,
-          { provider: plugin.selectedModel.provider as 'anthropic' | 'mistralai' | 'openai' | 'moonshot' | 'ollama', modelId: resolvedModelId }
+          { provider: plugin.selectedModel.provider as 'anthropic' | 'mistralai' | 'openai' | 'moonshot' | 'openrouter' | 'ollama' | 'bedrock', modelId: resolvedModelId, routeProvider: plugin.selectedModel.routeProvider }
         )
         await plugin.deepAgentInferencer.initialize()
         plugin.deepAgentEnabled = true
@@ -357,6 +360,7 @@ export class DeepAgentManager {
         remixAILogger.log('[RemixAI Plugin] DeepAgent reinitialized successfully')
       } catch (error) {
         remixAILogger.error('[RemixAI Plugin] Failed to reinitialize DeepAgent:', error)
+        console.error('[DeepAgentManager] doReinitialize: caught error', error)
         plugin.deepAgentEnabled = false
         plugin.deepAgentInferencer = null
         ;(plugin as any).traceDeepAgentLifecycle?.('manager.reinitialize:failed', 'caught error inside DeepAgentManager.reinitialize()', {

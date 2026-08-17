@@ -31,7 +31,7 @@ export const SettingsSectionUI: React.FC<SettingsSectionUIProps> = ({ plugin, se
   const intl = useIntl()
 
   const isApiKeySetting = (name: string): boolean => {
-    return name.includes('deepagent-') && name.includes('-api-key')
+    return name.includes('deepagent-') && (name.includes('-api-key') || name.includes('-bearer-token'))
   }
 
   const validateApiKey = (name: string, value: string): string | null => {
