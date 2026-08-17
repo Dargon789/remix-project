@@ -11,7 +11,8 @@ import { Features } from '@remix-api';
  */
 export interface AIModel {
   id: string
-  provider: 'openai' | 'mistralai' | 'moonshot' | 'anthropic' | 'ollama'
+  provider: 'openai' | 'mistralai' | 'moonshot' | 'openrouter' | 'anthropic' | 'ollama' | 'bedrock'
+  routeProvider?: 'openai' | 'mistralai' | 'moonshot' | 'openrouter' | 'anthropic' | 'ollama' | 'bedrock'
   /** Display name as the backend wants it shown. */
   displayName: string
   description: string
@@ -26,6 +27,7 @@ export interface AIModel {
   available: boolean
   /** Backend-supplied reason when `available === false`. e.g. 'feature_required'. */
   reason?: string
+  requireAPIKey?: boolean
   /** Backend ordering hint. */
   sortOrder: number
 }
@@ -86,16 +88,34 @@ export const ANONYMOUS_FALLBACK_MODELS: AIModel[] = [
  * it via `assistantState.getDefaultModel()` (or `selectDefaultModel(snap)`).
  *
  * If you find yourself wanting a literal model id here, you have a bug:
- *   - For "user just opened the app" \u2192 selectedModel should be `null`
- *     until /permissions resolves. Render a "Loading\u2026" state.
- *   - For "task X needs model Y" \u2192 backend advertises that via
+ *   - For "user just opened the app" → selectedModel should be `null`
+ *     until /permissions resolves. Render a "Loading…" state.
+ *   - For "task X needs model Y" → backend advertises that via
  *     `permissions.task_models[X]`. Read with `assistantState.getModelForTask('X')`.
- *   - For "Ollama / anonymous fallback" \u2192 ANONYMOUS_FALLBACK_MODELS.
+ *   - For "Ollama / anonymous fallback" → ANONYMOUS_FALLBACK_MODELS.
  *
  * Anything else MUST throw rather than silently substitute.
  */
-
 export function getModelById(id: string, list: ReadonlyArray<AIModel> = ANONYMOUS_FALLBACK_MODELS): AIModel | undefined {
+  return list.find(m => m.id === id)
+}
+
+export function modelKey(model: Pick<AIModel, 'provider' | 'id'>): string {
+  return `${model.provider}::${model.id}`
+}
+
+export function parseModelKey(key: string): { provider?: string; id: string } {
+  const idx = key.indexOf('::')
+  if (idx === -1) return { id: key }
+  return { provider: key.slice(0, idx), id: key.slice(idx + 2) }
+}
+
+export function findModel(
+  list: ReadonlyArray<AIModel>,
+  id: string,
+  provider?: string
+): AIModel | undefined {
+  if (provider) return list.find(m => m.id === id && m.provider === provider)
   return list.find(m => m.id === id)
 }
 
@@ -126,17 +146,75 @@ export function parseAIModelsFromPermissions(permissions: any): AIModel[] | null
       requiredFeature: typeof m.required_feature === 'string' ? m.required_feature : null,
       available: m.available !== false,
       reason: typeof m.reason === 'string' ? m.reason : undefined,
+      requireAPIKey: !!(m.require_api_key ?? m.requireAPIKey),
       sortOrder: typeof m.sort_order === 'number' ? m.sort_order : 0
     }))
     .sort((a, b) => a.sortOrder - b.sortOrder)
+
   // Append the local Ollama option only when the user has the `ai:ollama`
-  // feature enabled. The backend doesn't ship Ollama in `ai_models[]`
-  // (it's a local capability), so the feature flag is the only signal.
+  // feature. Every other provider (anthropic / openai / mistral / moonshot /
+  // openrouter / bedrock) is advertised directly by the backend in `ai_models`.
   const features = permissions?.features as Record<string, { is_enabled?: boolean }> | undefined
+
   if (features && features[Features.AI_OLLAMA]?.is_enabled === true) {
     parsed.push(OLLAMA_MODEL)
   }
   return parsed
+}
+
+interface BrandCurationRule {
+  match: RegExp
+  brand: AIModel['provider']
+  displayName: string
+  description?: string
+  sortOrder: number
+}
+
+const BEDROCK_BRAND_CURATION: BrandCurationRule[] = [
+  // Anthropic (Claude on Bedrock) — 5 family + 4.8 family
+  { match: /claude-fable-5|fable-5/i, brand: 'anthropic', displayName: 'Claude Fable 5', description: 'Anthropic Claude Fable 5', sortOrder: 10 },
+  { match: /claude-opus-5/i, brand: 'anthropic', displayName: 'Claude Opus 5', description: 'Anthropic Claude Opus 5 — most capable', sortOrder: 11 },
+  { match: /claude-sonnet-5/i, brand: 'anthropic', displayName: 'Claude Sonnet 5', description: 'Anthropic Claude Sonnet 5 — balanced', sortOrder: 12 },
+  { match: /claude-opus-4-8/i, brand: 'anthropic', displayName: 'Claude Opus 4.8', description: 'Anthropic Claude Opus 4.8', sortOrder: 13 },
+  { match: /claude-sonnet-4-8/i, brand: 'anthropic', displayName: 'Claude Sonnet 4.8', description: 'Anthropic Claude Sonnet 4.8', sortOrder: 14 },
+  { match: /claude-haiku-4-8/i, brand: 'anthropic', displayName: 'Claude Haiku 4.8', description: 'Anthropic Claude Haiku 4.8 — fast', sortOrder: 15 },
+  // Mistral AI
+  { match: /mistral-large/i, brand: 'mistralai', displayName: 'Mistral Large', description: 'Mistral Large', sortOrder: 20 },
+  { match: /devstral/i, brand: 'mistralai', displayName: 'Devstral', description: 'Mistral Devstral — coding', sortOrder: 21 },
+  { match: /mistral-small/i, brand: 'mistralai', displayName: 'Mistral Small', description: 'Mistral Small — fast', sortOrder: 22 },
+  // OpenAI (open-weight gpt-oss on Bedrock)
+  { match: /gpt-oss-120b/i, brand: 'openai', displayName: 'GPT-OSS 120B', description: 'OpenAI open-weight 120B', sortOrder: 30 },
+  { match: /gpt-oss-20b/i, brand: 'openai', displayName: 'GPT-OSS 20B', description: 'OpenAI open-weight 20B — fast', sortOrder: 31 }
+]
+
+export function curateBedrockBrandedModels(models: AIModel[]): AIModel[] {
+  if (!Array.isArray(models) || models.length === 0) return models
+  const bedrockModels = models.filter((m) => m.provider === 'bedrock')
+  if (bedrockModels.length === 0) return models
+
+  const branded: AIModel[] = []
+  const brandedIds = new Set<string>()
+  for (const model of bedrockModels) {
+    const rule = BEDROCK_BRAND_CURATION.find((r) => r.match.test(model.id))
+    if (!rule) continue
+    brandedIds.add(model.id)
+    branded.push({
+      ...model, // preserves backend `isDefault`, `available`, etc.
+      provider: rule.brand,
+      routeProvider: 'bedrock',
+      displayName: rule.displayName,
+      description: rule.description ?? model.description,
+      sortOrder: rule.sortOrder
+    })
+  }
+
+  if (branded.length === 0) return models
+
+  // Everything we didn't rebrand: unmatched Bedrock models (stay under "AWS
+  const rest = models.filter((m) => !(m.provider === 'bedrock' && brandedIds.has(m.id)))
+
+  branded.sort((a, b) => a.sortOrder - b.sortOrder)
+  return [...branded, ...rest]
 }
 
 const CompletionParams:IParams = {
