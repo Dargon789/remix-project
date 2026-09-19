@@ -110,7 +110,6 @@ export interface PromptAreaProps {
   ollamaModels: any[]
   themeTracker: any
   stopRequest: () => void
-  autoModeEnabled?: boolean
   handleLoadSkills?: () => void
   usingOwnApiKey?: boolean
   aiRoute?: 'initializing' | 'agent' | 'tools' | 'chat'
@@ -154,7 +153,6 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
   showOllamaModelSelector,
   selectedOllamaModel,
   modelSelectorBtnRef,
-  autoModeEnabled,
   usingOwnApiKey,
   aiRoute = 'chat',
   aiRouteReady = true,
@@ -222,7 +220,7 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
       cmds.push({
         name: 'load-skills',
         description: 'Load skills',
-        category: 'Tools',
+        category: 'Audit',
         action: handleLoadSkills,
         disabled: false,
         requiredFeatures: [Features.SKILLS_BASIC]
@@ -233,7 +231,7 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
         name: 'audit',
         description: 'Audit a contract',
         requiredFeatures: [Features.AI_AUDITOR],
-        category: 'Tools',
+        category: 'Audit',
         action: () => {
           handleLoadAuditChecklist()
           setInput('Audit a contract. Ask which contract file to audit if none provided.')
@@ -243,13 +241,23 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
       cmds.push({
         name: 'load-audit-checklist',
         description: 'Load audit checklist',
-        category: 'Tools',
+        category: 'Audit',
         action: handleLoadAuditChecklist,
         requiredFeatures: [Features.AI_AUDITOR],
         disabled: !hasAuditorPermission
       })
     }
-    if (handleGasOptimisationAudit) cmds.push({ name: 'gas-audit', description: 'Gas optimisation audit', category: 'Tools', action: handleGasOptimisationAudit, requiredFeatures: [Features.AI_AUDITOR]})
+    if (handleGasOptimisationAudit) cmds.push({ name: 'gas-audit', description: 'Gas optimisation audit', category: 'Audit', action: handleGasOptimisationAudit, requiredFeatures: [Features.AI_AUDITOR]})
+    if (handleLoadSkills) {
+      cmds.push({
+        name: 'load-skills',
+        description: 'Skills',
+        category: 'Skills',
+        action: handleLoadSkills,
+        disabled: false,
+        requiredFeatures: [Features.SKILLS_BASIC]
+      })
+    }
     return cmds
   }, [handleSetModel, handleOpenSettings, handleLoadSkills, handleLoadAuditChecklist, handleGasOptimisationAudit, hasAuditorPermission, hasSkillsPermission, setInput])
 
@@ -392,7 +400,26 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
   // route that can never become ready until they authenticate.
   const activeCategory = activeShortcut ? (SHORTCUT_CATEGORIES.find(c => c.id === activeShortcut) ?? null) : null
 
-  const toolCommands = actionCommands.filter(cmd => cmd.category === 'Tools')
+  const actionCommandsByCategory = actionCommands.reduce<Record<string, Command[]>>((acc, cmd) => {
+    const cat = cmd.category ?? 'Other'
+    if (cat === 'Settings') return acc
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(cmd)
+    return acc
+  }, {})
+
+  const activeActionCommands = activeShortcut
+    ? (actionCommandsByCategory[Object.keys(actionCommandsByCategory).find(k => k.toLowerCase() === activeShortcut) ?? ''] ?? [])
+    : []
+
+  const dynamicCategoryPills = Object.keys(actionCommandsByCategory).map(cat => {
+    const cmds = actionCommandsByCategory[cat]
+    return {
+      id: cat.toLowerCase(),
+      label: cat,
+      directAction: cmds.length === 1 && cmds[0].action ? cmds[0] : null,
+    }
+  })
 
   // Contextual hint for a just-inserted command (e.g. "/compile ") so the user
   const activeCommandHint = useMemo(() => {
@@ -418,15 +445,27 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
     <>
       <div ref={shortcutsRef} className="position-relative mx-2 mb-1">
         <div className="d-flex flex-row align-items-center" style={{ gap: '4px' }}>
-          {[...SHORTCUT_CATEGORIES, ...(toolCommands.length > 0 ? [{ id: 'tools', label: 'Tools' }] : [])].map(cat => (
+          {[...SHORTCUT_CATEGORIES, ...dynamicCategoryPills].map(cat => (
             <button
               key={cat.id}
-              onClick={() => setActiveShortcut(prev => {
-                const next = prev === cat.id ? null : cat.id
-                // Track only when opening a category (not when toggling it shut)
-                if (next) trackMatomoEvent({ category: 'ai', action: 'remixAI', name: 'command_category_open', value: cat.id, isClick: true })
-                return next
-              })}
+              onClick={() => {
+                const direct = (cat as any).directAction
+                if (direct) {
+                  const missingFeature = getMissingFeature(direct)
+                  if (missingFeature) {
+                    onUpgradeRequired?.(direct.name, missingFeature)
+                    return
+                  }
+                  trackMatomoEvent({ category: 'ai', action: 'remixAI', name: 'tool_selected', value: direct.name, isClick: true })
+                  direct.action?.()
+                  return
+                }
+                setActiveShortcut(prev => {
+                  const next = prev === cat.id ? null : cat.id
+                  if (next) trackMatomoEvent({ category: 'ai', action: 'remixAI', name: 'command_category_open', value: cat.id, isClick: true })
+                  return next
+                })
+              }}
               className="btn btn-sm rounded-pill"
               style={{
                 fontSize: '0.72rem',
@@ -525,7 +564,7 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
             })}
           </div>
         )}
-        {activeShortcut === 'tools' && (
+        {activeActionCommands.length > 0 && (
           <div
             className="position-absolute rounded-3 shadow-lg overflow-hidden"
             style={{
@@ -536,9 +575,9 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
               border: '1px solid var(--bs-border-color)',
               zIndex: 1000,
             }}
-            data-id="shortcut-popover-tools"
+            data-id="shortcut-popover-action"
           >
-            {toolCommands.map((cmd, i) => {
+            {activeActionCommands.map((cmd, i) => {
               const missingFeature = getMissingFeature(cmd)
               const isLocked = missingFeature !== null
               return (
@@ -546,7 +585,6 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
                   key={cmd.name}
                   onClick={() => {
                     setActiveShortcut(null)
-                    // Locked tool → plan-manager hand-off (tracked by onUpgradeRequired).
                     if (isLocked) {
                       onUpgradeRequired?.(cmd.name, missingFeature as string)
                       return
@@ -559,7 +597,7 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
                     backgroundColor: 'transparent',
                     color: 'var(--bs-body-color)',
                     fontSize: '0.8rem',
-                    borderBottom: i < toolCommands.length - 1 ? '1px solid var(--bs-border-color)' : 'none',
+                    borderBottom: i < activeActionCommands.length - 1 ? '1px solid var(--bs-border-color)' : 'none',
                     cursor: 'pointer',
                   }}
                   onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--custom-onsurface-layer-1)' }}
@@ -669,7 +707,7 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
               >
                 <div className="d-flex flex-row flex-nowrap align-items-center justify-content-center">
                   <span className="text-nowrap">
-                    {autoModeEnabled ? 'Auto Mode' : (selectedModel?.displayName || 'Select Model')}
+                    {selectedModel?.displayName || 'Select Model'}
                   </span>
                   {usingOwnApiKey && (
                     <CustomTooltip tooltipText="Using your own API key">

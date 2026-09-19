@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState, useRef, useMemo } from 'react'
 import { FormattedMessage, useIntl } from 'react-intl'
-import { CustomToggle, CustomTooltip, getTimeAgo, shortenAddress, isNumeric, is0XPrefixed, isHexadecimal, logBuilder, extractDataDefault, getMultiValsString } from '@remix-ui/helper'
+import { CustomToggle, CustomTooltip, getTimeAgo, shortenAddress, isNumeric, is0XPrefixed, isHexadecimal, logBuilder, extractDataDefault, getMultiValsString, isQuickDappRemixVMIdentifier, normalizeQuickDappEnvironment } from '@remix-ui/helper'
 import { CopyToClipboard } from '@remix-ui/clipboard'
 import * as remixLib from '@remix-project/remix-lib'
 import { Dropdown } from 'react-bootstrap'
@@ -11,6 +11,7 @@ import { DeployedContract } from '../types'
 import { runTransactions } from '../actions'
 import { ContractKebabMenu } from './ContractKebabMenu'
 import { EnsNaming } from './EnsNaming'
+import { QuickDappContractSelector, QuickDappFigmaPreparationResult, QuickDappSetupOptions } from '@remix-ui/quick-dapp-v2'
 
 import { TreeView, TreeViewItem } from '@remix-ui/tree-view'
 import BN from 'bn.js'
@@ -22,11 +23,7 @@ import isElectron from 'is-electron'
 const txHelper = remixLib.execution.txHelper
 const txFormat = remixLib.execution.txFormat
 const highlightedContracts = new Set<string>()
-const QUICKDAPP_SUBGRAPH_SETUP_OPTION = '- Subgraph: None (default) or a .subgraph file path/name'
-const QUICKDAPP_SUBGRAPH_SETUP_RULE = 'Subgraph defaults to None. If I choose to use a .subgraph, ask me for the .subgraph file path/name and pass it to generate_dapp as subgraphFilePath. Do not redirect me to the .subgraph context menu and do not invent graphContext.'
-const QUICKDAPP_GRAPH_CONTEXT_TOOL_ARG = '- subgraphFilePath: include only if I chose a .subgraph file path/name; graphContext: include only if a validated graphContext was already provided by The Graph handoff'
-const QUICKDAPP_SCOPE_NOTICE = 'Before listing setup options, briefly state this scope once: "QuickDApp publishes a browser-based static frontend. It does not provide a server runtime or secret storage, and selected contract bindings are fixed after creation."'
-
+const REMIX_VM_DAPP_WORKSPACE_MESSAGE = 'Creating another DApp from a DApp workspace is not supported with Remix VM. Switch to a persistent network, deploy the contract there, and try again.'
 interface DeployedContractItemProps {
   contract: DeployedContract
   index: number
@@ -36,11 +33,10 @@ interface DeployedContractItemProps {
 }
 
 export function DeployedContractItem({ contract, index, registerRef, isKebabMenuOpen = false, onKebabMenuToggle }: DeployedContractItemProps) {
-  const { dispatch, plugin, themeQuality } = useContext(DeployedContractsAppContext)
+  const { widgetState, dispatch, plugin, themeQuality } = useContext(DeployedContractsAppContext)
   const { trackMatomoEvent } = useContext(TrackingContext)
   const intl = useIntl()
   const { features } = useAuth()
-  const hasQuickdappAccess = features?.[Features.DAPP_QUICKDAPP]?.is_enabled
   const hasRegisterEnsAccess = features?.[Features.REGISTER_ENS]?.is_enabled === true
   const isDesktop = isElectron()
   const [networkName, setNetworkName] = useState<string>('')
@@ -62,6 +58,9 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
   const [expandPath, setExpandPath] = useState<string[]>([])
   const [functionSearchTerm, setFunctionSearchTerm] = useState<string>('')
   const [showEnsNaming, setShowEnsNaming] = useState<boolean>(false)
+  const [showQuickDappContractSelector, setShowQuickDappContractSelector] = useState<boolean>(false)
+  const [quickDappFixedFrontendMode, setQuickDappFixedFrontendMode] = useState<'inline' | 'workspace' | undefined>()
+  const [quickDappEnvironmentId, setQuickDappEnvironmentId] = useState<string>()
 
   useEffect(() => {
     plugin.call('udappEnv', 'getNetwork').then((net) => {
@@ -385,107 +384,104 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
     }
   }
 
-  const handleCreateDapp = async (contract: DeployedContract) => {
+  const blockDappWorkspaceRemixVmCreation = async (sourceWorkspaceName?: string): Promise<boolean> => {
+    if (!sourceWorkspaceName?.startsWith('dapp-')) return false
+
+    let providerName: string | undefined
+    try {
+      const providerObject = await plugin.call('blockchain', 'getProviderObject')
+      providerName = providerObject?.name
+    } catch (e) {
+      return false
+    }
+
+    if (!isQuickDappRemixVMIdentifier(providerName)) return false
+
+    console.warn('[QDBinding] workspace.creation.blocked', {
+      sourceWorkspace: sourceWorkspaceName,
+      targetMode: 'workspace',
+      reason: 'remix_vm_from_dapp_workspace'
+    })
+    try {
+      await plugin.call('notification', 'toast', REMIX_VM_DAPP_WORKSPACE_MESSAGE)
+    } catch (e) { /* best-effort */ }
+    return true
+  }
+
+  const getCurrentQuickDappEnvironment = async (): Promise<string> => {
+    const provider = await plugin.call('blockchain', 'getProvider') as string
+    if (isQuickDappRemixVMIdentifier(provider)) {
+      return normalizeQuickDappEnvironment(provider)
+    }
+
+    const chainId = await plugin.call('blockchain', 'sendRpc', 'eth_chainId') as string
+    if (!chainId) throw new Error('Could not resolve the current execution environment')
+    return normalizeQuickDappEnvironment(chainId)
+  }
+
+  const startCreateDapp = async (contract: DeployedContract, setupOptions: QuickDappSetupOptions, chainId: string) => {
     if (isGenerating.current) return
     isGenerating.current = true
 
     try {
-      if (onKebabMenuToggle) {
-        onKebabMenuToggle(false)
-      }
+      console.log('[QuickDapp] handleCreateDapp START', { name: contract.name, address: contract.address, timestamp: Date.now() });
 
-      // Permission gate: non-beta users see the QuickDapp lock screen
-      if (!hasQuickdappAccess) {
-        await plugin.call('manager', 'activatePlugin', 'quick-dapp-v2')
-        await plugin.call('tabs' as any, 'focus', 'quick-dapp-v2')
+      const currentWorkspace = await plugin.call('filePanel', 'getCurrentWorkspace')
+      const sourceIsDappWorkspace = currentWorkspace?.name?.startsWith('dapp-') === true
+      if (sourceIsDappWorkspace && isDesktop) {
+        await plugin.call('notification', 'toast', 'Creating another DApp from a DApp workspace is not supported in Remix Desktop because generation is inline-only.')
         return
       }
+      if (await blockDappWorkspaceRemixVmCreation(currentWorkspace?.name)) return
 
-      console.log('[QuickDapp] handleCreateDapp START', { name: contract.name, address: contract.address, timestamp: Date.now() });
+      await plugin.call('manager', 'activatePlugin', 'quick-dapp-v2')
+      await plugin.call('tabs' as any, 'focus', 'quick-dapp-v2')
+
+      const frontendMode = isDesktop ? 'inline' : sourceIsDappWorkspace ? 'workspace' : setupOptions.frontendMode
+      const selectedAdditionalContracts = setupOptions.additionalContracts
 
       // Send contract details to AI Assistant for DApp generation
 
-      let chainId: string
-      try {
-        const providerObject = await plugin.call('blockchain', 'getProviderObject')
-        const providerName = providerObject?.name || 'vm-unknown'
-        if (providerName.startsWith('vm')) {
-          chainId = providerName
-        } else {
-          const network = await plugin.call('network', 'detectNetwork')
-          chainId = network?.id?.toString() || providerName
-        }
-      } catch (e) {
-        chainId = 'unknown'
-      }
       console.log('[QuickDapp] chainId resolved:', chainId);
 
-      const prompt = isDesktop
-        ? `I want to create a DApp frontend inline in the /frontend folder of my current workspace. Follow these steps exactly:
+      const additionalContractsToolArg = selectedAdditionalContracts.length > 0
+        ? `- additionalContracts: ${JSON.stringify(selectedAdditionalContracts.map((candidate) => ({ contractName: candidate.name, contractAddress: candidate.address })))}`
+        : '- additionalContracts: omit this field'
+      const design = setupOptions.design || (setupOptions.figmaContextId ? 'Match the validated Figma design' : 'Modern dark mode single-page DApp using React and Ethers.js')
+      const designSummary = setupOptions.figmaContextId ? `Figma: ${setupOptions.figmaUrl}` : setupOptions.design || 'defaults'
+      const setupOptionsSummary = [
+        `Location: ${frontendMode === 'inline' ? 'Inline' : 'Workspace'}`,
+        `Base mini-app: ${setupOptions.isBaseMiniApp ? 'Yes' : 'No'}`,
+        `Design: ${designSummary}`,
+        `Subgraph: ${setupOptions.subgraphFilePath || 'None'}`
+      ].join(', ')
+      const prompt = `I want to create a DApp frontend. The user confirmed all setup options in the QuickDapp UI. Do not ask the setup question again and do not change the confirmed values.
 
-STEP 1 - ASK FOR SETUP OPTIONS:
-${QUICKDAPP_SCOPE_NOTICE}
-Location is fixed to Inline in /frontend for this request. Ask me once for:
-- Base mini-app: No (default) or Yes
-- Design: defaults, style notes, or a Figma URL
-${QUICKDAPP_SUBGRAPH_SETUP_OPTION}
+Confirmed contracts:
+- Primary: ${contract.name} at ${contract.address}
+- Additional: ${selectedAdditionalContracts.length > 0 ? selectedAdditionalContracts.map((candidate) => `${candidate.name} at ${candidate.address}`).join(', ') : 'None'}
 
-Ask exactly those setup options. Do not ask Theme, Primary Color, DApp Title, Layout, or any other design subquestions.
-${QUICKDAPP_SUBGRAPH_SETUP_RULE}
-After asking, STOP and wait for my next reply. Do not check files, call generate_dapp, or write files in the same turn as this setup question.
-In my next reply, use defaults for anything I skip. If I provide a Figma URL without a token, ask for the Figma Personal Access Token and STOP again.
+Confirmed setup:
+- Location: ${frontendMode === 'inline' ? 'Inline in /frontend' : 'Workspace'}
+- Base mini-app: ${setupOptions.isBaseMiniApp ? 'Yes' : 'No'}
+- Design: ${JSON.stringify(designSummary)}
+- Subgraph: ${JSON.stringify(setupOptions.subgraphFilePath || 'None')}
 
-STEP 2 - CHECK FOR EXISTING CONTENT:
-Check if /frontend exists with content. If yes, ask: "The /frontend folder already has files. Overwrite them?"
-
-STEP 3 - CALL THE TOOL:
-After I confirm (or if /frontend is empty/doesn't exist), you MUST call generate_dapp with:
-- description: my design answer, or "Modern dark mode single-page DApp using React and Ethers.js" if I skipped it
-- contractName: "${contract.name}"
-- contractAddress: "${contract.address}"
-- chainId: "${chainId}"
-- frontendMode: "inline"
-- isBaseMiniApp: true only if I selected Base mini-app Yes; otherwise false
-- figmaUrl and figmaToken only if I provided them
-${QUICKDAPP_GRAPH_CONTEXT_TOOL_ARG}
-- confirmOverwrite: true only if I confirmed overwrite
+Call generate_dapp now with:
+- description: ${JSON.stringify(design)}
+- contractName: ${JSON.stringify(contract.name)}
+- contractAddress: ${JSON.stringify(contract.address)}
+- chainId: ${JSON.stringify(chainId)}
+${additionalContractsToolArg}
+- frontendMode: ${JSON.stringify(frontendMode)}
+- isBaseMiniApp: ${setupOptions.isBaseMiniApp}
+- figmaUrl: ${setupOptions.figmaUrl ? JSON.stringify(setupOptions.figmaUrl) : 'omit this field'}
+- figmaContextId: ${setupOptions.figmaContextId ? JSON.stringify(setupOptions.figmaContextId) : 'omit this field'}
+- subgraphFilePath: ${setupOptions.subgraphFilePath ? JSON.stringify(setupOptions.subgraphFilePath) : 'omit this field'}
 - setupOptionsConfirmed: true
-- setupOptionsSummary: a short summary of my confirmed setup choices
+- setupOptionsSummary: ${JSON.stringify(setupOptionsSummary)}
 
-IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, continue with STEP 2 and STEP 3.`
-        : `I want to create a DApp frontend. Follow these steps exactly:
-
-STEP 1 - ASK FOR SETUP OPTIONS:
-${QUICKDAPP_SCOPE_NOTICE}
-Ask me once: "How should I create your DApp?"
-- Location: Workspace (default, new dedicated workspace) or Inline (in /frontend folder of current workspace)
-- Base mini-app: No (default) or Yes
-- Design: defaults, style notes, or a Figma URL
-${QUICKDAPP_SUBGRAPH_SETUP_OPTION}
-
-Ask exactly those four setup options. Do not ask Theme, Primary Color, DApp Title, Layout, or any other design subquestions.
-${QUICKDAPP_SUBGRAPH_SETUP_RULE}
-After asking, STOP and wait for my next reply. Do not call generate_dapp or write files in the same turn as this setup question.
-In my next reply, use defaults for anything I skip. If I provide a Figma URL without a token, ask for the Figma Personal Access Token and STOP again.
-
-STEP 2 - IF I CHOOSE INLINE:
-Check if /frontend exists with content. If yes, ask: "The /frontend folder already has files. Overwrite them?"
-
-STEP 3 - CALL THE TOOL:
-After I answer, you MUST call generate_dapp with:
-- description: my design answer, or "Modern dark mode single-page DApp using React and Ethers.js" if I skipped it
-- contractName: "${contract.name}"
-- contractAddress: "${contract.address}"
-- chainId: "${chainId}"
-- frontendMode: "inline" or "workspace" based on my Location answer
-- isBaseMiniApp: true only if I selected Base mini-app Yes; otherwise false
-- figmaUrl and figmaToken only if I provided them
-${QUICKDAPP_GRAPH_CONTEXT_TOOL_ARG}
-- confirmOverwrite: true only if I chose Inline and confirmed overwrite
-- setupOptionsConfirmed: true
-- setupOptionsSummary: a short summary of my confirmed setup choices
-
-IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, continue with STEP 2 and STEP 3.`
+For Inline mode, preserve the existing /frontend overwrite confirmation flow. Contract bindings and setup values were confirmed in the UI.`
 
       console.log('[QuickDapp] prompt assembled, length:', prompt.length);
 
@@ -501,7 +497,11 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
 
       // Send prompt to AI Assistant
       console.log('[QuickDapp] calling chatPipe...');
-      await plugin.call('remixaiassistant' as any, 'chatPipe', prompt, false, { source: 'run-tab', presetId: 'dapp-from-deployed-contract' })
+      await plugin.call('remixaiassistant' as any, 'chatPipe', prompt, false, {
+        source: 'run-tab',
+        presetId: 'dapp-from-deployed-contract',
+        displayText: `Create a DApp\n${contract.name} · ${networkName || chainId} · ${frontendMode === 'inline' ? 'Inline' : 'New workspace'}`
+      })
       console.log('[QuickDapp] chatPipe returned');
 
       trackMatomoEvent?.({ category: 'ai', action: 'remixAI', name: 'create_dapp_via_ai', isClick: true })
@@ -512,6 +512,60 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
       }
     } finally {
       isGenerating.current = false
+    }
+  }
+
+  const handleCreateDapp = async (contract: DeployedContract) => {
+    if (onKebabMenuToggle) onKebabMenuToggle(false)
+
+    try {
+      const currentWorkspace = await plugin.call('filePanel', 'getCurrentWorkspace')
+      const sourceIsDappWorkspace = currentWorkspace?.name?.startsWith('dapp-') === true
+      if (sourceIsDappWorkspace && isDesktop) {
+        await plugin.call('notification', 'toast', 'Creating another DApp from a DApp workspace is not supported in Remix Desktop because generation is inline-only.')
+        return
+      }
+      if (await blockDappWorkspaceRemixVmCreation(currentWorkspace?.name)) return
+
+      const environmentId = await getCurrentQuickDappEnvironment()
+      setQuickDappEnvironmentId(environmentId)
+      setQuickDappFixedFrontendMode(isDesktop ? 'inline' : sourceIsDappWorkspace ? 'workspace' : undefined)
+      setShowQuickDappContractSelector(true)
+    } catch (error) {
+      console.error('[QuickDapp] Could not prepare DApp setup options:', error)
+      await plugin.call('notification', 'toast', 'Could not prepare DApp setup options. Please try again.')
+    }
+  }
+
+  const handleQuickDappSetupConfirm = async (options: QuickDappSetupOptions) => {
+    if (!quickDappEnvironmentId) {
+      await plugin.call('notification', 'toast', 'Could not confirm the current network. Reopen QuickDapp setup and try again.')
+      return
+    }
+
+    try {
+      const currentEnvironment = await getCurrentQuickDappEnvironment()
+      if (currentEnvironment !== quickDappEnvironmentId) {
+        await plugin.call('notification', 'toast', 'The network changed while QuickDapp setup was open. Switch back or reopen the setup.')
+        return
+      }
+
+      setShowQuickDappContractSelector(false)
+      void startCreateDapp(contract, options, quickDappEnvironmentId)
+    } catch (_) {
+      await plugin.call('notification', 'toast', 'Could not confirm the current network. Please try again.')
+    }
+  }
+
+  const validateQuickDappSetupEnvironment = async (): Promise<string | undefined> => {
+    if (!quickDappEnvironmentId) return 'QuickDapp setup is no longer available. Reopen it and try again.'
+    try {
+      const currentEnvironment = await getCurrentQuickDappEnvironment()
+      if (currentEnvironment !== quickDappEnvironmentId) {
+        return 'The network changed while QuickDapp setup was open. Switch back or reopen the setup.'
+      }
+    } catch (_) {
+      return 'Could not confirm the current network. Please try again.'
     }
   }
 
@@ -548,14 +602,22 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
     }
   }
 
-  const handleCopyBytecode = async (contract: DeployedContract) => {
+  const handleCopyDeployedBytecode = async (contract: DeployedContract) => {
     if (onKebabMenuToggle) {
       onKebabMenuToggle(false)
     }
-    const bytecode = contract.contractData?.bytecode || contract.contractData?.object
-    if (bytecode) {
-      navigator.clipboard.writeText(bytecode)
-      await plugin.call('notification', 'toast', 'Bytecode copied to clipboard')
+    try {
+      // Fetch deployed bytecode from the blockchain
+      const deployedBytecode = await plugin.call('blockchain', 'getCode', contract.address)
+
+      if (deployedBytecode && deployedBytecode !== '0x' && deployedBytecode !== '0x0') {
+        navigator.clipboard.writeText(deployedBytecode)
+        await plugin.call('notification', 'toast', 'Deployed bytecode copied to clipboard')
+      } else {
+        await plugin.call('notification', 'toast', 'No deployed bytecode available for this contract')
+      }
+    } catch (error) {
+      await plugin.call('notification', 'toast', 'Error copying deployed bytecode')
     }
   }
 
@@ -697,7 +759,7 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
 
   return (
     <div
-      className="mb-3"
+      className=""
       ref={(el) => {
         contractItemRef.current = el
         if (registerRef) registerRef(el)
@@ -762,14 +824,12 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
             onNameContract={networkName !== 'Remix VM' ? handleNameContract : undefined}
             onCopyABI={handleCopyABI}
             onSaveABI={handleSaveABI}
-            onCopyBytecode={handleCopyBytecode}
+            onCopyBytecode={handleCopyDeployedBytecode}
             onOpenInExplorer={handleOpenInExplorer}
             onClear={handleClear}
           />
           {isExpanded && (
-            <div className="p-3 pt-0" onClick={(e) => e.stopPropagation()}>
-              {/* Divider */}
-              <div className="border-top mb-3"></div>
+            <div className="p-3" style={{ background: 'var(--custom-onsurface-layer-1)' }} onClick={(e) => e.stopPropagation()}>
 
               {/* ENS Naming */}
               {showEnsNaming && (
@@ -794,123 +854,169 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                 {showHighLevel && (
                   <>
                     {functionABIs && functionABIs.length > 0 ? (
-                      <div className="mb-3" data-id={`functionDropdown-${index}`}>
-                        <Dropdown>
-                          <Dropdown.Toggle
-                            as={CustomToggle}
-                            className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-between"
-                            style={{
-                              backgroundColor: 'var(--custom-onsurface-layer-3)',
-                              border: '1px solid var(--bs-border-color)',
-                              color: 'var(--dark/text-secondary, #d5d7e3)',
-                              padding: '8px 12px'
-                            }}
-                            icon="fas fa-caret-down"
-                            useDefaultIcon={false}
-                          >
-                            <div className="d-flex align-items-center gap-1" style={{ flex: '1', minWidth: 0 }}>
-                              <span style={{ color: 'var(--text-tertiary, #a2a3bd)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Select a function to interact with...</span>
-                            </div>
-                          </Dropdown.Toggle>
-                          <Dropdown.Menu
-                            style={{
-                              backgroundColor: 'var(--custom-onsurface-layer-2)',
-                              border: '1px solid var(--bs-border-color)',
-                              maxHeight: '240px',
-                              overflowY: 'auto',
-                              width: '100%',
-                              padding: 0
-                            }}
-                          >
-                            <div style={{
-                              padding: '8px',
-                              borderBottom: '1px solid var(--bs-border-color)',
-                              backgroundColor: 'var(--custom-onsurface-layer-2)'
-                            }}>
-                              <input
-                                type="text"
-                                placeholder="Search functions..."
-                                className="form-control form-control-sm"
-                                value={functionSearchTerm}
-                                onChange={(e) => {
-                                  e.stopPropagation()
-                                  setFunctionSearchTerm(e.target.value)
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                style={{
-                                  backgroundColor: 'var(--custom-onsurface-layer-3)',
-                                  border: '1px solid var(--bs-border-color)',
-                                  color: 'var(--dark/text-secondary, #d5d7e3)',
-                                  fontSize: '11px'
-                                }}
-                              />
-                            </div>
-                            <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
-                              {filteredFunctionABIs.map((funcABI: FuncABI, filteredIndex: number) => {
-                                // Find the actual index in the original functionABIs array
-                                const actualIndex = functionABIs.findIndex(f => f === funcABI)
-                                const inputTypes = funcABI.inputs.map(input => input.type).join(', ')
-                                const isSelected = selectedFunctionIndex === actualIndex
-
-                                return (
-                                  <Dropdown.Item
-                                    key={actualIndex}
-                                    data-id={`deployedContractItem-${index}-function-${actualIndex}`}
-                                    className="d-flex align-items-center gap-1"
-                                    style={{
-                                      backgroundColor: isSelected ? 'var(--custom-onsurface-layer-3)' : 'transparent',
-                                      color: 'var(--dark/text-secondary, #d5d7e3)',
-                                      padding: '8px 12px',
-                                      border: 'none'
-                                    }}
-                                    onClick={() => handleFunctionClick(actualIndex)}
-                                  >
-                                    {getStateMutabilityBadge(funcABI)}
-                                    <div className="d-flex align-items-baseline gap-1" style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-                                      <span
-                                        style={{
-                                          fontSize: '12px',
-                                          fontWeight: 700,
-                                          overflow: 'hidden',
-                                          textOverflow: 'ellipsis',
-                                          whiteSpace: 'nowrap',
-                                          flexShrink: 0,
-                                          maxWidth: '100%'
-                                        }}
-                                        title={funcABI.name}
-                                      >
-                                        {funcABI.name}
+                      <>
+                        {functionABIs.length > 4 && (
+                          <div className="mb-2">
+                            <input
+                              type="text"
+                              placeholder="Search functions..."
+                              className="form-control form-control-sm"
+                              value={functionSearchTerm}
+                              onChange={(e) => setFunctionSearchTerm(e.target.value)}
+                              style={{
+                                backgroundColor: 'var(--bs-body-bg)',
+                                border: '1px solid var(--bs-border-color)',
+                                color: 'var(--dark/text-secondary, #d5d7e3)',
+                                fontSize: '11px'
+                              }}
+                            />
+                          </div>
+                        )}
+                        <div data-id={`functionList-${index}`}>
+                          {filteredFunctionABIs.map((funcABI: FuncABI, _filteredIdx: number) => {
+                            const actualIndex = functionABIs.findIndex((f: FuncABI) => f === funcABI)
+                            const isViewPure = funcABI.stateMutability === 'view' || funcABI.stateMutability === 'pure'
+                            const executeHandler = () => {
+                              if (selectedFunctionIndex !== actualIndex) {
+                                trackMatomoEvent?.({ category: 'udapp', action: 'deployedContractFunctionSelect', name: funcABI.name || `func${actualIndex}`, isClick: true })
+                              }
+                              setSelectedFunctionIndex(actualIndex)
+                              handleExecuteTransaction(actualIndex)
+                            }
+                            const inputStyle = { background: 'var(--bs-body-bg)', color: 'var(--dark/text-quaternary, #959bad)', border: 'none', fontSize: '0.7rem', minHeight: '30px' }
+                            return (
+                              <div key={actualIndex} className="dc-fn-row py-2" style={{ borderTop: '1px solid var(--bs-border-color)' }} data-id={`deployedContractItem-${index}-function-${actualIndex}`}>
+                                {/* Header: dot · name · sig · Call button (always) · Transact button (no-input only) */}
+                                <div className="d-flex align-items-center gap-2 mb-1">
+                                  {getStateMutabilityBadge(funcABI)}
+                                  <div className="d-flex align-items-baseline gap-1" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 700, color: themeQuality === 'dark' ? 'white' : 'black', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={funcABI.name}>
+                                      {funcABI.name}
+                                    </span>
+                                    {funcABI.inputs.length > 0 && (
+                                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary, #a2a3bd)', fontFamily: 'Monaco, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1, minWidth: 0 }}>
+                                        ({funcABI.inputs.map((i: any) => i.type).join(', ')})
                                       </span>
-                                      {funcABI.inputs.length > 0 && (
-                                        <span
-                                          style={{
-                                            fontSize: '10px',
-                                            color: 'var(--text-tertiary, #a2a3bd)',
-                                            fontFamily: 'Monaco, monospace',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                            flexShrink: 1,
-                                            minWidth: 0
-                                          }}
-                                          title={inputTypes}
+                                    )}
+                                  </div>
+                                  {/* Call: always in header */}
+                                  {isViewPure && (
+                                    <button
+                                      data-id={`btnExecute-${index}-${actualIndex}`}
+                                      className="btn btn-sm flex-shrink-0"
+                                      style={{ backgroundColor: '#64C4FF14', color: '#64c4ff', border: 'none', fontSize: '11px', fontWeight: 700, padding: '3px 10px' }}
+                                      onClick={executeHandler}
+                                    >
+                                      {intl.formatMessage({ id: 'udapp.callButton' })}
+                                    </button>
+                                  )}
+                                  {/* Transact with no inputs: in header */}
+                                  {!isViewPure && funcABI.inputs.length === 0 && (
+                                    <button
+                                      data-id={`btnExecute-${index}-${actualIndex}`}
+                                      className="btn btn-sm btn-primary flex-shrink-0"
+                                      style={{ fontSize: '11px', fontWeight: 600, padding: '3px 12px' }}
+                                      onClick={executeHandler}
+                                    >
+                                      {intl.formatMessage({ id: 'udapp.transactButton' })}
+                                    </button>
+                                  )}
+                                </div>
+                                {/* Inputs area */}
+                                {funcABI.inputs.length > 0 && (
+                                  <div className="ps-3">
+                                    {/* 1-input Transact: input-group with inline button */}
+                                    {!isViewPure && funcABI.inputs.length === 1 ? (
+                                      <div className="input-group input-group-sm mb-1">
+                                        <input
+                                          data-id={`input-${index}-${actualIndex}-0`}
+                                          type="text"
+                                          placeholder={`${funcABI.inputs[0].name || 'param0'} (${funcABI.inputs[0].type})`}
+                                          className="form-control form-control-sm"
+                                          value={funcInputs[actualIndex]?.[0] || ''}
+                                          onChange={(e) => handleFunctionInputChange(actualIndex, 0, e.target.value)}
+                                          style={inputStyle}
+                                        />
+                                        <button
+                                          data-id={`btnExecute-${index}-${actualIndex}`}
+                                          className="btn btn-primary"
+                                          style={{ fontSize: '11px', fontWeight: 600 }}
+                                          onClick={executeHandler}
                                         >
-                                          {inputTypes}
-                                        </span>
+                                          {intl.formatMessage({ id: 'udapp.transactButton' })}
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      /* All other cases: stacked inputs */
+                                      funcABI.inputs.map((input: any, inputIdx: number) => (
+                                        <input
+                                          key={inputIdx}
+                                          data-id={`input-${index}-${actualIndex}-${inputIdx}`}
+                                          type="text"
+                                          placeholder={`${input.name || `param${inputIdx}`} (${input.type})`}
+                                          className="form-control form-control-sm mb-1"
+                                          value={funcInputs[actualIndex]?.[inputIdx] || ''}
+                                          onChange={(e) => handleFunctionInputChange(actualIndex, inputIdx, e.target.value)}
+                                          style={inputStyle}
+                                        />
+                                      ))
+                                    )}
+                                    {/* Bottom row: copy buttons (left) + Transact for multi-input (right) */}
+                                    <div className="d-flex align-items-center gap-1 mt-1 mb-1">
+                                      <CopyToClipboard tip={intl.formatMessage({ id: 'udapp.copyCalldata' })} icon="fa-clipboard" direction="auto" getContent={() => getEncodedCall(actualIndex)}>
+                                        <button className="btn btn-sm border-0" style={{ fontSize: '0.65rem', padding: '2px 6px', backgroundColor: 'var(--custom-onsurface-layer-3)' }}>
+                                          <span className="text-secondary">Calldata</span>
+                                          <i className="far fa-copy ms-1 text-secondary"></i>
+                                        </button>
+                                      </CopyToClipboard>
+                                      <CopyToClipboard tip={intl.formatMessage({ id: 'udapp.copyParameters' })} icon="fa-clipboard" direction="auto" getContent={() => getEncodedParams(actualIndex)}>
+                                        <button className="btn btn-sm border-0" style={{ fontSize: '0.65rem', padding: '2px 6px', backgroundColor: 'var(--custom-onsurface-layer-3)' }}>
+                                          <span className="text-secondary">Params</span>
+                                          <i className="far fa-copy ms-1 text-secondary"></i>
+                                        </button>
+                                      </CopyToClipboard>
+                                      {!isViewPure && funcABI.inputs.length > 1 && (
+                                        <>
+                                          <div style={{ flex: 1 }} />
+                                          <button
+                                            data-id={`btnExecute-${index}-${actualIndex}`}
+                                            className="btn btn-sm btn-primary"
+                                            style={{ fontSize: '11px', fontWeight: 600, padding: '3px 12px' }}
+                                            onClick={executeHandler}
+                                          >
+                                            {intl.formatMessage({ id: 'udapp.transactButton' })}
+                                          </button>
+                                        </>
                                       )}
                                     </div>
-                                  </Dropdown.Item>
-                                )
-                              })}
-                              {filteredFunctionABIs.length === 0 && functionSearchTerm.trim() && (
-                                <div className="text-muted text-center py-2" style={{ fontSize: '11px' }}>
-                                No functions found matching "{functionSearchTerm}"
-                                </div>
-                              )}
+                                  </div>
+                                )}
+                                {isViewPure && selectedFunctionIndex === actualIndex && (
+                                  <div className="udapp_value ps-3" data-id="udapp_tree_value">
+                                    <TreeView id="treeView">
+                                      {Object.keys(contract.decodedResponse || {}).map((key) => {
+                                        const decoded: Record<number, any> = contract.decodedResponse || {}
+                                        const numKey = parseInt(key)
+                                        const response = decoded[numKey]
+                                        return numKey === actualIndex
+                                          ? Object.keys(response || {}).map((innerkey) =>
+                                            renderData((decoded[numKey] || {})[innerkey], response, innerkey, innerkey)
+                                          )
+                                          : null
+                                      })}
+                                    </TreeView>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                          {filteredFunctionABIs.length === 0 && functionSearchTerm.trim() && (
+                            <div className="text-muted text-center py-2" style={{ fontSize: '11px' }}>
+                              No functions found matching "{functionSearchTerm}"
                             </div>
-                          </Dropdown.Menu>
-                        </Dropdown>
-                      </div>
+                          )}
+                        </div>
+                      </>
                     ) : (
                       <div className="text-muted pt-3 text-center"><FormattedMessage id="udapp.noABIAvailableForContract" /></div>
                     )}
@@ -957,7 +1063,8 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                         color: themeQuality === 'dark' ? 'white' : 'black',
                         border: 'none',
                         padding: '8px 12px',
-                        fontSize: '10px'
+                        fontSize: '10px',
+                        background: 'var(--bs-body-bg)'
                       }}
                     />
                     {llIError && (
@@ -968,131 +1075,9 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                   </div>
                 )}
               </div>
+              <div className="border-top mb-3"></div>
 
-              {selectedFunctionIndex !== null && functionABIs[selectedFunctionIndex] && (
-                // Divider
-                <div className="border-top mb-3"></div>
-              )}
-
-              {selectedFunctionIndex !== null && functionABIs[selectedFunctionIndex] && (
-                <div className="mb-3">
-                  <div className="d-flex align-items-center gap-1 mb-2">
-                    {getStateMutabilityBadge(functionABIs[selectedFunctionIndex])}
-                    <div className="d-flex align-items-baseline gap-1" style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          color: themeQuality === 'dark' ? 'white' : 'black',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0,
-                          maxWidth: '100%'
-                        }}
-                        title={functionABIs[selectedFunctionIndex].name}
-                      >
-                        {functionABIs[selectedFunctionIndex].name}
-                      </span>
-                      {functionABIs[selectedFunctionIndex].inputs.length > 0 && (
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            color: 'var(--text-tertiary, #a2a3bd)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            flexShrink: 1,
-                            minWidth: 0
-                          }}
-                          title={functionABIs[selectedFunctionIndex].inputs.map((input: any) => input.type).join(', ')}
-                        >
-                          {functionABIs[selectedFunctionIndex].inputs.map((input: any) => input.type).join(', ')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {functionABIs[selectedFunctionIndex].inputs.length > 0 && functionABIs[selectedFunctionIndex].inputs.map((input: any, inputIdx: number) => (
-                    <div key={inputIdx} className="mb-2">
-                      <input
-                        data-id={`selectedFunction-${inputIdx}`}
-                        type="text"
-                        placeholder={`${input.name || `param${inputIdx}`} (${input.type})`}
-                        className="form-control form-control-sm"
-                        value={(funcInputs[selectedFunctionIndex]?.[inputIdx] || '')}
-                        onChange={(e) => {
-                          handleFunctionInputChange(selectedFunctionIndex, inputIdx, e.target.value)
-                        }}
-                        style={{
-                          // backgroundColor: 'var(--custom-onsurface-background, #222336)',
-                          color: 'var(--dark/text-quaternary, #959bad)',
-                          border: 'none',
-                          padding: '8px 12px',
-                          fontSize: '0.7rem',
-                          minHeight: '30px'
-                        }}
-                      />
-                    </div>
-                  ))}
-                  {functionABIs[selectedFunctionIndex].inputs.length > 0 && (
-                    <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
-                      <CopyToClipboard
-                        tip={intl.formatMessage({ id: 'udapp.copyCalldata' })}
-                        icon="fa-clipboard"
-                        direction="bottom"
-                        getContent={() => getEncodedCall(selectedFunctionIndex)}
-                      >
-                        <button
-                          className="btn btn-sm flex-fill"
-                          style={{ minWidth: '100px', backgroundColor: 'var(--custom-onsurface-layer-3)' }}
-                          data-id={`copyCalldata-${selectedFunctionIndex}`}
-                        >
-                          <span className="text-secondary" style={{ fontSize: '0.7rem' }}>
-                            <FormattedMessage id="udapp.calldata" defaultMessage="Calldata" />
-                          </span>
-                          <i className="far fa-copy ms-1 text-secondary" style={{ fontSize: '0.7rem' }}></i>
-                        </button>
-                      </CopyToClipboard>
-                      <CopyToClipboard
-                        tip={intl.formatMessage({ id: 'udapp.copyParameters' })}
-                        icon="fa-clipboard"
-                        direction="bottom"
-                        getContent={() => getEncodedParams(selectedFunctionIndex)}
-                      >
-                        <button
-                          className="btn btn-sm flex-fill"
-                          style={{ minWidth: '100px', backgroundColor: 'var(--custom-onsurface-layer-3)' }}
-                          data-id={`copyParameters-${selectedFunctionIndex}`}
-                        >
-                          <span className="text-secondary" style={{ fontSize: '0.7rem' }}>
-                            <FormattedMessage id="udapp.parameters" />
-                          </span>
-                          <i className="far fa-copy ms-1 text-secondary" style={{ fontSize: '0.7rem' }}></i>
-                        </button>
-                      </CopyToClipboard>
-                    </div>
-                  )}
-                  {(functionABIs[selectedFunctionIndex].stateMutability === 'view' || functionABIs[selectedFunctionIndex].stateMutability === 'pure') && (
-                    <div className="udapp_value" data-id="udapp_tree_value">
-                      <TreeView id="treeView">
-                        {Object.keys(contract.decodedResponse || {}).map((key) => {
-                          const response = contract.decodedResponse[key]
-
-                          return parseInt(key) === selectedFunctionIndex
-                            ? Object.keys(response || {}).map((innerkey) => {
-                              return renderData(contract.decodedResponse[key][innerkey], response, innerkey, innerkey)
-                            })
-                            : null
-                        })}
-                      </TreeView>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {((selectedFunctionIndex !== null && functionABIs[selectedFunctionIndex] &&
-                functionABIs[selectedFunctionIndex].stateMutability !== 'view' &&
-                functionABIs[selectedFunctionIndex].stateMutability !== 'pure') || showLowLevel) && (
+              {(functionABIs.some((fn: FuncABI) => fn.stateMutability !== 'view' && fn.stateMutability !== 'pure') || showLowLevel) && (
                 <div className="mb-3">
                   <div className="d-flex align-items-center gap-1 mb-3">
                     <label className="mb-0" style={{ fontSize: '12px', fontWeight: 700, minWidth: '75px', color: themeQuality === 'dark' ? 'white' : 'black' }}>
@@ -1119,7 +1104,8 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                           flex: 1,
                           paddingRight: '3.5rem',
                           fontSize: '0.7rem',
-                          minHeight: '30px'
+                          minHeight: '30px',
+                          background: 'var(--bs-body-bg)'
                         }}
                       />
                       <Dropdown style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', zIndex: 2 }}>
@@ -1171,7 +1157,7 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                           style={{
                             position: 'absolute',
                             left: '0.35rem',
-                            top: '35%',
+                            top: '50%',
                             transform: 'translateY(-50%)',
                             backgroundColor: '#64C4FF14',
                             color: '#64c4ff',
@@ -1216,7 +1202,8 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                               opacity: gasLimit === 0 ? 0.6 : 1,
                               cursor: gasLimit === 0 ? 'not-allowed' : 'text',
                               fontSize: '0.7rem',
-                              minHeight: '30px'
+                              minHeight: '30px',
+                              alignItems: 'center'
                             }}
                           />
                         </CustomTooltip>
@@ -1239,7 +1226,9 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                             opacity: gasLimit === 0 ? 0.6 : 1,
                             cursor: gasLimit === 0 ? 'not-allowed' : 'text',
                             fontSize: '0.7rem',
-                            minHeight: '30px'
+                            minHeight: '30px',
+                            background: 'var(--bs-body-bg)',
+                            alignItems: 'center'
                           }}
                         />
                       )}
@@ -1248,18 +1237,13 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                 </div>
               )}
 
-              {((selectedFunctionIndex !== null && functionABIs[selectedFunctionIndex]) || showLowLevel) && (
+              {showLowLevel && (
                 <button
                   data-id={`btnExecute-${index}`}
                   className="btn btn-primary w-100 mt-3"
                   onClick={() => {
-                    const actionType = showLowLevel ? 'lowLevel' : functionABIs[selectedFunctionIndex]?.name || 'function'
-                    trackMatomoEvent?.({ category: 'udapp', action: 'deployedContractExecute', name: actionType, isClick: true })
-                    if (showLowLevel) {
-                      sendData()
-                    } else if (selectedFunctionIndex !== null) {
-                      handleExecuteTransaction(selectedFunctionIndex)
-                    }
+                    trackMatomoEvent?.({ category: 'udapp', action: 'deployedContractExecute', name: 'lowLevel', isClick: true })
+                    sendData()
                   }}
                   style={{
                     backgroundColor: 'var(--button/primary/default, #64c4ff)',
@@ -1271,11 +1255,7 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
                     borderRadius: '4px'
                   }}
                 >
-                  {showLowLevel
-                    ? intl.formatMessage({ id: 'udapp.transactButton' })
-                    : (functionABIs[selectedFunctionIndex].stateMutability === 'view' || functionABIs[selectedFunctionIndex].stateMutability === 'pure')
-                      ? intl.formatMessage({ id: 'udapp.callButton' })
-                      : intl.formatMessage({ id: 'udapp.transactButton' })}
+                  {intl.formatMessage({ id: 'udapp.transactButton' })}
                 </button>
               )}
 
@@ -1291,6 +1271,19 @@ IMPORTANT: In this turn, only ask STEP 1 and then STOP. After my next reply, con
           )}
         </div>
       </div>
+      <QuickDappContractSelector
+        show={showQuickDappContractSelector}
+        primaryContract={contract}
+        deployedContracts={widgetState.deployedContracts}
+        fixedFrontendMode={quickDappFixedFrontendMode}
+        onPrepareFigma={async (figmaUrl, figmaToken) => {
+          const validationError = await validateQuickDappSetupEnvironment()
+          if (validationError) return { success: false, message: validationError }
+          return await plugin.call('quick-dapp-v2' as any, 'prepareFigmaDesign', figmaUrl, figmaToken) as QuickDappFigmaPreparationResult
+        }}
+        onCancel={() => setShowQuickDappContractSelector(false)}
+        onConfirm={(options) => void handleQuickDappSetupConfirm(options)}
+      />
     </div>
   )
 }

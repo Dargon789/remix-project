@@ -7,6 +7,7 @@ export {
   ToolApprovalGate,
   createRemixTools,
   jsonSchemaToZod,
+  withTolerantKeys,
   mcpResultToString,
   resolveToolUIString
 } from './tools'
@@ -16,7 +17,8 @@ export {
   REMIX_DEEPAGENT_SYSTEM_PROMPT,
   SOLIDITY_CODE_GENERATION_PROMPT,
   SECURITY_ANALYSIS_PROMPT,
-  CODE_EXPLANATION_PROMPT
+  CODE_EXPLANATION_PROMPT,
+  AUDIT_CATEGORY_MATCH_PROMPT
 } from './prompts'
 
 // Subagent prompts
@@ -40,7 +42,6 @@ export {
   MAX_TOOL_EXECUTIONS,
 
   // Model configuration
-  SUPPORTED_PROVIDERS,
 
   // Session configuration
   SESSION_THREAD_PREFIX,
@@ -70,7 +71,6 @@ export {
   LOCAL_STORAGE_KEYS,
 
   // Types
-  type SupportedProvider,
   type MemoryBackendType
 } from './constants'
 
@@ -86,11 +86,6 @@ export {
   type PromptComplexity
 } from './helpers/promptAnalysis'
 
-// Model selection
-export {
-  selectOptimalModel
-} from './helpers/modelSelection'
-
 export { createModelInstance } from './ModelFactory'
 
 export { buildSubagentConfigs, type SubagentConfigItem } from './SubagentConfig'
@@ -98,3 +93,44 @@ export { buildSubagentConfigs, type SubagentConfigItem } from './SubagentConfig'
 export { StreamEventHandler, type TokenUsageState, type StreamProcessingResult } from './StreamEventHandler'
 
 export { InactivityTimeoutManager } from './InactivityTimeoutManager'
+
+export { clearModelCache } from './ModelFactory'
+
+// Model runtime parameters — backend-driven, provider defaults as fallback.
+export {
+  resolveModelParams,
+  setModelCatalog,
+  getModelCatalog,
+  lookupCatalogEntry,
+  PROVIDER_PARAM_DEFAULTS,
+  type ResolvedModelParams
+} from './modelParams'
+
+// Provider adapter registry.
+export {
+  PROVIDER_ADAPTERS,
+  SUPPORTED_TRANSPORTS,
+  isSupportedTransport,
+  getProviderAdapter,
+  getProviderCapabilities,
+  resolveBedrockModelId,
+  ensureToolDescriptions,
+  type ProviderAdapter,
+  type ProviderCapabilities
+} from './providers'
+
+// Transport retry.
+export {
+  withRetryingFetch,
+  retryEvents,
+  parseRetryAfterHeader,
+  DEFAULT_RETRY_POLICY,
+  SDK_MAX_RETRIES,
+  type RetryPolicy,
+  type RetryAttemptInfo
+} from './retryTransport'
+
+export {
+  syncModelCatalog,
+  resolveCodeCapableSelection
+} from './helpers/modelCatalog'

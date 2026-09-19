@@ -1538,6 +1538,45 @@ body.light .message-copy-btn:hover {
 }
 
 /* --------------------------------------------------------
+   "Using <model>" strip — same geometry as the auto-accept
+   banner above it so the two stack as one column.
+
+   The banner and this line hang off different parents, and
+   this one's parent paints a lighter strip: the full-bleed
+   row covers it with the panel background so only the inner
+   rounded box shows.
+   -------------------------------------------------------- */
+
+.rai-panel-strip {
+  background: var(--bs-body-bg);
+  flex-shrink: 0;
+}
+
+.rai-run-model {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  margin: 0 8px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+  min-width: 0;
+  color: var(--bs-success);
+  background: color-mix(in srgb, var(--bs-success) 10%, var(--bs-body-bg));
+  border: 1px solid color-mix(in srgb, var(--bs-success) 22%, var(--bs-body-bg));
+}
+
+.rai-run-model__icon {
+  font-size: 0.7rem;
+  margin-right: 6px;
+}
+
+.rai-run-model__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------
    HITL Pending Approvals Summary Bar
    -------------------------------------------------------- */
 
@@ -1828,4 +1867,54 @@ code {
 .remix-ai-model-selector [data-selected="true"] {
   background-color: rgba(255, 255, 255, 0.06) !important;
   box-shadow: inset 3px 0 0 var(--custom-ai-color);
+}
+
+/* "Auto Mode": the first entry of the model list, at the same level as the
+   provider headers. Sticky so it stays put while the list scrolls, and tinted
+   with the theme accent so it reads as the recommended choice. */
+.remix-ai-model-selector .rai-auto-row {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  border-bottom: 1px solid var(--custom-ai-color) !important;
+  box-shadow: inset 3px 0 0 var(--custom-ai-color);
+  background-color: #1b1c2b;
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--custom-ai-color) 22%, transparent),
+    color-mix(in srgb, var(--custom-ai-color) 6%, transparent)
+  );
+  transition: background-image 0.15s ease;
+}
+
+.remix-ai-model-selector .rai-auto-row:hover,
+.remix-ai-model-selector .rai-auto-row:focus {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--custom-ai-color) 36%, transparent),
+    color-mix(in srgb, var(--custom-ai-color) 14%, transparent)
+  );
+}
+
+.remix-ai-model-selector .rai-auto-icon {
+  color: var(--custom-ai-color);
+}
+
+.remix-ai-model-selector .rai-auto-title {
+  color: var(--custom-ai-color);
+}
+
+.remix-ai-model-selector .rai-auto-subtitle {
+  color: rgba(231, 232, 240, 0.7);
+}
+
+.remix-ai-model-selector .rai-auto-badge {
+  background-color: color-mix(in srgb, var(--custom-ai-color) 18%, transparent);
+  border: 1px solid var(--custom-ai-color);
+  color: var(--custom-ai-color);
+  font-size: 0.6rem;
+  padding: 1px 6px;
+  font-weight: 600;
 }
