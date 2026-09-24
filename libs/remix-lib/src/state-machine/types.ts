@@ -106,7 +106,7 @@ export type SerializedConditionInput = SerializedCondition
 // ─── Nudge Engine Types ──────────────────────────────────────────────
 
 export interface NudgeAction {
-  type: 'toast' | 'modal' | 'hint' | 'widget'
+  type: 'toast' | 'modal' | 'hint' | 'widget' | 'banner'
   title?: string
   message: string
   actionLabel?: string // e.g. "Try it now"

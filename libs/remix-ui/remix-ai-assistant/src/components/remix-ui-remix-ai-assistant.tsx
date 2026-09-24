@@ -3,12 +3,13 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useImperative
 //@ts-ignore
 import '../css/remix-ai-assistant.css'
 
-import { ChatCommandParser, GenerationParams, ChatHistory, HandleStreamResponse, AIModel, ANONYMOUS_FALLBACK_MODELS, remixAILogger, modelKey, parseModelKey, findModel, applyByokKeyPolicy, BYOK_API_KEY_SETTINGS, modelTransportProvider, onApiKeysChange, isAutoModelId, type ModelTransport } from '@remix/remix-ai-core'
+import { ChatCommandParser, GenerationParams, ChatHistory, HandleStreamResponse, AIModel, ANONYMOUS_FALLBACK_MODELS, remixAILogger, modelKey, parseModelKey, findModel, applyByokKeyPolicy, BYOK_API_KEY_SETTINGS, modelTransportProvider, onApiKeysChange, isAutoModelId, isCheapModel, type ModelTransport } from '@remix/remix-ai-core'
 import { ToolApprovalRequest, ApiKeyErrorEvent } from '@remix/remix-ai-core'
 import { HandleOpenAICompatibleResponse, HandleOllamaResponse } from '@remix/remix-ai-core'
 //@ts-ignore
 import '../css/color.css'
 import { ModalTypes } from '@remix-ui/app'
+import { isStarterCreditPack, STARTER_PACK_CREDITS } from '@remix-ui/plan-manager'
 import { MatomoEvent, AIEvent, Features, PublicPlan, ChatPromptMetadata } from '@remix-api'
 //@ts-ignore
 import { TrackingContext } from '@remix-ide/tracking'
@@ -215,6 +216,15 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
   const ollamaMenuRef = useRef<any>()
   const [ollamaModels, setOllamaModels] = useState<{ name: string; supported: boolean }[]>([])
   const [selectedModel, setSelectedModel] = useState<AIModel | null>(null)
+  // Set when a starter credit pack is confirmed; cleared once the switch to a
+  // low-cost model has actually been applied (the catalogue is refreshed
+  // asynchronously after the purchase, so the switch can't happen inline).
+  const [pendingCheapSwitch, setPendingCheapSwitch] = useState(false)
+  // Composer toggle: narrows the model menu to the `ai:cheapModels` tier.
+  const [cheapModelsOnly, setCheapModelsOnly] = useState(false)
+  // The armed-switch effect re-runs on every catalogue refresh; this keeps the
+  // "purchase applied but nothing to switch to" event to one per purchase.
+  const cheapUnavailableTrackedRef = useRef(false)
   // Mirrors `selectedModel` for callbacks that must not capture a stale value
   // (the API-key change subscription lives outside the render closure).
   const selectedModelRef = useRef<AIModel | null>(null)
@@ -2359,6 +2369,113 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
     setShowModelSelector(false)
   }, [props.plugin, modelAccess, pushSystemNotice])
 
+  const hasCheapModels = useMemo(
+    () => availableModels.some(m => isCheapModel(m)),
+    [availableModels]
+  )
+
+  // Never leave the menu stuck on a filter that can't match anything.
+  useEffect(() => {
+    if (!hasCheapModels && cheapModelsOnly) setCheapModelsOnly(false)
+  }, [hasCheapModels, cheapModelsOnly])
+
+  const handleToggleCheapModels = useCallback(() => {
+    const next = !cheapModelsOnly
+    setCheapModelsOnly(next)
+    dispatchActivity('button', 'cheapModelsOnly')
+    trackMatomoEvent({ category: 'ai', action: 'remixAI', name: next ? 'cheap_models_on' : 'cheap_models_off', value: 'manual', isClick: true })
+
+    if (next) {
+      // Switch to the first available cheap model
+      const target = availableModels
+        .filter(m => m.available && m.provider !== 'ollama' && isCheapModel(m))
+        .sort((a, b) => a.sortOrder - b.sortOrder)[0]
+      if (target) void handleModelSelection(modelKey(target))
+    } else {
+      // Switch back to the auto model, or fall back to the backend default
+      const autoModel = availableModels.find(m => isAutoModelId(m.id) && m.available !== false)
+      if (autoModel) {
+        void handleModelSelection(modelKey(autoModel))
+      } else {
+        void (async () => {
+          try {
+            const def: AIModel | null = await props.plugin.call('assistantState' as any, 'getDefaultModel')
+            if (def && def.available !== false) void handleModelSelection(modelKey(def))
+          } catch { /* ignore */ }
+        })()
+      }
+    }
+  }, [cheapModelsOnly, availableModels, handleModelSelection, props.plugin])
+
+  // A confirmed starter credit pack arms the switch to the low-cost tier.
+  useEffect(() => {
+    const onPurchaseConfirmed = (payload: any) => {
+      const items = Array.isArray(payload?.items) ? payload.items : []
+      if (!items.some(isStarterCreditPack)) return
+      cheapUnavailableTrackedRef.current = false
+      setPendingCheapSwitch(true)
+    }
+    props.plugin.on('planManager' as any, 'purchaseConfirmed', onPurchaseConfirmed)
+    return () => {
+      props.plugin.off('planManager' as any, 'purchaseConfirmed')
+    }
+  }, [props.plugin])
+
+  // Apply the armed switch as soon as the refreshed catalogue actually offers a
+  // low-cost model, then tell the user what changed and why.
+  useEffect(() => {
+    if (!pendingCheapSwitch) return
+
+    const explain = (model: AIModel) =>
+      `Your ${STARTER_PACK_CREDITS.toLocaleString()}-credit top-up unlocked the low-cost models, so the assistant switched to ${model.displayName} to make those credits last. Pick any other model from the selector whenever you want.`
+
+    // The modal lives in the plan manager, which fires it at the end of
+    // checkout so it lands whether or not this panel is open. Here we narrow
+    // the picker to the tier we just switched to and leave the record in the
+    // strip. Turning the filter on is part of announcing the switch, so it runs
+    // on both paths — including when the user already sat on a cheap model.
+    const announce = (model: AIModel) => {
+      setCheapModelsOnly(true)
+      setChatNotice({
+        severity: 'info',
+        code: 'CHEAP_MODELS_ENABLED',
+        title: `Switched to ${model.displayName}`,
+        message: explain(model),
+        actionable: false
+      })
+    }
+
+    if (selectedModel && isCheapModel(selectedModel) && selectedModel.available) {
+      setPendingCheapSwitch(false)
+      trackMatomoEvent({ category: 'ai', action: 'remixAI', name: 'cheap_models_auto_kept', value: modelKey(selectedModel), isClick: false })
+      announce(selectedModel)
+      return
+    }
+
+    const target = availableModels
+      .filter(m => m.available && m.provider !== 'ollama' && isCheapModel(m))
+      .sort((a, b) => a.sortOrder - b.sortOrder)[0]
+    if (!target) {
+      // Stay armed — the catalogue may still be refreshing after the purchase.
+      if (!cheapUnavailableTrackedRef.current) {
+        cheapUnavailableTrackedRef.current = true
+        trackMatomoEvent({ category: 'ai', action: 'remixAI', name: 'cheap_models_unavailable', value: 'no_model', isClick: false })
+      }
+      return
+    }
+
+    let cancelled = false
+    void (async () => {
+      await handleModelSelection(modelKey(target))
+      if (cancelled) return
+      setPendingCheapSwitch(false)
+      trackMatomoEvent({ category: 'ai', action: 'remixAI', name: 'cheap_models_auto_switch', value: modelKey(target), isClick: false })
+      // handleModelSelection clears the strip on entry, so announce after it.
+      announce(target)
+    })()
+    return () => { cancelled = true }
+  }, [pendingCheapSwitch, availableModels, selectedModel, handleModelSelection])
+
   const handleLockedModelClick = useCallback((selectionKey: string, _modelName: string) => {
     const { id: modelId, provider } = parseModelKey(selectionKey)
     const model = findModel(availableModels, modelId, provider)
@@ -3029,6 +3146,9 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
               hasSkillsPermission={hasSkillsPermission}
               onUpgradeRequired={handleFeatureUpgradeRequired}
               getRequiredPlanName={getRequiredPlanName}
+              cheapModelsOnly={cheapModelsOnly}
+              hasCheapModels={hasCheapModels}
+              onToggleCheapModels={handleToggleCheapModels}
             />
           ) : (
             <AiChatPromptArea
@@ -3087,6 +3207,9 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
               hasSkillsPermission={hasSkillsPermission}
               onUpgradeRequired={handleFeatureUpgradeRequired}
               getRequiredPlanName={getRequiredPlanName}
+              cheapModelsOnly={cheapModelsOnly}
+              hasCheapModels={hasCheapModels}
+              onToggleCheapModels={handleToggleCheapModels}
             />
           )
         }

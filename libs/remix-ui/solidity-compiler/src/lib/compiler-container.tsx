@@ -10,9 +10,9 @@ import { listenToEvents } from './actions/compiler'
 import { getValidLanguage } from '@remix-project/remix-solidity'
 import { CopyToClipboard } from '@remix-ui/clipboard'
 import { configFileContent } from './compilerConfiguration'
-import { appPlatformTypes, platformContext, onLineContext, AppContext, appActionTypes } from '@remix-ui/app'
+import { appPlatformTypes, platformContext, onLineContext, AppContext, appActionTypes, useAuth } from '@remix-ui/app'
 import { TrackingContext } from '@remix-ide/tracking'
-import { CompilerEvent, CompilerContainerEvent } from '@remix-api'
+import { CompilerEvent, CompilerContainerEvent, Features } from '@remix-api'
 import * as packageJson from '../../../../../package.json'
 
 import './css/style.css'
@@ -74,6 +74,8 @@ export const CompilerContainer = (props: CompilerContainerProps) => {
   const [truffleCompilation, setTruffleCompilation] = useState(false)
   const [compilerContainer, dispatch] = useReducer(compilerReducer, compilerInitialState)
   const { appStateDispatch } = useContext(AppContext)
+  const { features } = useAuth()
+  const hasSkillsPermission = features[Features.AI_SKILLS]?.is_enabled === true
 
   useEffect(() => {
     sethhCompilation(false)
@@ -795,6 +797,15 @@ export const CompilerContainer = (props: CompilerContainerProps) => {
     onChangeRuns(settings.runs)
   }
 
+  const loadAISkills = () => {
+    if (!hasSkillsPermission) {
+      ;(api as any).call('planManager', 'open', { reason: 'feature-required', requiredFeature: Features.SKILLS_BASIC })
+    } else {
+      trackMatomoEvent({ category: 'compilerContainer', action: 'loadAISkills', name: '', isClick: true })
+      appStateDispatch({ type: appActionTypes.showSkillsModal, payload: true })
+    }
+  }
+
   const toggleConfigurations = () => {
     setToggleExpander(!toggleExpander)
   }
@@ -1182,10 +1193,7 @@ export const CompilerContainer = (props: CompilerContainerProps) => {
             <button
               data-id="compilerContainerLoadAISkillsBtn"
               className="btn btn-secondary btn-block d-block w-100 text-break mb-1 mt-1"
-              onClick={() => {
-                trackMatomoEvent({ category: 'compilerContainer', action: 'loadAISkills', name: '', isClick: true })
-                appStateDispatch({ type: appActionTypes.showSkillsModal, payload: true })
-              }}
+              onClick={loadAISkills}
             >
               Load AI Skills
             </button>
