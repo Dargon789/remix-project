@@ -24,8 +24,6 @@ interface AiChatPromptAreaForHistoryProps {
       setMcpEnhanced: React.Dispatch<React.SetStateAction<boolean>>
       availableModels: AIModel[]
       selectedModel: any
-      autoModeEnabled: boolean
-      autoModeAvailable: boolean
       handleModelSelection: (modelName: string) => void
       onLockedModelClick?: (modelId: string, modelName: string) => void
       /** Permission-derived state of the per-model "Upgrade plan" pill. */
@@ -34,6 +32,10 @@ interface AiChatPromptAreaForHistoryProps {
       buyCreditsPillState?: 'hidden' | 'coming_soon' | 'available'
       /** Called when the user clicks the "Buy credits" pill on a locked model. */
       onBuyCreditsClick?: (modelId: string, modelName: string) => void
+    /** Transport provider → whether the user stored a BYOK key for it. */
+    byokKeyPresence?: Record<string, boolean>
+    /** Opens the API key settings from a model waiting for a key. */
+    onAddApiKeyClick?: () => void
       input: string
       setInput: React.Dispatch<React.SetStateAction<string>>
       isStreaming: boolean
@@ -64,6 +66,10 @@ interface AiChatPromptAreaForHistoryProps {
       hasSkillsPermission?: boolean
       onUpgradeRequired?: (commandName: string, missingFeature: string) => void
       getRequiredPlanName?: (feature: string) => string | null
+      /** Low-cost model filter — shared by the composer toggle and the menu. */
+      cheapModelsOnly?: boolean
+      hasCheapModels?: boolean
+      onToggleCheapModels?: () => void
 }
 
 export default function AiChatPromptAreaForHistory(props: AiChatPromptAreaForHistoryProps) {
@@ -83,22 +89,23 @@ export default function AiChatPromptAreaForHistory(props: AiChatPromptAreaForHis
     >
       {props.showModelSelector && (
         <div
-          className="pt-2 mb-2 z-3 remix-ai-model-selector border position-fixed"
-          style={{ borderRadius: '8px', top: props.modelOpt.top, bottom: props.modelOpt.bottom, left: props.modelOpt.left + 16, zIndex: 2000, minWidth: '300px', maxWidth: '400px', maxHeight: props.modelOpt.maxHeight || undefined, overflowY: 'auto' }}
+          className="pt-2 mb-2 z-3 remix-ai-model-selector border position-fixed d-flex flex-column"
+          style={{ borderRadius: '8px', top: props.modelOpt.top, bottom: props.modelOpt.bottom, left: props.modelOpt.left + 16, zIndex: 2000, minWidth: '300px', maxWidth: '400px', maxHeight: props.modelOpt.maxHeight || undefined, overflow: 'hidden' }}
           ref={props.menuRef}
         >
-          <div className="text-uppercase ms-2 mb-2 small rai-selector-heading">Select a model</div>
+          <div className="text-uppercase ms-2 mb-2 small rai-selector-heading flex-shrink-0">Select a model</div>
           <ModelSelectorMenu
             availableModels={props.availableModels}
-            autoModeAvailable={props.autoModeAvailable}
-            autoModeEnabled={props.autoModeEnabled}
-            currentChoice={props.autoModeEnabled ? 'auto' : (props.selectedModel ? modelKey(props.selectedModel) : props.selectedModelId as string)}
+            currentChoice={props.selectedModel ? modelKey(props.selectedModel) : props.selectedModelId as string}
             setChoice={props.handleModelSelection}
             setShowOptions={props.setShowModelSelector}
             onLockedItemClick={handleLockedItemClick}
             upgradePillState={props.upgradePillState}
             buyCreditsPillState={props.buyCreditsPillState}
             onBuyCreditsClick={props.onBuyCreditsClick ? handleBuyCreditsClick : undefined}
+            byokKeyPresence={props.byokKeyPresence}
+            onAddApiKeyClick={props.onAddApiKeyClick ? () => props.onAddApiKeyClick?.() : undefined}
+            cheapOnly={props.cheapModelsOnly}
           />
           {false && props.mcpEnabled && (
             <div className="border-top mt-2 pt-2">
@@ -170,7 +177,6 @@ export default function AiChatPromptAreaForHistory(props: AiChatPromptAreaForHis
         handleOllamaModelSelection={props.handleOllamaModelSelection}
         ollamaModels={props.ollamaModels}
         selectedOllamaModel={props.selectedOllamaModel}
-        autoModeEnabled={props.autoModeEnabled}
         stopRequest={props.stopRequest}
         modelSelectorBtnRef={props.modelSelectorBtnRef}
         handleLoadSkills={props.handleLoadSkills}
@@ -187,6 +193,9 @@ export default function AiChatPromptAreaForHistory(props: AiChatPromptAreaForHis
         hasSkillsPermission={props.hasSkillsPermission}
         onUpgradeRequired={props.onUpgradeRequired}
         getRequiredPlanName={props.getRequiredPlanName}
+        cheapModelsOnly={props.cheapModelsOnly}
+        hasCheapModels={props.hasCheapModels}
+        onToggleCheapModels={props.onToggleCheapModels}
       />
       <span className="mb-2 mx-4 small w-100 text-dark">RemixAI can make mistakes. Always check important info.</span>
     </section>

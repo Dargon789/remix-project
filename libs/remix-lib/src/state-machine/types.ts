@@ -106,11 +106,12 @@ export type SerializedConditionInput = SerializedCondition
 // ─── Nudge Engine Types ──────────────────────────────────────────────
 
 export interface NudgeAction {
-  type: 'toast' | 'modal' | 'hint' | 'widget'
+  type: 'toast' | 'modal' | 'hint' | 'widget' | 'banner'
   title?: string
   message: string
   actionLabel?: string // e.g. "Try it now"
   actionTarget?: string // e.g. 'remixAI::switchModel::opus'
+  autoTrigger?: boolean // invoke actionTarget immediately instead of showing a card
   icon?: string // e.g. 'fas fa-robot'
   dismissable?: boolean // default true; hides both X and 'Don't show again'
   hidePermanentDismiss?: boolean // hides only the 'Don't show this again' footer button

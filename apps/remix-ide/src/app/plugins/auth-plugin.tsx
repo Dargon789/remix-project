@@ -4,6 +4,7 @@ import { endpointUrls } from '@remix-endpoints-helper'
 import { QueryParams } from '@remix-project/remix-lib'
 import { getAddress } from 'ethers'
 import { SiweMessage } from 'siwe'
+import { appConfigReader, cacheRedirectConfig, parseRedirectConfig, redirectFreshVisitor } from '../utils/freshUserRedirect'
 
 const profile = {
   name: 'auth',
@@ -211,15 +212,9 @@ export class AuthPlugin extends Plugin {
    */
   async getPaddleConfig(): Promise<{ clientToken: string | null; environment: 'sandbox' | 'production' }> {
     try {
-      // Ensure we have a token set
-      const token = await this.getToken()
-
-      // The billing /config endpoint requires auth. When the user isn't logged
-      // in there is nothing to fetch — skip the request instead of firing a
-      // guaranteed 401 (which also needlessly trips the token-refresh path).
-      if (!token) {
-        return { clientToken: null, environment: 'sandbox' }
-      }
+      // Attaches the bearer when we have one; the endpoint also serves
+      // anonymous callers so Paddle can price-preview before sign-in.
+      await this.getToken()
 
       const response = await this.billingApi.getConfig()
       if (response.ok && response.data?.paddle) {
@@ -600,6 +595,22 @@ export class AuthPlugin extends Plugin {
     } catch (error) {
       console.warn('[AuthPlugin] Error fetching app config:', error)
       return {}
+    }
+  }
+
+  /**
+   * Cache the domain-redirect settings so later visits can act during preload,
+   * and — for a first visit, where preload had nothing cached yet — send a
+   * visitor with an empty browser storage over to the new domain now.
+   */
+  private applyDomainRedirectConfig(config: AppConfig): void {
+    if (this.isDesktop()) return
+    try {
+      const redirect = parseRedirectConfig(appConfigReader(config))
+      cacheRedirectConfig(redirect)
+      redirectFreshVisitor(redirect)
+    } catch (error) {
+      this.log('[AuthPlugin] Domain redirect config skipped:', error)
     }
   }
 
@@ -1422,6 +1433,7 @@ export class AuthPlugin extends Plugin {
 
     this.getAppConfig().then((config) => {
       this.emit('appConfigChanged', config)
+      this.applyDomainRedirectConfig(config)
     }).catch(() => {})
 
     // Validate existing token with the API on load

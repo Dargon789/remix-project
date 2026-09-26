@@ -20,7 +20,7 @@
 import { setup, createActor, type AnyActorRef } from 'xstate'
 import type { PermissionsResponse } from '@remix-api'
 import { Features } from '@remix-api'
-import { ANONYMOUS_FALLBACK_MODELS, parseAIModelsFromPermissions, curateBedrockBrandedModels, type AIModel } from '../types/models'
+import { ANONYMOUS_FALLBACK_MODELS, parseAIModelsFromPermissions, curateOpenRouterBrandedModels, isOpenRouterRouted, type AIModel } from '../types/models'
 
 // ─── Public types ───────────────────────────────────────────────────
 
@@ -598,45 +598,6 @@ export function selectPlanManagerHandoff(snap: AssistantSnapshot): PlanManagerHa
   }
 }
 
-/**
- * Allowed provider/model IDs. Drives the model picker without scattering
- * `if (features['ai:foo'])` checks across the codebase. Pass in the static
- * model registry; we filter by `ai:<provider>` feature flags.
- *
- * Convention (matches the live /permissions/ shape):
- *   feature_name === 'ai:Mistral'   → mistralai provider models
- *   feature_name === 'ai:Anthropic' → anthropic provider models
- *   feature_name === 'ai:OpenAI'    → openai provider models
- *   feature_name === 'ai:completion' → models with capabilities including 'completion'
- */
-export function selectAllowedModelIds(
-  snap: AssistantSnapshot,
-  models: ReadonlyArray<{ id: string; provider: string; capabilities?: string[] }>
-): string[] {
-  if (!snap.permissions?.features) {
-    // No permissions yet — fall back to anything that doesn't require auth.
-    // (Mirrors getDefaultModel() behaviour.)
-    return models.filter((m) => m.provider === 'mistralai').map((m) => m.id)
-  }
-  const allowed: string[] = []
-  for (const m of models) {
-    if (m.provider === 'ollama') { allowed.push(m.id); continue }
-    // Provider key is capitalised in /permissions/ (`ai:Mistral`, not `ai:mistralai`).
-    const providerKey = providerToFeatureKey(m.provider)
-    if (providerKey && isFeatureEnabled(snap.permissions, providerKey)) allowed.push(m.id)
-  }
-  return allowed
-}
-
-function providerToFeatureKey(provider: string): string | null {
-  switch (provider) {
-  case 'mistralai': return Features.AI_PROVIDER_MISTRAL
-  case 'anthropic': return Features.AI_PROVIDER_ANTHROPIC
-  case 'openai': return Features.AI_PROVIDER_OPENAI
-  default: return null
-  }
-}
-
 /** Seconds remaining on the current cooldown, or null if none. */
 export function selectCooldownRemaining(snap: AssistantSnapshot, now: number = Date.now()): number | null {
   if (snap.cooldown === 'blocked') return Number.POSITIVE_INFINITY
@@ -666,7 +627,10 @@ export function selectAllowedProvidersFromError(snap: AssistantSnapshot): string
 export function selectAvailableModels(snap: AssistantSnapshot): AIModel[] {
   if (snap.isAuthenticated && snap.permissions) {
     const parsed = parseAIModelsFromPermissions(snap.permissions)
-    if (parsed && parsed.length > 0) return curateBedrockBrandedModels(parsed)
+    // OpenRouter is the only curated route: its rows are rebranded onto their
+    // vendor. Every other provider (including Bedrock) is left exactly as the
+    // backend sent it.
+    if (parsed && parsed.length > 0) return curateOpenRouterBrandedModels(parsed)
   }
   return ANONYMOUS_FALLBACK_MODELS
 }
@@ -680,14 +644,21 @@ export function selectAvailableModels(snap: AssistantSnapshot): AIModel[] {
 export function selectDefaultModel(snap: AssistantSnapshot): AIModel | null {
   const models = selectAvailableModels(snap)
   if (!models.length) return null
-  // Prefer an `available` default; only fall back to the unavailable one
-  // (e.g. anonymous placeholder) if nothing else is marked default.
-  const availableDefault = models.find((m) => m.isDefault && m.available)
-  if (availableDefault) return availableDefault
+  // OpenRouter is the default router: among `available` rows flagged
+  // is_default, an OpenRouter-routed one wins. Only when the backend advertises
+  // no OpenRouter default at all do we fall back to another provider's.
+  const availableDefaults = models.filter((m) => m.isDefault && m.available)
+  const routedDefault = availableDefaults.find(isOpenRouterRouted)
+  if (routedDefault) return routedDefault
+  if (availableDefaults.length > 0) return availableDefaults[0]
   const anyDefault = models.find((m) => m.isDefault)
   if (anyDefault) return anyDefault
-  // No is_default flag anywhere — pick the first available row.
-  return models.find((m) => m.available) ?? models[0] ?? null
+  // No is_default flag anywhere — first available OpenRouter row, else the
+  // first available row of any provider.
+  return models.find((m) => m.available && isOpenRouterRouted(m))
+    ?? models.find((m) => m.available)
+    ?? models[0]
+    ?? null
 }
 
 /**
@@ -715,11 +686,6 @@ export function selectTaskParam(
   const row = tp?.[taskId]
   if (!row || row[key] === undefined || row[key] === null) return null
   return row[key]
-}
-
-/** Sugar over selectFeatureEnabled — Auto Mode is just `ai:auto`. */
-export function selectAutoModeEnabled(snap: AssistantSnapshot): boolean {
-  return selectFeatureEnabled(snap, Features.AI_AUTO)
 }
 
 /**
@@ -882,6 +848,18 @@ export function selectChatNotice(snap: AssistantSnapshot): ChatNotice | null {
       code: err.code,
       title: 'AI service error',
       message: err.message || 'The AI service ran into an issue. Please try again.',
+      actionable: true
+    }
+  case 'MODEL_TOOLS_UNSUPPORTED':
+    // Client-side code, raised by the RemixAI plugin when the active model
+    // turns out not to support tool calling. It has already rolled the
+    // selection back — its message names the model that failed and the one
+    // restored, so prefer it over the generic line.
+    return {
+      severity: 'warning',
+      code: err.code,
+      title: 'Model not supported',
+      message: err.message || 'The selected model cannot call tools, which the assistant requires.',
       actionable: true
     }
   case 'BAD_REQUEST':
