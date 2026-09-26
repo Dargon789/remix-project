@@ -5,6 +5,7 @@ import { CopyToClipboard } from '@remix-ui/clipboard'
 import * as remixLib from '@remix-project/remix-lib'
 import { Dropdown } from 'react-bootstrap'
 import { parseUnits } from 'ethers'
+import { checksumAddressesInValue } from '@remix-ui/utils'
 import { FuncABI } from '@remix-project/core-plugin'
 import { DeployedContractsAppContext } from '../contexts'
 import { DeployedContract } from '../types'
@@ -23,6 +24,8 @@ import isElectron from 'is-electron'
 const txHelper = remixLib.execution.txHelper
 const txFormat = remixLib.execution.txFormat
 const highlightedContracts = new Set<string>()
+
+
 const REMIX_VM_DAPP_WORKSPACE_MESSAGE = 'Creating another DApp from a DApp workspace is not supported with Remix VM. Switch to a persistent network, deploy the contract there, and try again.'
 interface DeployedContractItemProps {
   contract: DeployedContract
@@ -333,7 +336,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
       const paramMap: {[paramIndex: number]: string} = {}
       const filled = new Set<number>()
       values.forEach((value, idx) => {
-        paramMap[idx] = typeof value === 'string' ? value : JSON.stringify(value)
+        paramMap[idx] = checksumAddressesInValue(value, funcABI.inputs[idx])
         filled.add(idx)
       })
       setFuncInputs(prev => ({ ...prev, [funcIndex]: paramMap }))
