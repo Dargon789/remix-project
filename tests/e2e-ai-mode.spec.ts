@@ -207,6 +207,26 @@ test('history opens inline on the right of the chat and RemixAI icons keep AI mo
   await expect(page.locator(sel.rightPanel)).toBeHidden()
 })
 
+test('leaving AI mode with history open lands on the docked chat, not the history list', async ({ page }) => {
+  await loadIde(page)
+  await enterAiMode(page)
+  await click(page, `${sel.host} [data-id="toggle-history-btn"]`)
+  await expect(page.locator(`${sel.host} [data-id="chat-history-sidebar"]`)).toBeVisible()
+
+  await click(page, sel.codeBtn)
+  await expectCodeMode(page)
+  const prompt = page.locator(`${sel.rightPanel} section#remix-ai-prompt-area`)
+  await expect(prompt).toBeVisible()
+  await expect(page.locator(`${sel.rightPanel} [data-id="chat-history-sidebar"]`)).toHaveCount(0)
+
+  // Not persisted as open either
+  await page.reload()
+  await expect(page.locator(`${sel.rightPanel} ${sel.chatReady}`)).toBeAttached({ timeout: 90_000 })
+  await removeOverlays(page)
+  await expect(prompt).toBeVisible()
+  await expect(page.locator(`${sel.rightPanel} [data-id="chat-history-sidebar"]`)).toHaveCount(0)
+})
+
 test('docked history fills the panel height and hides the prompt until Back to chat', async ({ page }) => {
   await loadIde(page)
   const prompt = page.locator(`${sel.rightPanel} section#remix-ai-prompt-area`)

@@ -453,6 +453,12 @@ export class RemixAIAssistant extends ViewPlugin {
   async restorePanel() {
     if (!this.isMaximized) return
     this.isMaximized = false
+    // History is a side column in AI mode but replaces the whole chat (prompt
+    // included) when docked: leave AI mode on the chat, not the history list.
+    if (this.showHistorySidebar) {
+      this.showHistorySidebar = false
+      localStorage.setItem('remix-ai-history-sidebar-visible', 'false')
+    }
     this.renderComponent()
     await this.call('layout', 'restoreFromAIChatMaximized')
     // Re-show only what AI mode hid and the user hasn't reopened meanwhile.
