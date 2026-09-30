@@ -87,7 +87,7 @@ export const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
       <div className="chat-history-sidebar-header border-0 px-3 pt-3 pb-2" style={{ backgroundColor: theme.toLowerCase() === 'dark' ? '#222336' : '#eff1f5' }}>
         <div className="d-flex justify-content-between align-items-center mb-2">
           <h6 className="mb-0 fw-semibold sidebar-title text-truncate" data-id="chat-history-sidebar-title">
-            {'Chat history'} <span className="ms-1 fw-normal text-muted">{filteredConversations.length}</span>
+            {'Chat History'} <span className="ms-1 fw-normal text-muted">{filteredConversations.length}</span>
           </h6>
           {isMaximized && (
             <CustomTooltip tooltipText="Close chat history">

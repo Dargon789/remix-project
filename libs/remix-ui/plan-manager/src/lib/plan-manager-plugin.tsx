@@ -162,6 +162,9 @@ export class PlanManagerPlugin extends ViewPlugin {
   // messaging can run early in the session.
   private billingLocale: BillingLocale | null = null
   private billingLocaleProbed = false
+  // Country+currency last stored on the account, so a re-emit or token refresh
+  // doesn't re-POST. Cleared on every auth change (the next user must sync).
+  private syncedLocaleSignature = ''
   // One batched catalog PricePreview is shared between the early locale probe
   // and the panel, keyed by the set of Paddle price ids it covered.
   private catalogPriceCache: { key: string; value: CatalogPricePreview } | null = null
@@ -325,6 +328,8 @@ export class PlanManagerPlugin extends ViewPlugin {
         token: s.token ?? null,
         userId: s.user?.id ?? null
       })
+      // A different session must re-report its region.
+      this.syncedLocaleSignature = ''
       if (s.isAuthenticated) {
         void this.initPaddleSingleton()
         // Auth is the driving motor: every login must (re)load the catalog of
@@ -335,6 +340,9 @@ export class PlanManagerPlugin extends ViewPlugin {
         void this.loadAccountData()
         // Out-of-band from account data (brief: never fold into /permissions).
         void this.loadPendingCheckouts()
+        // The country is usually already known (cached or probed while
+        // anonymous) — persist it now that there's an account to attach it to.
+        void this.syncBillingLocaleToAccount()
       }
     }
     try {
@@ -984,6 +992,29 @@ export class PlanManagerPlugin extends ViewPlugin {
     } catch { /* storage blocked — the locale stays in memory for this session */ }
     planManagerLogger.log('[PlanManager:price] billing locale resolved', locale)
     this.emit('billingLocaleResolved', locale)
+    void this.syncBillingLocaleToAccount()
+  }
+
+  /**
+   * Persist the detected country on the user's account. Only runs while
+   * signed in, and only once per (user, country+currency) — a failed call
+   * clears the guard so the next resolve/login retries.
+   */
+  private async syncBillingLocaleToAccount(): Promise<void> {
+    const locale = this.billingLocale
+    if (!locale?.countryCode) return
+    if (!this.store.getSnapshot().isAuthenticated) return
+
+    const signature = `${locale.countryCode}|${locale.currencyCode}`
+    if (signature === this.syncedLocaleSignature) return
+    this.syncedLocaleSignature = signature
+
+    const stored = await this.call('auth', 'reportUserLocale' as any, locale.countryCode, locale.currencyCode)
+      .catch(() => false)
+    if (!stored) {
+      this.syncedLocaleSignature = ''
+      planManagerLogger.log('[PlanManager:price] billing locale not stored on account')
+    }
   }
 
   /**

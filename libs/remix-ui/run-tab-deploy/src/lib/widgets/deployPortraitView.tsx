@@ -7,6 +7,7 @@ import { DeployAppContext } from '../contexts'
 import { Provider } from '@remix-ui/run-tab-environment'
 import { useIntl } from 'react-intl'
 import * as remixLib from '@remix-project/remix-lib'
+import { checksumAddressesInValue } from '@remix-ui/utils'
 import { deployContract, getNetworkProxyAddresses } from '../actions'
 import { ToggleSwitch } from '@remix-ui/toggle'
 import { ContractKebabMenu } from './contractKebabMenu'
@@ -299,7 +300,7 @@ function DeployPortraitView() {
       const newValues: {[key: number]: string} = {}
       const filled = new Set<number>()
       values.forEach((value, index) => {
-        newValues[index] = typeof value === 'string' ? value : JSON.stringify(value)
+        newValues[index] = checksumAddressesInValue(value, inputs[index])
         filled.add(index)
       })
 
