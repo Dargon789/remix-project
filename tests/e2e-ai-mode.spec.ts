@@ -292,3 +292,40 @@ test('a file opened programmatically keeps AI mode; a File Explorer click leaves
   await expectCodeMode(page)
   await expect(page.locator(sel.editorSlot)).toHaveCount(1)
 })
+
+test('maximizing another pinned plugin shows it in a centered column; AI mode restores it cleanly', async ({ page }) => {
+  await loadIde(page)
+  await pinToRight(page, 'solidity')
+  await expect(page.locator(`${sel.rightPanel} ${sel.panelTitle}`)).toHaveText(/Solidity compiler/i)
+
+  await click(page, `${sel.rightPanel} [data-id="maximizeRightSidePanel"]`)
+  await expect(page.locator(sel.rightPanel)).toHaveClass(/right-panel-maximized/)
+  await expect(page.locator('#main-panel')).toBeHidden()
+  // Not AI mode: the switcher stays on Code
+  await expect(page.locator(sel.switcher)).toHaveAttribute('data-active', 'code')
+
+  const panel = await page.locator(sel.rightPanel).boundingBox()
+  const header = await page.locator(`${sel.rightPanel} .swapitHeader`).boundingBox()
+  const column = await page.locator(`${sel.rightPanel} .pluginsContainer .plugins`).boundingBox()
+  // Header spans the whole panel; the plugin sits in a centered, capped column
+  expect(header.width).toBeGreaterThan(panel.width - 4)
+  expect(column.width).toBeLessThanOrEqual(900)
+  const leftGap = column.x - panel.x
+  const rightGap = panel.x + panel.width - (column.x + column.width)
+  expect(Math.abs(leftGap - rightGap)).toBeLessThan(4)
+
+  // Restore from the header button
+  await click(page, `${sel.rightPanel} [data-id="maximizeRightSidePanel"]`)
+  await expect(page.locator(sel.rightPanel)).not.toHaveClass(/right-panel-maximized/)
+  await expect(page.locator('#main-panel')).toBeVisible()
+
+  // Maximized again, then switching to AI mode: the maximize is undone on the way
+  await click(page, `${sel.rightPanel} [data-id="maximizeRightSidePanel"]`)
+  await expect(page.locator(sel.rightPanel)).toHaveClass(/right-panel-maximized/)
+  await enterAiMode(page)
+  await click(page, sel.codeBtn)
+  await expectCodeMode(page)
+  await expect(page.locator(sel.rightPanel)).not.toHaveClass(/right-panel-maximized/)
+  await expect(page.locator('#main-panel')).toBeVisible()
+  await expect(page.locator(`${sel.rightPanel} ${sel.panelTitle}`)).toHaveText(/Solidity compiler/i)
+})
