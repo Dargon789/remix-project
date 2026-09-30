@@ -62,6 +62,10 @@ function findAnchor(elementId?: string): HTMLElement | null {
 
 const PERMANENT_DISMISS_KEY = 'remix_nudge_dismissed_permanent'
 const AI_MODE_INTRO_ID = 'ai-mode-intro'
+/** How many times each callout has actually been on screen, keyed by rule id */
+const CALLOUT_VIEWS_KEY = 'remix_nudge_callout_views'
+/** A callout ignored this many times (e.g. reloaded away) stops coming back */
+const MAX_CALLOUT_VIEWS = 3
 
 /* ─── Plugin profile ─── */
 
@@ -1042,9 +1046,15 @@ export class NudgePlugin extends Plugin {
 
     /* ─── AI / Code modes announcement ─── */
 
-    // Callout under the topbar AI/Code switcher, the first time the user
-    // reaches for the docked chat. Once ever; also retired as soon as the user
-    // enters AI mode by any route (see the aiModeChanged listener).
+    // Callout under the topbar AI/Code switcher, when the user reaches for the
+    // docked chat. At most once per session, and only retired by the user
+    // (close, "Got it", "Try AI mode", or entering AI mode by any route — see
+    // the aiModeChanged listener). A session where it couldn't show (modal,
+    // no switcher on screen) doesn't count; one where it showed but was
+    // ignored does, up to MAX_CALLOUT_VIEWS (see _showCallout).
+    // Older builds recorded it as shown for good the moment it triggered;
+    // drop that record so those users get it again.
+    if (!this._isPermanentlyDismissed(AI_MODE_INTRO_ID)) this.engine_.resetShown(AI_MODE_INTRO_ID)
     this.engine_.addRule({
       id: AI_MODE_INTRO_ID,
       condition: any('ai:chat_engaged', 'ai:chat_message'),
@@ -1058,7 +1068,8 @@ export class NudgePlugin extends Plugin {
         actionTarget: 'remixaiassistant::maximizePanel',
         secondaryLabel: 'Got it'
       },
-      showOnce: true,
+      showOnce: 'session',
+      enabled: !this._isPermanentlyDismissed(AI_MODE_INTRO_ID),
       priority: 30
     })
 
@@ -1219,6 +1230,7 @@ export class NudgePlugin extends Plugin {
 
   private async _showCallout(rule: NudgeRule): Promise<void> {
     if (this._isPermanentlyDismissed(rule.id)) return
+    if (this._getCalloutViews(rule.id) >= MAX_CALLOUT_VIEWS) return
     // Don't pop over a sign-in / plans / migration dialog
     if (this._isBlockingModalOpen() && !(await this._waitForModalsToClose())) return
     // Nothing to point at (e.g. desktop app without the topbar)
@@ -1229,8 +1241,27 @@ export class NudgePlugin extends Plugin {
       const aiModeActive = await this.call('remixaiassistant' as any, 'isAIModeActive').catch(() => false)
       if (aiModeActive) return this._retireRule(rule.id)
     }
+    // Only a callout that actually made it on screen counts as a view
+    this._countCalloutView(rule.id)
     this.state = { ...this.state, callout: rule }
     this.renderComponent()
+  }
+
+  private _getCalloutViews(id: string): number {
+    try {
+      const views = JSON.parse(localStorage.getItem(CALLOUT_VIEWS_KEY) || '{}')
+      return Number(views[id]) || 0
+    } catch {
+      return 0
+    }
+  }
+
+  private _countCalloutView(id: string): void {
+    try {
+      const views = JSON.parse(localStorage.getItem(CALLOUT_VIEWS_KEY) || '{}')
+      views[id] = (Number(views[id]) || 0) + 1
+      localStorage.setItem(CALLOUT_VIEWS_KEY, JSON.stringify(views))
+    } catch { }
   }
 
   private _closeCallout(): void {

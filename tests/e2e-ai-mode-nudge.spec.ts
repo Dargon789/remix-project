@@ -1,8 +1,9 @@
 import { test, expect, Page } from '@playwright/test'
 
-// The one-time "Meet AI mode" callout under the topbar AI/Code switcher. It
-// appears the first time the user reaches for the docked RemixAI chat, and is
-// retired for good once closed or once the user enters AI mode.
+// The "Meet AI mode" callout under the topbar AI/Code switcher. It appears
+// when the user reaches for the docked RemixAI chat (once per session), and is
+// retired for good once closed or once the user enters AI mode. Ignored, it
+// comes back in later sessions up to 3 times.
 
 test.use({ viewport: { width: 1600, height: 1000 } })
 test.describe.configure({ mode: 'default', timeout: 180_000 })
@@ -72,6 +73,21 @@ test('"Got it" closes the callout for good', async ({ page }) => {
   await expect(page.locator(sel.callout)).toBeVisible({ timeout: 15_000 })
   await page.locator('[data-id="nudge-callout-secondary"]').click()
   await expect(page.locator(sel.callout)).toHaveCount(0)
+
+  await loadIde(page, { reload: true })
+  await reachForChat(page)
+  await page.waitForTimeout(4000)
+  await expect(page.locator(sel.callout)).toHaveCount(0)
+})
+
+test('an ignored callout comes back next session, up to 3 times', async ({ page }) => {
+  await loadIde(page)
+
+  for (let view = 1; view <= 3; view++) {
+    if (view > 1) await loadIde(page, { reload: true })
+    await reachForChat(page)
+    await expect(page.locator(sel.callout)).toBeVisible({ timeout: 15_000 })
+  }
 
   await loadIde(page, { reload: true })
   await reachForChat(page)
