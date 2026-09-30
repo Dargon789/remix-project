@@ -544,3 +544,96 @@
   width: 12px;
   height: 12px;
 }
+
+/* ============================
+   AI mode "try me" animation
+   The topbar AI/Code switcher, until the user has entered AI mode once
+   (NudgePlugin._syncAiModeAttention marks the AI button). Every 3s: a light
+   in the AI color makes one turn around the switcher (same ring as the AI
+   mode prompt spotlight, remix-ai-assistant.css), then a white light sweeps
+   over the AI icon and label.
+   ============================ */
+
+@property --nudge-ai-ring-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* Ring: a 1.5px band just inside the switcher's border (it clips overflow) */
+.ai-mode-toggle-group:has([data-nudge-attention])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--nudge-ai-ring-angle),
+    transparent 0deg,
+    transparent 250deg,
+    color-mix(in srgb, var(--custom-ai-color) 60%, transparent) 320deg,
+    var(--custom-ai-color) 352deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+  z-index: 2;
+  animation: nudge-ai-ring 3s linear infinite;
+}
+
+/* 0-1s: one turn, then fade out and wait */
+@keyframes nudge-ai-ring {
+  0% { --nudge-ai-ring-angle: 0deg; opacity: 1; animation-timing-function: cubic-bezier(0.45, 0, 0.25, 1); }
+  33% { --nudge-ai-ring-angle: 360deg; opacity: 1; }
+  40% { --nudge-ai-ring-angle: 360deg; opacity: 0; }
+  99.9% { --nudge-ai-ring-angle: 360deg; opacity: 0; }
+  100% { --nudge-ai-ring-angle: 360deg; opacity: 1; }
+}
+
+/* Sweep: each of icon and label gets its own band (the button centers its
+   content, so there's no fixed offset for one shared gradient), timed so they
+   read as one pass */
+[data-nudge-attention] .ai-mode-btn-icon,
+[data-nudge-attention] .ai-mode-btn-label {
+  background-image: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.6) 42%, #fff 50%, rgba(255, 255, 255, 0.6) 58%, transparent 70%);
+  background-size: 300% 100%;
+  background-position: 100% 0;
+  background-repeat: no-repeat;
+}
+
+[data-nudge-attention] .ai-mode-btn-icon {
+  animation: nudge-ai-sweep-icon 3s ease-in-out infinite;
+}
+
+/* The label keeps its color (currentColor under the band), clipped to the text */
+[data-nudge-attention] .ai-mode-btn-label {
+  background-color: currentColor;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: nudge-ai-sweep-label 3s ease-in-out infinite;
+}
+
+/* Right after the ring. Position 100% → 0% moves the band left to right */
+@keyframes nudge-ai-sweep-icon {
+  0%, 33% { background-position: 100% 0; }
+  48%, 100% { background-position: 0% 0; }
+}
+
+@keyframes nudge-ai-sweep-label {
+  0%, 44% { background-position: 100% 0; }
+  61%, 100% { background-position: 0% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-mode-toggle-group:has([data-nudge-attention])::before {
+    display: none;
+  }
+
+  [data-nudge-attention] .ai-mode-btn-icon,
+  [data-nudge-attention] .ai-mode-btn-label {
+    animation: none;
+  }
+}

@@ -66,6 +66,9 @@ const AI_MODE_INTRO_ID = 'ai-mode-intro'
 const CALLOUT_VIEWS_KEY = 'remix_nudge_callout_views'
 /** A callout ignored this many times (e.g. reloaded away) stops coming back */
 const MAX_CALLOUT_VIEWS = 3
+/** Set the first time the user enters AI mode; ends the AI button's attention animation */
+const AI_MODE_TRIED_KEY = 'remix_ai_mode_tried'
+const AI_MODE_BUTTON_ANCHOR = 'aiReviewModeBtn'
 
 /* ─── Plugin profile ─── */
 
@@ -179,6 +182,13 @@ export class NudgePlugin extends Plugin {
     this._setupBuiltinRules()
     this._setupEventListeners()
     this.renderComponent()
+    // Animate the switcher's AI button once the topbar has rendered it
+    const start = Date.now()
+    const waitForSwitcher = () => {
+      if (findAnchor(AI_MODE_BUTTON_ANCHOR)) return this._syncAiModeAttention()
+      if (Date.now() - start < 30_000) setTimeout(waitForSwitcher, 1000)
+    }
+    setTimeout(waitForSwitcher, 1000)
   }
 
   onDeactivation(): void {
@@ -246,11 +256,14 @@ export class NudgePlugin extends Plugin {
     })
 
     // Entering AI mode (switcher, maximize button or the callout itself) means
-    // the user has found it: close the intro callout and never show it again.
+    // the user has found it: close the intro callout, stop the AI button's
+    // attention animation, and never show either again.
     this.on('remixaiassistant', 'aiModeChanged', (active: boolean) => {
       if (!active) return
+      try { localStorage.setItem(AI_MODE_TRIED_KEY, 'true') } catch { }
       if (this.state.callout?.id === AI_MODE_INTRO_ID) this._closeCallout()
       this._retireRule(AI_MODE_INTRO_ID)
+      this._syncAiModeAttention()
     })
 
     // AI model changed
@@ -1283,6 +1296,21 @@ export class NudgePlugin extends Plugin {
     this.trackMatomoEvent({ category: 'nudge', action: 'dismissed', name: id, isClick: true })
     this._closeCallout()
     this._retireRule(id)
+  }
+
+  /**
+   * Until the user has entered AI mode once, the switcher's AI button plays a
+   * short idle animation (CSS on [data-nudge-attention], see nudge-widget.css).
+   * Independent of the intro callout: closing that doesn't stop it. An
+   * attribute rather than a class so the topbar's re-renders leave it alone.
+   */
+  private _syncAiModeAttention(): void {
+    let tried = false
+    try { tried = localStorage.getItem(AI_MODE_TRIED_KEY) === 'true' } catch { }
+    const button = findAnchor(AI_MODE_BUTTON_ANCHOR)
+    if (!button) return
+    if (tried) button.removeAttribute('data-nudge-attention')
+    else button.setAttribute('data-nudge-attention', 'true')
   }
 
   /* ─── Hint / decoration management ─── */
