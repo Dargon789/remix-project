@@ -9,6 +9,17 @@ import { test, expect, Page } from '@playwright/test'
 test.use({ viewport: { width: 1600, height: 1000 } })
 test.describe.configure({ mode: 'default', timeout: 180_000 })
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    // CI injects `window.__IS_E2E_TEST__ = true` into index.html
+    // (scripts/inject-e2e-config.js), which switches the nudge plugin off.
+    // These tests exercise nudges, so pin the flag to false and ignore the write.
+    Object.defineProperty(window, '__IS_E2E_TEST__', { get: () => false, set: () => {}, configurable: false })
+    // The flag also gates the beta corner widget; keep it out of the way
+    localStorage.setItem('remix_beta_corner_dismissed', 'true')
+  })
+})
+
 const sel = {
   callout: '[data-id="nudge-callout"]',
   switcher: '[data-id="aiModeSwitcher"]',

@@ -34,6 +34,10 @@ async function removeOverlays (page: Page) {
 
 async function click (page: Page, target: string | Locator) {
   await removeOverlays(page)
+  // A forced click lands on whatever is on top: a lingering hover tooltip
+  // (e.g. "Hide chat history" sits over the topbar switcher) swallows it.
+  await page.mouse.move(0, 0)
+  await expect(page.locator('.remixui-tooltip-popover')).toHaveCount(0)
   const locator = typeof target === 'string' ? page.locator(target) : target
   await locator.first().click({ force: true })
 }
