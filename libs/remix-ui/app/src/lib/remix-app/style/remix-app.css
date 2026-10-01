@@ -74,6 +74,12 @@ pre {
   width              : 100%;
   margin             : 0 auto;
 }
+/* Header bar stays full width; its title and controls line up with the column
+   (!important beats the Bootstrap p-2 utility) */
+#right-side-panel.right-panel-maximized .swapitHeader {
+  padding-left       : calc(max(0px, (100% - 900px) / 2) + 0.5rem) !important;
+  padding-right      : calc(max(0px, (100% - 900px) / 2) + 0.5rem) !important;
+}
 .highlightcode       {
   position           : absolute;
   z-index            : 20;

@@ -282,6 +282,18 @@ test('the AI mode header has no top border (the topbar already draws it)', async
   expect(borderTop).toBe('0px')
 })
 
+test('in AI mode, the auto-accept banner lines up with the input box', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('remix_hitl_auto_accept', 'true'))
+  await loadIde(page)
+  await enterAiMode(page)
+  const banner = page.locator(`${sel.host} [data-id="hitl-auto-accept-banner"]`)
+  await expect(banner).toBeVisible()
+  const bannerBox = await banner.boundingBox()
+  const promptBox = await page.locator(`${sel.host} [data-id="remix-ai-prompt-area"]`).boundingBox()
+  expect(Math.abs(bannerBox.x - promptBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(bannerBox.width - promptBox.width)).toBeLessThanOrEqual(1)
+})
+
 test('in AI mode, RemixAI icons focus the prompt and play the one-shot spotlight', async ({ page }) => {
   await loadIde(page)
   await enterAiMode(page)
@@ -331,12 +343,19 @@ test('maximizing another pinned plugin shows it in a centered column; AI mode re
   const panel = await page.locator(sel.rightPanel).boundingBox()
   const header = await page.locator(`${sel.rightPanel} .swapitHeader`).boundingBox()
   const column = await page.locator(`${sel.rightPanel} .pluginsContainer .plugins`).boundingBox()
-  // Header spans the whole panel; the plugin sits in a centered, capped column
-  expect(header.width).toBeGreaterThan(panel.width - 4)
+  // The plugin sits in a centered, capped column
   expect(column.width).toBeLessThanOrEqual(900)
   const leftGap = column.x - panel.x
   const rightGap = panel.x + panel.width - (column.x + column.width)
   expect(Math.abs(leftGap - rightGap)).toBeLessThan(4)
+  // The header bar spans the panel, but its title and controls stay within the column
+  expect(header.width).toBeGreaterThan(panel.width - 4)
+  const title = await page.locator(`${sel.rightPanel} ${sel.panelTitle}`).boundingBox()
+  const close = await page.locator(`${sel.rightPanel} [data-id="hideRightSidePanel"]`).boundingBox()
+  expect(title.x).toBeGreaterThanOrEqual(column.x)
+  expect(title.x - column.x).toBeLessThan(20)
+  expect(close.x + close.width).toBeLessThanOrEqual(column.x + column.width)
+  expect(column.x + column.width - (close.x + close.width)).toBeLessThan(20)
 
   // Restore from the header button
   await click(page, `${sel.rightPanel} [data-id="maximizeRightSidePanel"]`)
