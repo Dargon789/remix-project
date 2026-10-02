@@ -5375,7 +5375,7 @@ const ALERT_COPY: Record<Exclude<CreditState, 'healthy' | 'unknown'>, {
   empty: {
     eyebrow: 'Out of credits',
     title: () => 'You\'ve used all your credits',
-    body: (r) => `AI features are paused until you top up, upgrade your plan${r ? `, or your included allowance refills on ${r}` : ''}.`,
+    body: (r) => `AI features are paused until you top up or upgrade to a paid plan (Starter or Pro) that includes a sign-up gift of AI credits.`,
     icon: 'fas fa-bolt'
   }
 }
