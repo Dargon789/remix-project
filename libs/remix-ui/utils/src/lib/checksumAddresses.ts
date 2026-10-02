@@ -8,16 +8,26 @@ export const checksumAddressesRaw = (value: any, input: any): any => {
   if (type === 'address[]' && Array.isArray(value)) {
     return value.map((v: string) => { try { return getAddress(v.toLowerCase()) } catch { return v } })
   }
-  if (type === 'tuple' && input?.components && typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    const result: Record<string, any> = {}
-    for (const comp of input.components) result[comp.name] = checksumAddressesRaw(value[comp.name], comp)
-    return result
+  if (type === 'tuple' && input?.components) {
+    // tuples are represented as positional arrays (one value per member, in declaration order)
+    if (Array.isArray(value)) {
+      return input.components.map((comp: any, i: number) => checksumAddressesRaw(value[i], comp))
+    }
+    // tolerate an object keyed by member name (fallback)
+    if (typeof value === 'object' && value !== null) {
+      return input.components.map((comp: any) => checksumAddressesRaw(value[comp.name], comp))
+    }
+    return value
   }
   if (type === 'tuple[]' && input?.components && Array.isArray(value)) {
     return value.map((item: any) => {
-      const result: Record<string, any> = {}
-      for (const comp of input.components) result[comp.name] = checksumAddressesRaw(item[comp.name], comp)
-      return result
+      if (Array.isArray(item)) {
+        return input.components.map((comp: any, i: number) => checksumAddressesRaw(item[i], comp))
+      }
+      if (typeof item === 'object' && item !== null) {
+        return input.components.map((comp: any) => checksumAddressesRaw(item[comp.name], comp))
+      }
+      return item
     })
   }
   return value
