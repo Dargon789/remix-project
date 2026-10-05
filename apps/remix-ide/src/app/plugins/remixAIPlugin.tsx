@@ -872,9 +872,7 @@ export class RemixAIPlugin extends Plugin {
     const result = await this.withAssistantGate(this.getSelectedModelRequiredFeature(), async () => {
       this.traceRouteDecision('code_explaining', { promptLen: prompt?.length ?? 0, contextLen: context?.length ?? 0 })
       // Explicit MCP toggle wins over DeepAgent — see answer() for rationale.
-      if (this.mcpEnabled && this.mcpInferencer){
-        return await this.mcpInferencer.code_explaining(prompt, context, params)
-      } else if (this.deepAgentEnabled && this.deepAgentInferencer) {
+      if (this.deepAgentEnabled && this.deepAgentInferencer) {
         await this.deepAgentManager.awaitReady()
         // See answer(): the awaited rebuild may have left no inferencer.
         if (!this.deepAgentInferencer) return await this.remoteInferencer.code_explaining(prompt, context, params)
@@ -890,8 +888,7 @@ export class RemixAIPlugin extends Plugin {
   async error_explaining(prompt: string, params: IParams=GenerationParams): Promise<any> {
     this.emit('errorExplainRequested')
     const result = await this.withAssistantGate(this.getSelectedModelRequiredFeature(), async () => {
-      // NOTE: error_explaining ALWAYS goes to remote (solcoder) by design.
-      this.traceRouteDecision('error_explaining', { hardcodedRoute: 'remote', promptLen: prompt?.length ?? 0 })
+      this.traceRouteDecision('error_explaining', { promptLen: prompt?.length ?? 0 })
       let localFilesImports = ""
 
       // Get local imports from the workspace restrict to 5 most relevant files
@@ -902,6 +899,12 @@ export class RemixAIPlugin extends Plugin {
       }
       localFilesImports = localFilesImports + "\n End of local files imports.\n\n"
       const finalPrompt = localFilesImports ? `Using the following local imports: ${localFilesImports}\n\n` + prompt : prompt
+      if (this.deepAgentEnabled && this.deepAgentInferencer) {
+        await this.deepAgentManager.awaitReady()
+        // See answer(): the awaited rebuild may have left no inferencer.
+        if (!this.deepAgentInferencer) return await this.remoteInferencer.error_explaining(finalPrompt, params)
+        return await this.deepAgentInferencer.error_explaining(finalPrompt, params)
+      }
       return await this.remoteInferencer.error_explaining(finalPrompt, params)
     })
     if (result && params.terminal_output) this.call('terminal', 'log', { type: 'aitypewriterwarning', value: result })
@@ -911,8 +914,15 @@ export class RemixAIPlugin extends Plugin {
   async vulnerability_check(prompt: string, params: IParams=GenerationParams): Promise<any> {
     this.emit('vulnerabilityCheckRequested')
     const result = await this.withAssistantGate(this.getSelectedModelRequiredFeature(), async () => {
-      // NOTE: vulnerability_check ALWAYS goes to remote (solcoder) by design.
-      this.traceRouteDecision('vulnerability_check', { hardcodedRoute: 'remote', promptLen: prompt?.length ?? 0 })
+      // Same routing rationale as error_explaining(): the remote solcoder
+      // route rejects the chat selection's transport on accounts without that
+      // provider enabled.
+      this.traceRouteDecision('vulnerability_check', { promptLen: prompt?.length ?? 0 })
+      if (this.deepAgentEnabled && this.deepAgentInferencer) {
+        await this.deepAgentManager.awaitReady()
+        if (!this.deepAgentInferencer) return await this.remoteInferencer.vulnerability_check(prompt, params)
+        return await this.deepAgentInferencer.vulnerability_check(prompt, params)
+      }
       return await this.remoteInferencer.vulnerability_check(prompt, params)
     })
     if (result && params.terminal_output) this.call('terminal', 'log', { type: 'aitypewriterwarning', value: result })

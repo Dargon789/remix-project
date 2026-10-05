@@ -9,6 +9,7 @@ import type { BillingLocale } from '@remix-ui/plan-manager'
 import { trackMatomoEvent as baseTrackMatomoEvent, NudgeEvent, MatomoEvent, Features, PendingCheckout } from '@remix-api'
 import * as packageJson from '../../../../../package.json'
 import './nudge-widget.css'
+import axios from 'axios'
 
 declare global {
   interface Window { __IS_E2E_TEST__?: boolean }
@@ -50,6 +51,26 @@ function hasPermFeature(permissions: any, name: string): boolean {
   return false
 }
 
+/** Find a nudge target: data-id first, then data-assist-btn, then element id. */
+function findAnchor(elementId?: string): HTMLElement | null {
+  if (!elementId) return null
+  return (
+    document.querySelector(`[data-id="${elementId}"]`) ||
+    document.querySelector(`[data-assist-btn="${elementId}"]`) ||
+    document.getElementById(elementId)
+  ) as HTMLElement | null
+}
+
+const PERMANENT_DISMISS_KEY = 'remix_nudge_dismissed_permanent'
+const AI_MODE_INTRO_ID = 'ai-mode-intro'
+/** How many times each callout has actually been on screen, keyed by rule id */
+const CALLOUT_VIEWS_KEY = 'remix_nudge_callout_views'
+/** A callout ignored this many times (e.g. reloaded away) stops coming back */
+const MAX_CALLOUT_VIEWS = 3
+/** Set the first time the user enters AI mode; ends the AI button's attention animation */
+const AI_MODE_TRIED_KEY = 'remix_ai_mode_tried'
+const AI_MODE_BUTTON_ANCHOR = 'aiReviewModeBtn'
+
 /* ─── Plugin profile ─── */
 
 const profile = {
@@ -72,6 +93,8 @@ export interface NudgePluginState {
     animateOut: boolean
     /** Map of element‑id → decoration style for the hint layer */
     decorations: Map<string, NudgeDecoration>
+    /** Active anchored callout (type:'callout'), shown independently of the widget queue */
+    callout: NudgeRule | null
 }
 
 export interface NudgeDecoration {
@@ -118,7 +141,8 @@ export class NudgePlugin extends Plugin {
       activeNudge: null,
       queue: [],
       animateOut: false,
-      decorations: new Map()
+      decorations: new Map(),
+      callout: null
     }
   }
 
@@ -147,6 +171,8 @@ export class NudgePlugin extends Plugin {
         this.emit('nudgeBannerChanged', rule)
       } else if (rule.action.type === 'hint') {
         this._handleHint(rule)
+      } else if (rule.action.type === 'callout') {
+        this._showCallout(rule)
       } else if (rule.action.type === 'widget' || rule.action.type === 'toast' || rule.action.type === 'modal') {
         this._enqueue(rule)
       }
@@ -156,7 +182,15 @@ export class NudgePlugin extends Plugin {
 
     this._setupBuiltinRules()
     this._setupEventListeners()
+    this._setupDidYouKnowTips()
     this.renderComponent()
+    // Animate the switcher's AI button once the topbar has rendered it
+    const start = Date.now()
+    const waitForSwitcher = () => {
+      if (findAnchor(AI_MODE_BUTTON_ANCHOR)) return this._syncAiModeAttention()
+      if (Date.now() - start < 30_000) setTimeout(waitForSwitcher, 1000)
+    }
+    setTimeout(waitForSwitcher, 1000)
   }
 
   onDeactivation(): void {
@@ -216,6 +250,22 @@ export class NudgePlugin extends Plugin {
       if (name === 'remixaiassistant') {
         this.engine_.fire('ai:chat_opened')
       }
+    })
+
+    // User reached for the docked RemixAI chat (focus or press inside it)
+    this.on('remixaiassistant', 'chatEngaged', () => {
+      this.engine_.fire('ai:chat_engaged')
+    })
+
+    // Entering AI mode (switcher, maximize button or the callout itself) means
+    // the user has found it: close the intro callout, stop the AI button's
+    // attention animation, and never show either again.
+    this.on('remixaiassistant', 'aiModeChanged', (active: boolean) => {
+      if (!active) return
+      try { localStorage.setItem(AI_MODE_TRIED_KEY, 'true') } catch { }
+      if (this.state.callout?.id === AI_MODE_INTRO_ID) this._closeCallout()
+      this._retireRule(AI_MODE_INTRO_ID)
+      this._syncAiModeAttention()
     })
 
     // AI model changed
@@ -1009,8 +1059,71 @@ export class NudgePlugin extends Plugin {
       priority: 20
     })
 
+    /* ─── AI / Code modes announcement ─── */
+
+    // Callout under the topbar AI/Code switcher, when the user reaches for the
+    // docked chat. At most once per session, and only retired by the user
+    // (close, "Got it", "Try AI mode", or entering AI mode by any route — see
+    // the aiModeChanged listener). A session where it couldn't show (modal,
+    // no switcher on screen) doesn't count; one where it showed but was
+    // ignored does, up to MAX_CALLOUT_VIEWS (see _showCallout).
+    // Older builds recorded it as shown for good the moment it triggered;
+    // drop that record so those users get it again.
+    if (!this._isPermanentlyDismissed(AI_MODE_INTRO_ID)) this.engine_.resetShown(AI_MODE_INTRO_ID)
+    this.engine_.addRule({
+      id: AI_MODE_INTRO_ID,
+      condition: any('ai:chat_engaged', 'ai:chat_message'),
+      action: {
+        type: 'callout',
+        anchor: 'aiModeSwitcher',
+        badge: 'New',
+        title: 'Meet AI mode',
+        message: 'Build by chatting. Plan, generate and review your project with RemixAI in one focused view, then switch to Code to take over.',
+        actionLabel: 'Try AI mode',
+        actionTarget: 'remixaiassistant::maximizePanel',
+        secondaryLabel: 'Got it'
+      },
+      showOnce: 'session',
+      enabled: !this._isPermanentlyDismissed(AI_MODE_INTRO_ID),
+      priority: 30
+    })
+
     /* ─── Hint decorations (pulsating dots / glows on UI elements) ─── */
 
+  }
+
+  /* ─── Did You Know Tips (migrated from status bar) ─── */
+
+  private async _setupDidYouKnowTips(): Promise<void> {
+    try {
+      const response = await axios.get('https://raw.githubusercontent.com/remix-project-org/remix-dynamics/main/ide/tips.json')
+      const tips = response.data
+      if (!Array.isArray(tips) || tips.length === 0) return
+
+      // Pick a random tip
+      const randomTip = tips[Math.floor(Math.random() * tips.length)]
+
+      // Add a rule to show the tip as a banner only after significant user actions
+      // Very low priority ensures all important nudges show first
+      this.engine_.addRule({
+        id: 'did-you-know-tip',
+        condition: any('contract:deployed', 'git:committed', 'ai:workspace_generated'),
+        action: {
+          type: 'banner',
+          position: 'right',
+          title: 'Did You Know?',
+          message: randomTip,
+          icon: 'fa-solid fa-lightbulb',
+          widgetColor: '#22c55e',
+          widgetBg: 'rgba(34, 197, 94, 0.1)'
+        },
+        showOnce: 'session',
+        priority: 1
+      })
+    } catch (error) {
+      this.log('[NudgePlugin] Failed to fetch did you know tips:', error)
+      // Silently fail - tips are not critical
+    }
   }
 
   /* ─── Public methods (callable by other plugins) ─── */
@@ -1052,16 +1165,7 @@ export class NudgePlugin extends Plugin {
     this.renderComponent()
     this.emit('nudgeDismissed', { id, permanent: true })
     this.trackMatomoEvent({ category: 'nudge', action: 'dismissedPermanent', name: id, isClick: true })
-    // Persist in localStorage
-    try {
-      const key = 'remix_nudge_dismissed_permanent'
-      const raw = localStorage.getItem(key)
-      const dismissed: string[] = raw ? JSON.parse(raw) : []
-      if (!dismissed.includes(id)) {
-        dismissed.push(id)
-        localStorage.setItem(key, JSON.stringify(dismissed))
-      }
-    } catch { }
+    this._persistPermanentDismiss(id)
     setTimeout(() => {
       this._dequeueNext()
     }, 300)
@@ -1089,7 +1193,8 @@ export class NudgePlugin extends Plugin {
       activeNudge: null,
       queue: [],
       animateOut: false,
-      decorations: new Map()
+      decorations: new Map(),
+      callout: null
     }
     this.renderComponent()
   }
@@ -1118,12 +1223,7 @@ export class NudgePlugin extends Plugin {
   /* ─── Queue management ─── */
 
   private _enqueue(rule: NudgeRule): void {
-    // Check permanent dismissal
-    try {
-      const raw = localStorage.getItem('remix_nudge_dismissed_permanent')
-      const dismissed: string[] = raw ? JSON.parse(raw) : []
-      if (dismissed.includes(rule.id)) return
-    } catch { }
+    if (this._isPermanentlyDismissed(rule.id)) return
 
     if (this.state.activeNudge) {
       // Insert into queue sorted by priority (higher first)
@@ -1146,6 +1246,107 @@ export class NudgePlugin extends Plugin {
       animateOut: false
     }
     this.renderComponent()
+  }
+
+  private _isPermanentlyDismissed(id: string): boolean {
+    try {
+      const raw = localStorage.getItem(PERMANENT_DISMISS_KEY)
+      const dismissed: string[] = raw ? JSON.parse(raw) : []
+      return dismissed.includes(id)
+    } catch {
+      return false
+    }
+  }
+
+  private _persistPermanentDismiss(id: string): void {
+    try {
+      const raw = localStorage.getItem(PERMANENT_DISMISS_KEY)
+      const dismissed: string[] = raw ? JSON.parse(raw) : []
+      if (!dismissed.includes(id)) {
+        dismissed.push(id)
+        localStorage.setItem(PERMANENT_DISMISS_KEY, JSON.stringify(dismissed))
+      }
+    } catch { }
+  }
+
+  /** Stop a rule for good, whether or not it has been shown yet. */
+  private _retireRule(id: string): void {
+    this.engine_.disableRule(id)
+    this._persistPermanentDismiss(id)
+  }
+
+  /* ─── Callout management (anchored popover, type:'callout') ─── */
+
+  private async _showCallout(rule: NudgeRule): Promise<void> {
+    if (this._isPermanentlyDismissed(rule.id)) return
+    if (this._getCalloutViews(rule.id) >= MAX_CALLOUT_VIEWS) return
+    // Don't pop over a sign-in / plans / migration dialog
+    if (this._isBlockingModalOpen() && !(await this._waitForModalsToClose())) return
+    // Nothing to point at (e.g. desktop app without the topbar)
+    const anchor = findAnchor(rule.action.anchor)
+    if (!anchor || anchor.getBoundingClientRect().width === 0) return
+    if (rule.id === AI_MODE_INTRO_ID) {
+      // Already in AI mode: the announcement is moot
+      const aiModeActive = await this.call('remixaiassistant' as any, 'isAIModeActive').catch(() => false)
+      if (aiModeActive) return this._retireRule(rule.id)
+    }
+    // Only a callout that actually made it on screen counts as a view
+    this._countCalloutView(rule.id)
+    this.state = { ...this.state, callout: rule }
+    this.renderComponent()
+  }
+
+  private _getCalloutViews(id: string): number {
+    try {
+      const views = JSON.parse(localStorage.getItem(CALLOUT_VIEWS_KEY) || '{}')
+      return Number(views[id]) || 0
+    } catch {
+      return 0
+    }
+  }
+
+  private _countCalloutView(id: string): void {
+    try {
+      const views = JSON.parse(localStorage.getItem(CALLOUT_VIEWS_KEY) || '{}')
+      views[id] = (Number(views[id]) || 0) + 1
+      localStorage.setItem(CALLOUT_VIEWS_KEY, JSON.stringify(views))
+    } catch { }
+  }
+
+  private _closeCallout(): void {
+    if (!this.state.callout) return
+    this.state = { ...this.state, callout: null }
+    this.renderComponent()
+  }
+
+  async handleCalloutAction(target: string): Promise<void> {
+    const id = this.state.callout?.id || 'unknown'
+    this.trackMatomoEvent({ category: 'nudge', action: 'ctaClicked', name: id, value: target, isClick: true })
+    this._closeCallout()
+    if (target) await this._invokeTarget(target)
+  }
+
+  dismissCallout(): void {
+    const id = this.state.callout?.id
+    if (!id) return
+    this.trackMatomoEvent({ category: 'nudge', action: 'dismissed', name: id, isClick: true })
+    this._closeCallout()
+    this._retireRule(id)
+  }
+
+  /**
+   * Until the user has entered AI mode once, the switcher's AI button plays a
+   * short idle animation (CSS on [data-nudge-attention], see nudge-widget.css).
+   * Independent of the intro callout: closing that doesn't stop it. An
+   * attribute rather than a class so the topbar's re-renders leave it alone.
+   */
+  private _syncAiModeAttention(): void {
+    let tried = false
+    try { tried = localStorage.getItem(AI_MODE_TRIED_KEY) === 'true' } catch { }
+    const button = findAnchor(AI_MODE_BUTTON_ANCHOR)
+    if (!button) return
+    if (tried) button.removeAttribute('data-nudge-attention')
+    else button.setAttribute('data-nudge-attention', 'true')
   }
 
   /* ─── Hint / decoration management ─── */
@@ -1195,6 +1396,8 @@ export class NudgePlugin extends Plugin {
         onDismiss={() => this.dismiss()}
         onDismissPermanent={() => this.dismissPermanent()}
         onDecorationClick={(elementId) => this.removeDecoration(elementId)}
+        onCalloutAction={(target) => this.handleCalloutAction(target)}
+        onCalloutDismiss={() => this.dismissCallout()}
       />
     )
   }
@@ -1217,9 +1420,11 @@ interface NudgeWidgetUIProps {
     onDismiss: () => void
     onDismissPermanent: () => void
     onDecorationClick: (elementId: string) => void
+    onCalloutAction: (target: string) => void
+    onCalloutDismiss: () => void
 }
 
-function NudgeWidgetUI({ state, onAction, onDismiss, onDismissPermanent, onDecorationClick }: NudgeWidgetUIProps) {
+function NudgeWidgetUI({ state, onAction, onDismiss, onDismissPermanent, onDecorationClick, onCalloutAction, onCalloutDismiss }: NudgeWidgetUIProps) {
   const nudge = state.activeNudge
 
   return (
@@ -1299,6 +1504,11 @@ function NudgeWidgetUI({ state, onAction, onDismiss, onDismissPermanent, onDecor
         </div>
       )}
 
+      {/* Anchored callout (type:'callout') */}
+      {state.callout && (
+        <NudgeCallout rule={state.callout} onAction={onCalloutAction} onDismiss={onCalloutDismiss} />
+      )}
+
       {/* Decorations layer for hint-type nudges */}
       {state.decorations.size > 0 && (
         <NudgeDecorations
@@ -1332,12 +1542,7 @@ function NudgeDecorationOverlay({ decoration, onClick }: { decoration: NudgeDeco
   const [showTooltip, setShowTooltip] = React.useState(false)
 
   React.useEffect(() => {
-    // Try data-id first, then fall back to any data-* attribute matching the value
-    const el = (
-            document.querySelector(`[data-id="${decoration.elementId}"]`) ||
-            document.querySelector(`[data-assist-btn="${decoration.elementId}"]`) ||
-            document.querySelector(`#${decoration.elementId}`)
-        ) as HTMLElement
+    const el = findAnchor(decoration.elementId)
     if (!el) return
 
     const update = () => {
@@ -1394,6 +1599,74 @@ function NudgeDecorationOverlay({ decoration, onClick }: { decoration: NudgeDeco
           {decoration.tooltip}
         </div>
       )}
+    </div>
+  )
+}
+
+/* ─── Anchored callout (coach mark under a UI element) ─── */
+
+const CALLOUT_GAP = 10 // px between the anchor and the callout (room for the arrow)
+const CALLOUT_WIDTH = 300
+const CALLOUT_MARGIN = 12 // min distance from the viewport edges
+
+function NudgeCallout({ rule, onAction, onDismiss }: { rule: NudgeRule; onAction: (target: string) => void; onDismiss: () => void }) {
+  const [pos, setPos] = React.useState<{ top: number; left: number; arrowLeft: number } | null>(null)
+  const { action } = rule
+
+  React.useEffect(() => {
+    const el = findAnchor(action.anchor)
+    if (!el) return
+    const update = () => {
+      const rect = el.getBoundingClientRect()
+      if (rect.width === 0) return setPos(null)
+      const center = rect.left + rect.width / 2
+      // Centered under the anchor, clamped to the viewport; the arrow keeps
+      // pointing at the anchor's center.
+      const left = Math.min(
+        Math.max(center - CALLOUT_WIDTH / 2, CALLOUT_MARGIN),
+        window.innerWidth - CALLOUT_WIDTH - CALLOUT_MARGIN
+      )
+      setPos({ top: rect.bottom + CALLOUT_GAP, left, arrowLeft: center - left })
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    window.addEventListener('resize', update)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [action.anchor])
+
+  if (!pos) return null
+
+  return (
+    <div
+      className="nudge-callout"
+      role="dialog"
+      aria-label={action.title}
+      data-id="nudge-callout"
+      style={{ top: pos.top, left: pos.left, width: CALLOUT_WIDTH, '--nc-arrow-left': `${pos.arrowLeft}px` } as React.CSSProperties}
+    >
+      <button className="nudge-callout-close" onClick={onDismiss} title="Dismiss" data-id="nudge-callout-close">
+        <i className="fas fa-times"></i>
+      </button>
+      {action.badge && <span className="nudge-callout-badge">{action.badge}</span>}
+      {action.title && <h6 className="nudge-callout-title">{action.title}</h6>}
+      <p className="nudge-callout-desc">{action.message}</p>
+      <div className="nudge-callout-actions">
+        {action.secondaryLabel && (
+          <button className="btn btn-sm btn-link text-decoration-none nudge-callout-secondary" onClick={onDismiss} data-id="nudge-callout-secondary">
+            {action.secondaryLabel}
+          </button>
+        )}
+        {action.actionLabel && (
+          <button className="btn btn-ai nudge-callout-primary" onClick={() => onAction(action.actionTarget || '')} data-id="nudge-callout-primary">
+            <img src="assets/img/remixAI_small.svg" alt="" className="nudge-callout-ai-icon" />
+            <span>{action.actionLabel}</span>
+          </button>
+        )}
+      </div>
     </div>
   )
 }

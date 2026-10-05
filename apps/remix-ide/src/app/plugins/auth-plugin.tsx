@@ -10,7 +10,7 @@ const profile = {
   name: 'auth',
   displayName: 'Authentication',
   description: 'Handles SSO authentication and credits',
-  methods: ['login', 'logout', 'getUser', 'getCredits', 'refreshCredits', 'linkAccount', 'getLinkedAccounts', 'unlinkAccount', 'getApiClient', 'getSSOApi', 'getCreditsApi', 'getPermissionsApi', 'getBillingApi', 'getProductsApi', 'getCheckoutsApi', 'getEthSkillsApi', 'checkPermission', 'hasPermission', 'getAllPermissions', 'refreshPermissions', 'checkPermissions', 'getFeaturesByCategory', 'getFeatureLimit', 'getPaddleConfig', 'fetchGitHubToken', 'disconnectGitHub', 'getInviteApi', 'validateInviteToken', 'redeemInviteToken', 'getPendingInviteToken', 'setPendingInviteToken', 'setPendingInviteValidation', 'clearPendingInviteToken', 'getPendingInviteValidation', 'isAuthenticated', 'getToken', 'getRegistrationMode', 'getLoginMode', 'refreshLoginMode', 'getAccessPolicy', 'refreshAccessPolicy', 'notifyEmailOtpLogin', 'getAppConfig', 'refreshAppConfig', 'getAppConfigValue', 'getPublicPlans', 'poolCheckout', 'poolRelease', 'poolStatus', 'poolReleaseAll', 'isPoolAvailable'],
+  methods: ['login', 'logout', 'getUser', 'getCredits', 'refreshCredits', 'linkAccount', 'getLinkedAccounts', 'unlinkAccount', 'getApiClient', 'getSSOApi', 'getCreditsApi', 'getPermissionsApi', 'getBillingApi', 'getProductsApi', 'getCheckoutsApi', 'getEthSkillsApi', 'checkPermission', 'hasPermission', 'getAllPermissions', 'refreshPermissions', 'checkPermissions', 'getFeaturesByCategory', 'getFeatureLimit', 'getPaddleConfig', 'fetchGitHubToken', 'disconnectGitHub', 'getInviteApi', 'validateInviteToken', 'redeemInviteToken', 'getPendingInviteToken', 'setPendingInviteToken', 'setPendingInviteValidation', 'clearPendingInviteToken', 'getPendingInviteValidation', 'isAuthenticated', 'getToken', 'getRegistrationMode', 'getLoginMode', 'refreshLoginMode', 'getAccessPolicy', 'refreshAccessPolicy', 'notifyEmailOtpLogin', 'getAppConfig', 'refreshAppConfig', 'getAppConfigValue', 'getPublicPlans', 'reportUserLocale', 'poolCheckout', 'poolRelease', 'poolStatus', 'poolReleaseAll', 'isPoolAvailable'],
   events: ['authStateChanged', 'creditsUpdated', 'accountLinked', 'gitHubTokenReady', 'inviteTokenDetected', 'inviteTokenRedeemed', 'registrationModeChanged', 'loginModeChanged', 'accessPolicyChanged', 'appConfigChanged']
 }
 
@@ -672,6 +672,34 @@ export class AuthPlugin extends Plugin {
     } catch (error) {
       console.warn('[AuthPlugin] Error fetching public plans:', error)
       return []
+    }
+  }
+
+  /**
+   * Store the user's detected billing region on their account
+   * (POST /sso/me/locale). Best-effort: never throws, and returns false when
+   * the user isn't signed in or the endpoint rejects the call.
+   */
+  async reportUserLocale(countryCode: string, currencyCode?: string, source = 'paddle_price_preview'): Promise<boolean> {
+    if (!countryCode) return false
+    try {
+      const token = await this.getToken()
+      if (!token) return false
+
+      const response = await this.ssoApi.updateLocale({
+        country_code: countryCode.toUpperCase(),
+        currency_code: currencyCode,
+        source
+      })
+      if (!response.ok) {
+        this.log('[AuthPlugin] reportUserLocale failed:', response.status, response.error)
+        return false
+      }
+      this.log('[AuthPlugin] User locale stored:', countryCode, currencyCode)
+      return true
+    } catch (error) {
+      this.log('[AuthPlugin] reportUserLocale error:', error)
+      return false
     }
   }
 

@@ -25,6 +25,27 @@ contract ParamTest {
 }
 `
 
+// Contract with a single struct (tuple) constructor param. The AI must fill
+// this as a positional JSON array (one value per member, in declaration order),
+// e.g. ["0xAddress...", 123] — NOT a named-key JSON object — so that the Remix
+// ABI encoder (which uses unnamed tuple types) can encode it.
+const CONTRACT_WITH_STRUCT_CONSTRUCTOR = `// SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.0;
+
+contract StructTest {
+    struct Owner {
+        address p;
+        uint256 k;
+    }
+
+    Owner public owner;
+
+    constructor(Owner memory _owner) {
+        owner = _owner;
+    }
+}
+`
+
 async function signIn(page: any, poolApiKey: string) {
   const url = `http://127.0.0.1:8080/?#e2e_feature_groups=e2e-unlimited-quota&e2e_pool_key=${encodeURIComponent(poolApiKey)}&lang=en&optimize&runs=200&evmVersion&version=soljson-v0.8.34+commit.80d5c536.js`
   await page.goto(url)
@@ -115,6 +136,67 @@ test('auto fill with AI populates constructor inputs', async ({ page }) => {
   expect(val0.trim(), 'constructor param 0 (uint256) should be filled').not.toBe('')
   expect(val1.trim(), 'constructor param 1 (string) should be filled').not.toBe('')
   expect(val2.trim(), 'constructor param 2 (address) should be filled').not.toBe('')
+
+  // Button should have returned to enabled state after the AI responded
+  await expect(autoFillBtn).toBeEnabled({ timeout: 10000 })
+})
+
+/**
+ * Test: Auto fill with AI — struct (tuple) constructor input
+ *
+ * Steps:
+ *   1. Sign in via E2E pool
+ *   2. Load and compile a contract whose constructor takes a struct
+ *   3. Open the Deploy & Run tab
+ *   4. Verify the single (tuple) constructor input is visible and empty
+ *   5. Click the "Auto" (auto-fill) button
+ *   6. Assert the input receives a JSON ARRAY (positional values), not an object
+ */
+test('auto fill with AI populates a struct constructor input as a JSON array', async ({ page }) => {
+  test.setTimeout(180_000)
+
+  const poolApiKey = process.env.E2E_POOL_API_KEY || process.env.E2E_POOL_KEY
+  if (!poolApiKey) {
+    throw new Error('Missing E2E pool key — set E2E_POOL_API_KEY before running this test.')
+  }
+
+  await signIn(page, poolApiKey)
+  await loadAndCompileContract(page, CONTRACT_WITH_STRUCT_CONSTRUCTOR)
+
+  // Open the Deploy & Run tab
+  await page.locator('[data-id="verticalIconsKindudapp"]').click()
+
+  // The struct maps to a single tuple constructor input
+  await expect(page.locator('[data-id="constructorInput0"]')).toBeVisible({ timeout: 15000 })
+  await expect(page.locator('[data-id="constructorInput0"]')).toHaveValue('')
+
+  // The "Auto" button should be visible and enabled
+  const autoFillBtn = page.locator('[data-id="deploy-auto-fill-with-ai"]')
+  await expect(autoFillBtn).toBeVisible()
+  await expect(autoFillBtn).toBeEnabled()
+
+  // Click Auto fill
+  await autoFillBtn.click()
+  await expect(autoFillBtn).toBeDisabled({ timeout: 5000 })
+
+  // Wait for the tuple input to receive a non-empty value
+  await expect.poll(
+    async () => (await page.locator('[data-id="constructorInput0"]').inputValue()).trim().length,
+    { timeout: 120_000, intervals: [2000, 3000, 5000] }
+  ).toBeGreaterThan(0)
+
+  const structVal = (await page.locator('[data-id="constructorInput0"]').inputValue()).trim()
+  expect(structVal, 'struct constructor param should be filled').not.toBe('')
+
+  // The value must be a positional JSON array, NOT a named-key object
+  let parsed: any
+  expect(() => { parsed = JSON.parse(structVal) }, `struct value should be valid JSON, got: ${structVal}`).not.toThrow()
+  expect(Array.isArray(parsed), `struct value should be a JSON array, got: ${structVal}`).toBe(true)
+  // One value per struct member (address, uint256)
+  expect(parsed.length, `struct array should have 2 members, got: ${structVal}`).toBe(2)
+  // First member is an address, second is a (numeric) uint256
+  expect(String(parsed[0]), `first member should look like an address, got: ${structVal}`).toMatch(/^0x[0-9a-fA-F]{40}$/)
+  expect(String(parsed[1]), `second member should be numeric, got: ${structVal}`).toMatch(/^\d+$/)
 
   // Button should have returned to enabled state after the AI responded
   await expect(autoFillBtn).toBeEnabled({ timeout: 10000 })
