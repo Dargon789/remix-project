@@ -73,7 +73,7 @@ const profile = {
   name: 'planManager',
   displayName: 'Plan & Credits',
   description: 'Manage your subscription, top up credits and review AI usage',
-  methods: ['open', 'close', 'toggle', 'setCheckoutResult', 'reportCreditsExhausted', 'refresh', 'purchaseCredits', 'subscribeToPlan', 'changePlan', 'cancelSubscription', 'reactivateSubscription', 'resolveConfirm', 'cancelCheckout', 'resumeCheckout', 'dismissResumeNudge', 'getPendingCheckouts', 'discardCheckout', 'getBillingLocale'],
+  methods: ['open', 'close', 'toggle', 'setCheckoutResult', 'reportCreditsExhausted', 'requireAICredits', 'refresh', 'purchaseCredits', 'subscribeToPlan', 'changePlan', 'cancelSubscription', 'reactivateSubscription', 'resolveConfirm', 'cancelCheckout', 'resumeCheckout', 'dismissResumeNudge', 'getPendingCheckouts', 'discardCheckout', 'getBillingLocale'],
   events: ['opened', 'closed', 'checkoutResultChanged', 'pendingCheckoutsChanged', 'purchaseConfirmed', 'billingLocaleResolved'],
   icon: PLAN_ICON,
   location: 'sidePanel',
@@ -544,6 +544,22 @@ export class PlanManagerPlugin extends ViewPlugin {
   reportCreditsExhausted(): void {
     this.store.send({ type: 'CREDITS_EXHAUSTED' })
     void this.loadAccountData()
+  }
+
+  /**
+   * Pre-flight for one-shot AI actions. Passes when the user has spendable
+   * credits, unlimited included usage, or credits aren't known yet (the API
+   * stays the source of truth). Otherwise opens the top-up screen and
+   * returns false.
+   */
+  async requireAICredits(): Promise<boolean> {
+    if (!this.store.getSnapshot().isAuthenticated) return true
+    if (selectCreditStatus(this.store.getSnapshot()).state !== 'empty') return true
+    // Cached balance may be stale (e.g. topped up in another tab) — confirm before blocking.
+    await this.loadAccountData()
+    if (selectCreditStatus(this.store.getSnapshot()).state !== 'empty') return true
+    await this.open({ reason: 'quota-exhausted', initialSection: 'topup' })
+    return false
   }
 
   /** Manual refresh — called from the error state's retry button. */
