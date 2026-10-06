@@ -1,72 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { trackMatomoEvent } from '@remix-api'
 import {
-  enumerateSelectableChecklistPaths,
   buildAuditTaxonomy,
+  categoryFileToken,
+  deriveContractName,
+  computeLoadedCategories,
   AuditMatch,
   AuditMatchResult
 } from '@remix/remix-ai-core/audit-taxonomy'
+import {
+  ChecklistItem,
+  ChecklistCategory,
+  ChecklistData,
+  isChecklistItem,
+  collectChecklistItems,
+  countTotalItems
+} from './helpers'
 import './remix-ui-checklist-explorer-modal.css'
-
-interface ChecklistItem {
-  id: string
-  question: string
-  description: string
-  remediation?: string
-  references?: string[]
-  tags?: string[]
-}
-
-interface ChecklistCategory {
-  category: string
-  description: string
-  data: (ChecklistItem | ChecklistCategory)[]
-}
-
-interface ChecklistData {
-  category: string
-  description: string
-  data: (ChecklistItem | ChecklistCategory)[]
-}
 
 export interface RemixUiChecklistExplorerModalProps {
   isOpen: boolean
   onClose: () => void
   plugin?: any // Plugin instance to access fileManager
-}
-
-// Helper function to check if an item is a ChecklistItem or ChecklistCategory
-const isChecklistItem = (item: ChecklistItem | ChecklistCategory): item is ChecklistItem => {
-  return 'id' in item && 'question' in item
-}
-
-// Helper function to recursively collect all checklist items from nested categories
-const collectChecklistItems = (data: (ChecklistItem | ChecklistCategory)[]): ChecklistItem[] => {
-  const items: ChecklistItem[] = []
-
-  for (const item of data) {
-    if (isChecklistItem(item)) {
-      items.push(item)
-    } else {
-      // It's a category, recurse into its data
-      items.push(...collectChecklistItems(item.data))
-    }
-  }
-
-  return items
-}
-
-// Helper function to count total items in a category (including nested)
-const countTotalItems = (data: (ChecklistItem | ChecklistCategory)[]): number => {
-  return collectChecklistItems(data).length
-}
-
-const categoryFileToken = (categoryPath: string): string => {
-  const raw = categoryPath.includes('::') ? categoryPath.split('::').join('-') : categoryPath
-  return raw
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
 }
 
 /**
@@ -80,16 +35,6 @@ const candidateLabel = (file: string, all: string[]): string => {
   if (!ambiguous) return name
   const parts = file.split('/')
   return parts.length > 1 ? `${parts[parts.length - 2]}/${name}` : name
-}
-
-const computeLoadedCategories = (data: ChecklistData[], files: string[]): Set<string> => {
-  const haystack = files.join('\n')
-  const loaded = new Set<string>()
-  enumerateSelectableChecklistPaths(data).forEach(path => {
-    const token = categoryFileToken(path)
-    if (token && haystack.includes(token)) loaded.add(path)
-  })
-  return loaded
 }
 
 export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerModalProps) {
@@ -116,6 +61,11 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   const [currentSolFile, setCurrentSolFile] = useState<string>('')
   const containerRef = useRef<HTMLDivElement>(null)
   const matchRunId = useRef(0)
+
+  // The contract the checklists are saved against: it names the folder, so every
+  // save path and every "already saved" lookup is scoped through it.
+  const contractName = deriveContractName(matchTarget, contractNamesByFile)
+  const contractDir = contractName ? `audits/${contractName}` : ''
 
   const fetchChecklistData = async (): Promise<ChecklistData[]> => {
     const response = await fetch('https://raw.githubusercontent.com/Cyfrin/audit-checklist/main/checklist.json')
@@ -300,12 +250,13 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
     trackMatomoEvent(plugin, { category: 'ai', action: 'remixAI', name: 'audit_ai_match_cleared', isClick: true })
   }
 
-  const fetchExistingChecklistFiles = async (): Promise<string[]> => {
-    if (!plugin) return []
+  const fetchExistingChecklistFiles = async (dir: string): Promise<string[]> => {
+    if (!plugin || !dir) return []
     try {
-      const entries = await plugin.call('fileManager', 'readdir', 'audits')
+      const entries = await plugin.call('fileManager', 'readdir', dir)
       return Object.keys(entries || {})
     } catch (e) {
+      // The contract has no checklists saved yet — the folder simply isn't there.
       return []
     }
   }
@@ -355,9 +306,6 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
         try {
           const data = await fetchChecklistData()
           setChecklistData(data)
-          // Highlight categories whose checklist is already saved in the workspace
-          const existingFiles = await fetchExistingChecklistFiles()
-          setLoadedCategories(computeLoadedCategories(data, existingFiles))
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Failed to load checklist')
         } finally {
@@ -367,6 +315,21 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
       load()
     }
   }, [isOpen])
+
+  // "in workspace" badges are per contract now, so they have to follow the
+  // contract dropdown and not just the modal opening.
+  useEffect(() => {
+    if (!isOpen || !checklistData.length) return
+    let cancelled = false
+    if (!contractDir) {
+      setLoadedCategories(new Set())
+      return
+    }
+    fetchExistingChecklistFiles(contractDir).then(files => {
+      if (!cancelled) setLoadedCategories(computeLoadedCategories(checklistData, files))
+    })
+    return () => { cancelled = true }
+  }, [isOpen, checklistData, contractDir])
 
   const toggleCategory = (categoryPath: string) => {
     setSelectedCategories(prev => {
@@ -440,57 +403,58 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
     return markdown
   }
 
-  const generateChecklistMarkdown = (): string => {
-    const selectedData = checklistData.filter(mainCat => {
-      // Check if main category is selected (for direct checklist items)
-      if (selectedCategories.has(mainCat.category)) {
-        return true
-      }
-      // Check if any sub-categories are selected (for nested structure)
-      return mainCat.data.some(item => {
-        if (!isChecklistItem(item)) {
-          return selectedCategories.has(`${mainCat.category}::${item.category}`)
-        }
-        return false
-      })
-    })
+  /**
+   * One markdown document for a single selected category path. Each checklist is
+   * saved on its own now, so the whole-selection document is gone — but the
+   * per-item body below is byte-for-byte what it always was, because the auditor
+   * subagent reads these files and keys off that shape.
+   */
+  const generateCategoryMarkdown = (categoryPath: string): string => {
+    const [mainName, subName] = categoryPath.includes('::') ? categoryPath.split('::') : [categoryPath, '']
+    const mainCategory = checklistData.find(c => c.category === mainName)
+    if (!mainCategory) return ''
 
-    let markdown = `# Audit Checklist\n\n`
+    const title = subName ? `${mainName} → ${subName}` : mainName
+    let markdown = `# Audit Checklist — ${title}\n\n`
+    if (contractName) markdown += `Contract: ${contractName} (${matchTarget})\n\n`
     markdown += `Generated on: ${new Date().toISOString().split('T')[0]}\n\n`
 
-    selectedData.forEach(mainCategory => {
-      markdown += `## ${mainCategory.category}\n\n`
-      if (mainCategory.description) {
-        markdown += `${mainCategory.description}\n\n`
-      }
+    if (!subName) {
+      if (mainCategory.description) markdown += `${mainCategory.description}\n\n`
+      markdown += generateNestedMarkdown(mainCategory.data, mainName)
+      return markdown
+    }
 
-      // Check if this main category was directly selected (contains direct checklist items)
-      if (selectedCategories.has(mainCategory.category)) {
-        // Generate markdown for direct items in this category
-        markdown += generateNestedMarkdown(mainCategory.data, mainCategory.category)
-      } else {
-        // Handle sub-categories
-        const selectedSubCategories = mainCategory.data.filter(item =>
-          !isChecklistItem(item) && selectedCategories.has(`${mainCategory.category}::${item.category}`)
-        ) as ChecklistCategory[]
+    const subCategory = mainCategory.data.find(
+      item => !isChecklistItem(item) && (item as ChecklistCategory).category === subName
+    ) as ChecklistCategory | undefined
+    if (!subCategory) return ''
 
-        selectedSubCategories.forEach(subCategory => {
-          markdown += `### ${subCategory.category}\n\n`
-          if (subCategory.description) {
-            markdown += `${subCategory.description}\n\n`
-          }
-
-          // Generate nested markdown with proper category paths
-          markdown += generateNestedMarkdown(subCategory.data, `${mainCategory.category} → ${subCategory.category}`)
-        })
-      }
-    })
-
+    if (subCategory.description) markdown += `${subCategory.description}\n\n`
+    markdown += generateNestedMarkdown(subCategory.data, `${mainName} → ${subName}`)
     return markdown
+  }
+
+  /** Items in one selected category — drives the confirm step and the chat summary. */
+  const countItemsForCategory = (categoryPath: string): number => {
+    const [mainName, subName] = categoryPath.includes('::') ? categoryPath.split('::') : [categoryPath, '']
+    const mainCategory = checklistData.find(c => c.category === mainName)
+    if (!mainCategory) return 0
+    if (!subName) return countTotalItems(mainCategory.data)
+    const subCategory = mainCategory.data.find(
+      item => !isChecklistItem(item) && (item as ChecklistCategory).category === subName
+    ) as ChecklistCategory | undefined
+    return subCategory ? countTotalItems(subCategory.data) : 0
   }
 
   const handleLoadSelected = () => {
     if (selectedCategories.size === 0) return
+    // The contract names the folder, so it is required before anything is written.
+    if (!contractDir) {
+      setError('Select the contract these checklists belong to')
+      return
+    }
+    setError(null)
     setWizardStep('confirm')
   }
 
@@ -499,57 +463,44 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
       setError('Plugin not available')
       return
     }
+    if (!contractDir) {
+      setError('Select the contract these checklists belong to')
+      setWizardStep('browse')
+      return
+    }
     setWizardStep('saving')
     setSaving(true)
 
     try {
       await ensureDirectoryExists('audits')
+      await ensureDirectoryExists(contractDir)
 
-      const timestamp = new Date().toISOString().split('T')[0]
+      // One file per checklist, so the auditor can work through them one at a
+      // time and report per checklist.
+      const written: { label: string; items: number }[] = []
+      for (const categoryPath of Array.from(selectedCategories)) {
+        const content = generateCategoryMarkdown(categoryPath)
+        if (!content) continue
+        const filePath = `${contractDir}/${categoryFileToken(categoryPath)}.md`
+        await plugin.call('fileManager', 'writeFile', filePath, content)
+        written.push({
+          label: categoryPath.includes('::') ? categoryPath.split('::')[1] : categoryPath,
+          items: countItemsForCategory(categoryPath)
+        })
+      }
 
-      // Generate filename with selected categories
-      const selectedCategoryNames = Array.from(selectedCategories).map(categoryPath => {
-        if (categoryPath.includes('::')) {
-          const [mainCat, subCat] = categoryPath.split('::')
-          return `${mainCat}-${subCat}`
-        } else {
-          return categoryPath
-        }
-      }).join('_')
-
-      // Clean the category names for filename (remove special characters and spaces)
-      const cleanCategoryNames = selectedCategoryNames
-        .replace(/[^a-zA-Z0-9_-]/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '')
-        .substring(0, 100) // Limit length
-
-      const filename = `audit-checklist-${cleanCategoryNames}-${timestamp}.md`
-      const checklistContent = generateChecklistMarkdown()
-
-      await plugin.call('fileManager', 'writeFile', `audits/${filename}`, checklistContent)
+      if (!written.length) throw new Error('No checklist could be generated for the selection')
 
       // Post a summary into the chat so completion isn't silent — especially for
       // /load-audit-checklist, where nothing else is sent after the modal closes.
+      // It also puts the contract folder in the agent's context for the audit run.
       try {
-        let itemCount = 0
-        const categoryLabels: string[] = []
-        Array.from(selectedCategories).forEach(path => {
-          if (path.includes('::')) {
-            const [mainName, subName] = path.split('::')
-            const main = checklistData.find(c => c.category === mainName)
-            const sub = main?.data.find(i => !isChecklistItem(i) && (i as ChecklistCategory).category === subName) as ChecklistCategory | undefined
-            if (sub) { itemCount += countTotalItems(sub.data); categoryLabels.push(subName) }
-          } else {
-            const main = checklistData.find(c => c.category === path)
-            if (main) { itemCount += countTotalItems(main.data); categoryLabels.push(path) }
-          }
-        })
-        const labelText = categoryLabels.join(', ') || 'selected'
-        const summary = `Created \`audits/${filename}\` with the ${labelText} checklist (${itemCount} item${itemCount === 1 ? '' : 's'})`
+        const itemCount = written.reduce((total, entry) => total + entry.items, 0)
+        const labelText = written.map(entry => entry.label).join(', ')
+        const summary = `Saved ${written.length} checklist${written.length === 1 ? '' : 's'} for \`${contractName}\` (${matchTarget}) in \`${contractDir}/\` — ${labelText} (${itemCount} item${itemCount === 1 ? '' : 's'} total). Audit the contract against every checklist file in that folder.`
         await plugin.call('remixaiassistant', 'handleExternalMessage', summary)
       } catch (e) {
-        // assistant panel unavailable — the file is still created
+        // assistant panel unavailable — the files are still created
       }
 
       setSaving(false)
@@ -661,11 +612,11 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                     onChange={(e) => setMatchTarget(e.target.value)}
                     disabled={matching}
                     title={matchTarget
-                      ? `AI match will run against ${matchTarget}. Pick another file to change the target.`
-                      : 'Select the Solidity file to run the AI match against'}
-                    aria-label="Select the Solidity file to run the AI match against"
+                      ? `Checklists will be saved in ${contractDir}/, and AI match runs against ${matchTarget}. Pick another file to change the contract.`
+                      : 'Select the contract to save the checklists for'}
+                    aria-label="Select the contract to save the checklists for"
                   >
-                    <option value="" disabled>Select a file…</option>
+                    <option value="" disabled>Select a contract…</option>
                     {solCandidates.map(file => (
                       <option key={file} value={file} title={file}>
                         {candidateLabel(file, solCandidates)}{file === currentSolFile ? ' (current)' : ''}
@@ -829,7 +780,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                                       </span>
                                     )}
                                     {isLoaded && (
-                                      <span className="badge bg-success text-white small ms-2" title="A checklist for this category is already saved in audits/">
+                                      <span className="badge bg-success text-white small ms-2" title={`A checklist for this category is already saved in ${contractDir}/`}>
                                         <i className="fa-solid fa-check me-1"></i>
                                         in workspace
                                       </span>
@@ -904,7 +855,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                                               </span>
                                             )}
                                             {isLoaded && (
-                                              <span className="badge bg-success text-white small ms-2" title="A checklist for this category is already saved in audits/">
+                                              <span className="badge bg-success text-white small ms-2" title={`A checklist for this category is already saved in ${contractDir}/`}>
                                                 <i className="fa-solid fa-check me-1"></i>
                                                 in workspace
                                               </span>
@@ -999,25 +950,17 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                 </div>
                 <div className="alert alert-info mb-4">
                   <i className="fa-solid fa-info-circle me-2"></i>
-                  {(() => {
-                    const timestamp = new Date().toISOString().split('T')[0]
-                    const selectedCategoryNames = Array.from(selectedCategories).map(categoryPath => {
-                      if (categoryPath.includes('::')) {
-                        const [mainCat, subCat] = categoryPath.split('::')
-                        return `${mainCat}-${subCat}`
-                      } else {
-                        return categoryPath
-                      }
-                    }).join('_')
-                    const cleanCategoryNames = selectedCategoryNames
-                      .replace(/[^a-zA-Z0-9_-]/g, '_')
-                      .replace(/_+/g, '_')
-                      .replace(/^_|_$/g, '')
-                      .substring(0, 50) // Shorter for display
-                    return (
-                      <span>This will create a markdown checklist in <code>audits/audit-checklist-{cleanCategoryNames}-{timestamp}.md</code></span>
-                    )
-                  })()}
+                  <span>
+                    This will create one markdown checklist per category in <code>{contractDir}/</code>:
+                  </span>
+                  <ul className="mb-0 mt-2 small">
+                    {Array.from(selectedCategories).map(categoryPath => (
+                      <li key={categoryPath}>
+                        <code>{categoryFileToken(categoryPath)}.md</code>
+                        <span className="ms-2 opacity-75">{countItemsForCategory(categoryPath)} items</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
                 {error && (
                   <div className="alert alert-danger mb-3" role="alert">
@@ -1046,9 +989,9 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                 <div className="spinner-border text-primary fa-3x mb-4" role="status">
                   <span className="visually-hidden">Saving checklist...</span>
                 </div>
-                <h3 className="mb-3">Generating Checklist</h3>
+                <h3 className="mb-3">Generating Checklists</h3>
                 <p className="text-muted">
-                  Creating your audit checklist file...
+                  Saving one checklist file per category in {contractDir}/...
                 </p>
               </div>
             </div>
@@ -1063,11 +1006,20 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
               data-id="checklist-explorer-generate-selected"
               className="btn btn-primary"
               onClick={handleLoadSelected}
+              disabled={!contractDir}
+              title={contractDir
+                ? `Checklists will be saved in ${contractDir}/`
+                : 'Select the contract these checklists belong to first'}
             >
               <i className="fa-solid fa-list-check me-2"></i>
               Generate Checklist ({selectedCategories.size} categories
               {aiMatchedPaths.size > 0 && ` · ${aiMatchedPaths.size} AI-matched`})
             </button>
+            {!contractDir && (
+              <span className="text-muted small ms-3 align-self-center">
+                Select a contract above to choose where the checklists are saved.
+              </span>
+            )}
           </div>
         )}
       </div>

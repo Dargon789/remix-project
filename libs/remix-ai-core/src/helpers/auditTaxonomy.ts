@@ -258,3 +258,70 @@ export function filterAuditMatches(
 
   return { matches, discarded }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Per-contract checklist storage                                             */
+/*                                                                            */
+/* Selected checklists are saved one file per category under                  */
+/* `audits/<Contract>/<token>.md`. The naming lives here, next to the paths it */
+/* derives from, so the filenames and the selectable paths cannot drift apart. */
+/* -------------------------------------------------------------------------- */
+
+/** Anything that has to become a single safe path segment goes through this. */
+const sanitizeSegment = (raw: string): string => {
+  return raw
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+}
+
+/**
+ * Filename stem for one selected category. `Main::Sub` becomes `Main-Sub` so the
+ * two halves stay readable in the file explorer.
+ */
+export function categoryFileToken(categoryPath: string): string {
+  const raw = categoryPath.includes('::') ? categoryPath.split('::').join('-') : categoryPath
+  return sanitizeSegment(raw)
+}
+
+/**
+ * Folder name for the contract the checklists are saved against.
+ *
+ * The compiled contract name is preferred over the filename: `contracts/Token.sol`
+ * declaring `MyToken` reads better as `audits/MyToken/`. Falls back to the file
+ * stem when the file has not been compiled, and to `contract` when even that
+ * sanitizes away (a file named `__.sol`). The result is always a single path
+ * segment — it is interpolated straight into a write path.
+ */
+export function deriveContractName(target: string, namesByFile: Record<string, string[]> = {}): string {
+  if (!target) return ''
+  const compiled = namesByFile[target]?.[0]
+  if (compiled) {
+    const fromCompiled = sanitizeSegment(compiled)
+    if (fromCompiled) return fromCompiled
+  }
+  const stem = (target.split('/').pop() ?? target).replace(/\.sol$/i, '')
+  return sanitizeSegment(stem) || 'contract'
+}
+
+/**
+ * Which categories already have a checklist file saved for the selected contract.
+ *
+ * `files` is the listing of `audits/<Contract>/`, where each checklist owns one
+ * `<token>.md`. Matching is exact on that stem — a substring test over the whole
+ * listing would let `Access_Control` light up `Token-Access_Control` too.
+ */
+export function computeLoadedCategories(data: AuditChecklistNode[] | undefined, files: string[]): Set<string> {
+  const stems = new Set(
+    files
+      .map(file => (file.split('/').pop() ?? file))
+      .filter(name => name.toLowerCase().endsWith('.md'))
+      .map(name => name.slice(0, -3))
+  )
+  const loaded = new Set<string>()
+  enumerateSelectableChecklistPaths(data).forEach(path => {
+    const token = categoryFileToken(path)
+    if (token && stems.has(token)) loaded.add(path)
+  })
+  return loaded
+}
