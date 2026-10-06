@@ -18,7 +18,7 @@ module.exports = {
         (document.querySelector('*[data-id="basic-http-providerModalDialogModalBody-react"] input') as any).focus()
       }, [], () => { })
       .clearValue('*[data-id="basic-http-providerModalDialogModalBody-react"] input')
-      .setValue('*[data-id="basic-http-providerModalDialogModalBody-react"] input', 'https://go.getblock.io/7fbe62b139884d2c9c1616ca0de8b5b2')
+      .setValue('*[data-id="basic-http-providerModalDialogModalBody-react"] input', 'https://shared.eu-central-1.getblock.io/7fbe62b139884d2c9c1616ca0de8b5b2')
       .modalFooterOKClick('basic-http-provider')
       .waitForElementNotVisible('*[data-id="basic-http-providerModalDialogContainer-react"]', 15000)
       .waitForElementVisible({ selector: `[data-id="selected-provider-basic-http-provider"]`, timeout: 10000 })
