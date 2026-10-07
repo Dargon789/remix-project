@@ -123,7 +123,7 @@ export interface PromptAreaProps {
   onSignIn?: () => void
   isNewChat?: boolean
   handleOpenSettings?: () => void
-  handleLoadAuditChecklist?: () => void
+  handleLoadAuditChecklist?: (mode?: 'audit' | 'checklist') => void
   handleGasOptimisationAudit?: () => void
   hasAuditorPermission?: boolean
   hasSkillsPermission?: boolean
@@ -263,11 +263,8 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
         description: 'Audit a contract',
         requiredFeatures: [Features.AI_AUDITOR],
         category: 'Audit',
-        // The modal sends the audit prompt itself once the user picks the
-        // contract — seeding the composer here would both leave stale text
-        // behind and tell the agent to ask for a contract already chosen.
         action: () => {
-          handleLoadAuditChecklist()
+          handleLoadAuditChecklist('audit')
         },
         disabled: !hasAuditorPermission
       })
@@ -275,7 +272,8 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
         name: 'load-audit-checklist',
         description: 'Load audit checklist',
         category: 'Audit',
-        action: handleLoadAuditChecklist,
+        // Checklist mode: write the files and stop, no audit run.
+        action: () => handleLoadAuditChecklist('checklist'),
         requiredFeatures: [Features.AI_AUDITOR],
         disabled: !hasAuditorPermission
       })

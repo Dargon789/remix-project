@@ -22,7 +22,16 @@ export interface RemixUiChecklistExplorerModalProps {
   isOpen: boolean
   onClose: () => void
   plugin?: any // Plugin instance to access fileManager
+  /**
+   * Why the modal was opened. `audit` (from /audit) finishes by running the
+   * audit; `checklist` (from /load-audit-checklist or the home tab) just saves
+   * the checklist files and closes.
+   */
+  mode?: 'audit' | 'checklist'
 }
+
+/** Human label for a selectable path: `Main::Sub` reads as just `Sub`. */
+const categoryLabel = (path: string): string => (path.includes('::') ? path.split('::')[1] : path)
 
 /**
  * Dropdown label for a candidate: the basename, widened with its parent folder
@@ -38,7 +47,8 @@ const candidateLabel = (file: string, all: string[]): string => {
 }
 
 export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerModalProps) {
-  const { isOpen, onClose, plugin } = props
+  const { isOpen, onClose, plugin, mode = 'checklist' } = props
+  const isAuditMode = mode === 'audit'
   const [checklistData, setChecklistData] = useState<ChecklistData[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +76,15 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   // save path and every "already saved" lookup is scoped through it.
   const contractName = deriveContractName(matchTarget, contractNamesByFile)
   const contractDir = contractName ? `audits/${contractName}` : ''
+  /** Basename of the picked file — what the audit button names. */
+  const selectedFileName = matchTarget ? (matchTarget.split('/').pop() ?? matchTarget) : ''
+  /**
+   * Every checklist the audit will cover: those already saved in the contract's
+   * folder plus those just ticked. Both audit buttons run the agent over the
+   * whole folder, so neither may describe only half of what is in there.
+   */
+  const auditScopePaths = Array.from(new Set([...Array.from(loadedCategories), ...Array.from(selectedCategories)]))
+  const auditScopeLabels = auditScopePaths.map(categoryLabel)
 
   const fetchChecklistData = async (): Promise<ChecklistData[]> => {
     const response = await fetch('https://raw.githubusercontent.com/Cyfrin/audit-checklist/main/checklist.json')
@@ -466,11 +485,11 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
 
   const auditInstruction = (checklistLabels: string, runId: string): string => {
     const runDir = `audit_reports/${contractName}/${runId}`
-    return `Audit the contract ${contractName} in ${matchTarget} against every checklist file in ${contractDir}/ (${checklistLabels}). `
-      + `The contract and its checklists are already chosen — do not ask me which contract to audit or which checklists to use. `
-      + `This is one audit run: write everything under ${runDir}/ and nothing outside it. `
-      + `One report per checklist at ${runDir}/<checklist>_security_audit_report.md, then the condensed ${runDir}/summary.md. `
-      + `Do not touch or overwrite earlier run folders under audit_reports/${contractName}/.`
+    return `Audit the contract ${contractName} in ${matchTarget} against every checklist file in ${contractDir}). `
+      + `\nThe contract and its checklists are already chosen — do not ask me which contract to audit or which checklists to use. `
+      + `\nThis is one audit run: write everything under ${runDir}/ and nothing outside it. `
+      + `\nOne report per checklist at ${runDir}/<checklist>_security_audit_report.md, then the condensed ${runDir}/summary.md. `
+      + `\nDo not touch or overwrite earlier run folders under audit_reports/${contractName}/.`
   }
 
   const handleConfirmChecklist = async () => {
@@ -518,7 +537,11 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
       }
 
       setSaving(false)
-      startAudit(auditInstruction(labelText, newRunId()))
+      // Checklist mode stops here: the files are the deliverable.
+      // The audit covers the whole folder, so it is named with the full scope —
+      // the checklists just written plus any that were already saved.
+      if (isAuditMode) startAudit(auditInstruction(auditScopeLabels.join(', '), newRunId()))
+      else onClose()
     } catch (err) {
       setSaving(false)
       setError(err instanceof Error ? err.message : 'Failed to save checklist')
@@ -564,20 +587,27 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
       category: 'ai',
       action: 'remixAI',
       name: 'audit_existing_checklists',
-      value: `${loadedCategories.size}`,
+      value: `${auditScopePaths.length}`,
       isClick: true
     })
 
-    const labels = Array.from(loadedCategories).map(path => (path.includes('::') ? path.split('::')[1] : path))
+    // Anything ticked on top of what is saved still has to reach disk before the
+    // agent reads the folder, so hand over to the save path — it writes the new
+    // picks and then audits the same full scope this button describes.
+    if (selectedCategories.size > 0) {
+      await handleConfirmChecklist()
+      return
+    }
+
     try {
-      const itemCount = Array.from(loadedCategories).reduce((total, path) => total + countItemsForCategory(path), 0)
-      const summary = `Reusing ${labels.length} checklist${labels.length === 1 ? '' : 's'} already saved for \`${contractName}\` (${matchTarget}) in \`${contractDir}/\` — ${labels.join(', ')} (${itemCount} item${itemCount === 1 ? '' : 's'} total).`
+      const itemCount = auditScopePaths.reduce((total, path) => total + countItemsForCategory(path), 0)
+      const summary = `Reusing ${auditScopeLabels.length} checklist${auditScopeLabels.length === 1 ? '' : 's'} already saved for \`${contractName}\` (${matchTarget}) in \`${contractDir}/\` — ${auditScopeLabels.join(', ')} (${itemCount} item${itemCount === 1 ? '' : 's'} total).`
       await plugin.call('remixaiassistant', 'handleExternalMessage', summary)
     } catch (e) {
       // assistant panel unavailable — still hand off below
     }
 
-    startAudit(auditInstruction(labels.join(', '), newRunId()))
+    startAudit(auditInstruction(auditScopeLabels.join(', '), newRunId()))
   }
 
   const handleBack = () => {
@@ -794,21 +824,25 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                   <div className="category-description mb-4 d-flex align-items-center flex-wrap gap-2">
                     <span>Select audit categories to include in your checklist</span>
                     {loadedCategories.size > 0 && (
+                      <span className="badge bg-success text-white small">
+                        <i className="fa-solid fa-check me-1"></i>
+                        {loadedCategories.size} already in workspace
+                      </span>
+                    )}
+                    {loadedCategories.size > 0 && isAuditMode && (
                       <>
-                        <span className="badge bg-success text-white small">
-                          <i className="fa-solid fa-check me-1"></i>
-                          {loadedCategories.size} already in workspace
-                        </span>
                         {/* Nothing left to pick: the contract already has
                             checklists, so offer the audit straight away. */}
                         <button
                           data-id="checklist-explorer-audit-existing"
                           className="btn btn-sm btn-primary text-nowrap"
                           onClick={handleAuditExisting}
-                          title={`Audit ${contractName} against the ${loadedCategories.size} checklist${loadedCategories.size === 1 ? '' : 's'} already saved in ${contractDir}/`}
+                          title={selectedCategories.size > 0
+                            ? `Save the ${selectedCategories.size} newly picked checklist${selectedCategories.size === 1 ? '' : 's'}, then audit ${contractName} against all ${auditScopePaths.length} in ${contractDir}/`
+                            : `Audit ${contractName} against the ${auditScopePaths.length} checklist${auditScopePaths.length === 1 ? '' : 's'} already saved in ${contractDir}/`}
                         >
                           <i className="fa-solid fa-shield-halved me-1"></i>
-                          Audit with these {loadedCategories.size} checklist{loadedCategories.size === 1 ? '' : 's'}
+                          Audit with these {auditScopePaths.length} checklist{auditScopePaths.length === 1 ? '' : 's'}
                         </button>
                       </>
                     )}
@@ -1049,7 +1083,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                     className="btn btn-primary"
                     onClick={handleConfirmChecklist}
                   >
-                    Generate Checklist
+                    {isAuditMode ? `Audit ${selectedFileName || 'contract'}` : 'Generate Checklist'}
                   </button>
                 </div>
               </div>
@@ -1063,7 +1097,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                 <div className="spinner-border text-primary fa-3x mb-4" role="status">
                   <span className="visually-hidden">Saving checklist...</span>
                 </div>
-                <h3 className="mb-3">Generating Checklists</h3>
+                <h3 className="mb-3">{isAuditMode ? 'Starting Audit' : 'Generating Checklists'}</h3>
                 <p className="text-muted">
                   Saving one checklist file per category in {contractDir}/...
                 </p>
@@ -1082,11 +1116,15 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
               onClick={handleLoadSelected}
               disabled={!contractDir}
               title={contractDir
-                ? `Checklists will be saved in ${contractDir}/`
+                ? isAuditMode
+                  ? `Save the checklists in ${contractDir}/ and audit ${selectedFileName} against them`
+                  : `Checklists will be saved in ${contractDir}/`
                 : 'Select the contract these checklists belong to first'}
             >
-              <i className="fa-solid fa-list-check me-2"></i>
-              Generate Checklist ({selectedCategories.size} categories
+              <i className={`fa-solid ${isAuditMode ? 'fa-shield-halved' : 'fa-list-check'} me-2`}></i>
+              {isAuditMode
+                ? `Audit ${selectedFileName || 'contract'}`
+                : 'Generate Checklist'} ({selectedCategories.size} categories
               {aiMatchedPaths.size > 0 && ` · ${aiMatchedPaths.size} AI-matched`})
             </button>
             {!contractDir && (

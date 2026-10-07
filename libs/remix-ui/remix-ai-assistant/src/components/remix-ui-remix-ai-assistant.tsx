@@ -64,7 +64,7 @@ export interface RemixUiRemixAiAssistantProps {
   onToggleHistorySidebar?: () => void
   onSearch?: (query: string) => Promise<ConversationMetadata[]>
   onOpenSkillsModal?: () => void
-  onOpenChecklistModal?: () => void
+  onOpenChecklistModal?: (mode?: 'audit' | 'checklist') => void
 }
 export interface RemixUiRemixAiAssistantHandle {
   /** Programmatically send a prompt to the chat (returns after processing starts) */
@@ -2576,8 +2576,10 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
     props.plugin.call('settings', 'showSection', 'ai')
   }, [props.plugin])
 
-  const handleLoadAuditChecklist = useCallback(() => {
-    if (props.onOpenChecklistModal) props.onOpenChecklistModal()
+  // `/audit` and `/load-audit-checklist` open the same modal; the mode is what
+  // tells it whether to finish by running the audit or just saving checklists.
+  const handleLoadAuditChecklist = useCallback((mode: 'audit' | 'checklist' = 'checklist') => {
+    if (props.onOpenChecklistModal) props.onOpenChecklistModal(mode)
   }, [props.onOpenChecklistModal])
 
   const handleGasOptimisationAudit = useCallback(async () => {
