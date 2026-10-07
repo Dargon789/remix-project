@@ -263,9 +263,11 @@ export const PromptArea: React.FC<PromptAreaProps> = ({
         description: 'Audit a contract',
         requiredFeatures: [Features.AI_AUDITOR],
         category: 'Audit',
+        // The modal sends the audit prompt itself once the user picks the
+        // contract — seeding the composer here would both leave stale text
+        // behind and tell the agent to ask for a contract already chosen.
         action: () => {
           handleLoadAuditChecklist()
-          setInput('Audit a contract. Ask which contract file to audit if none provided.')
         },
         disabled: !hasAuditorPermission
       })

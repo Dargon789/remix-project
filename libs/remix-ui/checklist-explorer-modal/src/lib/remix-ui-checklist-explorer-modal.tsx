@@ -458,6 +458,21 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
     setWizardStep('confirm')
   }
 
+  const newRunId = (): string => {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `run-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  }
+
+  const auditInstruction = (checklistLabels: string, runId: string): string => {
+    const runDir = `audit_reports/${contractName}/${runId}`
+    return `Audit the contract ${contractName} in ${matchTarget} against every checklist file in ${contractDir}/ (${checklistLabels}). `
+      + `The contract and its checklists are already chosen — do not ask me which contract to audit or which checklists to use. `
+      + `This is one audit run: write everything under ${runDir}/ and nothing outside it. `
+      + `One report per checklist at ${runDir}/<checklist>_security_audit_report.md, then the condensed ${runDir}/summary.md. `
+      + `Do not touch or overwrite earlier run folders under audit_reports/${contractName}/.`
+  }
+
   const handleConfirmChecklist = async () => {
     if (!plugin) {
       setError('Plugin not available')
@@ -491,20 +506,19 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
 
       if (!written.length) throw new Error('No checklist could be generated for the selection')
 
-      // Post a summary into the chat so completion isn't silent — especially for
-      // /load-audit-checklist, where nothing else is sent after the modal closes.
-      // It also puts the contract folder in the agent's context for the audit run.
+      // Say what landed on disk — a UI-only bubble, so the audit instruction
+      // below has to repeat the contract rather than rely on it.
+      const itemCount = written.reduce((total, entry) => total + entry.items, 0)
+      const labelText = written.map(entry => entry.label).join(', ')
       try {
-        const itemCount = written.reduce((total, entry) => total + entry.items, 0)
-        const labelText = written.map(entry => entry.label).join(', ')
-        const summary = `Saved ${written.length} checklist${written.length === 1 ? '' : 's'} for \`${contractName}\` (${matchTarget}) in \`${contractDir}/\` — ${labelText} (${itemCount} item${itemCount === 1 ? '' : 's'} total). Audit the contract against every checklist file in that folder.`
+        const summary = `Saved ${written.length} checklist${written.length === 1 ? '' : 's'} for \`${contractName}\` (${matchTarget}) in \`${contractDir}/\` — ${labelText} (${itemCount} item${itemCount === 1 ? '' : 's'} total).`
         await plugin.call('remixaiassistant', 'handleExternalMessage', summary)
       } catch (e) {
         // assistant panel unavailable — the files are still created
       }
 
       setSaving(false)
-      handleOk()
+      startAudit(auditInstruction(labelText, newRunId()))
     } catch (err) {
       setSaving(false)
       setError(err instanceof Error ? err.message : 'Failed to save checklist')
@@ -512,11 +526,58 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
     }
   }
 
-  const handleOk = () => {
+  /**
+   * Close the modal and hand the audit off to the assistant.
+   *
+   * The instruction has to name the contract itself. This dropdown is the only
+   * place that choice is made, and the summary posted next to it is a UI-only
+   * assistant bubble (`addAssistantMessage` just calls `setMessages`) that the
+   * model never sees — so anything not in this string is invisible to the run.
+   * That is why it goes through `chatPipe` (which reaches `sendChat`) rather
+   * than `submitChatInput`, which would send whatever generic text the slash
+   * command happened to leave in the composer.
+   */
+  const startAudit = (instruction: string) => {
     onClose()
-    Promise.resolve(plugin?.call('remixaiassistant', 'submitChatInput')).catch(() => {
+    Promise.resolve(
+      plugin?.call('remixaiassistant', 'chatPipe', instruction, true, {
+        source: 'checklist-explorer',
+        presetId: 'audit-contract'
+      })
+    ).catch(() => {
       // assistant plugin unavailable — modal is already closed
     })
+  }
+
+  /**
+   * Skip the selection step and audit against what is already saved.
+   *
+   * Offered only when the selected contract's folder already holds checklists:
+   * at that point picking categories again is busywork. This ends the same way
+   * the Generate Checklist path does — summary into the chat, then handleOk —
+   * so both routes hand off to the audit run and its report identically. The
+   * only thing it skips is writing files that are already there.
+   */
+  const handleAuditExisting = async () => {
+    if (!plugin || !contractDir) return
+    trackMatomoEvent(plugin, {
+      category: 'ai',
+      action: 'remixAI',
+      name: 'audit_existing_checklists',
+      value: `${loadedCategories.size}`,
+      isClick: true
+    })
+
+    const labels = Array.from(loadedCategories).map(path => (path.includes('::') ? path.split('::')[1] : path))
+    try {
+      const itemCount = Array.from(loadedCategories).reduce((total, path) => total + countItemsForCategory(path), 0)
+      const summary = `Reusing ${labels.length} checklist${labels.length === 1 ? '' : 's'} already saved for \`${contractName}\` (${matchTarget}) in \`${contractDir}/\` — ${labels.join(', ')} (${itemCount} item${itemCount === 1 ? '' : 's'} total).`
+      await plugin.call('remixaiassistant', 'handleExternalMessage', summary)
+    } catch (e) {
+      // assistant panel unavailable — still hand off below
+    }
+
+    startAudit(auditInstruction(labels.join(', '), newRunId()))
   }
 
   const handleBack = () => {
@@ -730,13 +791,26 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
               {!loading && !error && (
                 <>
                   <div className="category-title">Audit Checklist Categories</div>
-                  <div className="category-description mb-4">
-                    Select audit categories to include in your checklist
+                  <div className="category-description mb-4 d-flex align-items-center flex-wrap gap-2">
+                    <span>Select audit categories to include in your checklist</span>
                     {loadedCategories.size > 0 && (
-                      <span className="ms-2 badge bg-success text-white small">
-                        <i className="fa-solid fa-check me-1"></i>
-                        already in workspace
-                      </span>
+                      <>
+                        <span className="badge bg-success text-white small">
+                          <i className="fa-solid fa-check me-1"></i>
+                          {loadedCategories.size} already in workspace
+                        </span>
+                        {/* Nothing left to pick: the contract already has
+                            checklists, so offer the audit straight away. */}
+                        <button
+                          data-id="checklist-explorer-audit-existing"
+                          className="btn btn-sm btn-primary text-nowrap"
+                          onClick={handleAuditExisting}
+                          title={`Audit ${contractName} against the ${loadedCategories.size} checklist${loadedCategories.size === 1 ? '' : 's'} already saved in ${contractDir}/`}
+                        >
+                          <i className="fa-solid fa-shield-halved me-1"></i>
+                          Audit with these {loadedCategories.size} checklist{loadedCategories.size === 1 ? '' : 's'}
+                        </button>
+                      </>
                     )}
                   </div>
 
