@@ -85,8 +85,10 @@ export const ChatHistoryComponent: React.FC<ChatHistoryComponentProps> = ({
     })
   }
 
-  // The thinking box belongs to the message currently being produced.
-  const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id
+  // renders on its own at the end of the list, where the turn actually is.
+  const lastMessage = messages[messages.length - 1]
+  const lastAssistantId = lastMessage?.role === 'assistant' ? lastMessage.id : undefined
+  const showTrailingThinking = isThinking && !lastAssistantId
   return (
     <div
       ref={historyRef}
@@ -355,6 +357,21 @@ export const ChatHistoryComponent: React.FC<ChatHistoryComponentProps> = ({
             </div>
           )
         }) //end of messages renderconsole.log(content)
+      )}
+      {showTrailingThinking && (
+        <div className="chat-row d-flex mb-2 gap-2" style={{ minWidth: '90%' }}>
+          <div className="thinking-indicator small mb-2 p-2 rounded" data-id="remix-ai-thinking" style={{
+            backgroundColor: theme?.toLowerCase() === 'dark' ? 'rgba(255, 193, 7, 0.15)' : 'rgba(255, 193, 7, 0.1)',
+            border: '1px solid rgba(255, 193, 7, 0.3)'
+          }}>
+            <div className="d-flex align-items-center">
+              <i className="fa fa-spinner fa-spin me-2 text-warning"></i>
+              <span className="text-warning">
+                <strong>Thinking</strong>
+              </span>
+            </div>
+          </div>
+        </div>
       )}
       {isStreaming && (
         <div className="text-center my-2">

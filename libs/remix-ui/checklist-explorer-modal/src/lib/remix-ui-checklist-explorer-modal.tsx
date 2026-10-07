@@ -67,6 +67,15 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   const [matchSummary, setMatchSummary] = useState<{ file: string; count: number; discarded: number; skippedReason?: string } | null>(null)
   const [solCandidates, setSolCandidates] = useState<string[]>([])
   const [matchTarget, setMatchTarget] = useState<string>('')
+  /**
+   * Plays the one-shot ring on the contract dropdown when the modal opens.
+   *
+   * The control sits in a busy toolbar and decides where everything is saved,
+   * yet it is easy to miss — and the focused file is preselected, so a user who
+   * never looks at it can audit the wrong contract. Cleared the moment they
+   * touch it, so it never nags.
+   */
+  const [highlightTarget, setHighlightTarget] = useState<boolean>(false)
   const [contractNamesByFile, setContractNamesByFile] = useState<Record<string, string[]>>({})
   const [currentSolFile, setCurrentSolFile] = useState<string>('')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -301,6 +310,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
       setLoadedCategories(new Set())
       setSearchTerm('')
       setError(null)
+      setHighlightTarget(true)
       matchRunId.current++
       setMatching(false)
       setMatchSlow(false)
@@ -485,7 +495,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
 
   const auditInstruction = (checklistLabels: string, runId: string): string => {
     const runDir = `audit_reports/${contractName}/${runId}`
-    return `Audit the contract ${contractName} in ${matchTarget} against every checklist file in ${contractDir}). `
+    return `Audit the contract ${contractName} in ${matchTarget} against every checklist file in ${contractDir}) using the Comprehensive_Auditor agent. `
       + `\nThe contract and its checklists are already chosen — do not ask me which contract to audit or which checklists to use. `
       + `\nThis is one audit run: write everything under ${runDir}/ and nothing outside it. `
       + `\nOne report per checklist at ${runDir}/<checklist>_security_audit_report.md, then the condensed ${runDir}/summary.md. `
@@ -695,12 +705,16 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
               {solCandidates.length > 0 && (
-                <div className="ai-match-target align-self-center" style={{ width: '13rem' }}>
+                <div
+                  className={`ai-match-target align-self-center${highlightTarget ? ' needs-contract' : ''}`}
+                  style={{ width: '13rem' }}
+                >
                   <select
                     data-id="checklist-explorer-ai-match-target"
                     className="form-select"
                     value={matchTarget}
-                    onChange={(e) => setMatchTarget(e.target.value)}
+                    onChange={(e) => { setMatchTarget(e.target.value); setHighlightTarget(false) }}
+                    onFocus={() => setHighlightTarget(false)}
                     disabled={matching}
                     title={matchTarget
                       ? `Checklists will be saved in ${contractDir}/, and AI match runs against ${matchTarget}. Pick another file to change the contract.`
