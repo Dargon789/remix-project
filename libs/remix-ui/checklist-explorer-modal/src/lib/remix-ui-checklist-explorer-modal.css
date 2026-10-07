@@ -141,32 +141,31 @@
   }
 }
 
-/* Checklist container responsive height */
-@media (min-width: 769px) and (max-width: 1024px) {
-  .checklist-explorer-container {
-    max-height: 500px;
-  }
-}
+/* No fixed cap on the scrolling body: it held the modal to 500/600px even on a
+   tall screen, so a long selection scrolled inside a short box with empty space
+   around it. The container's `max-height: 90vh` is the real bound — the body
+   grows to fit and only scrolls once the modal has used the viewport. */
 
-@media (min-width: 1025px) {
-  .checklist-explorer-container {
-    max-height: 600px;
-  }
-}
-
-/* Step-specific sizing */
+/* Step-specific sizing.
+   These steps size to their content: the selection list and the file preview
+   both grow with the number of categories picked, and a fixed height clipped
+   them. `min-height` keeps the short case (a single category, or the saving
+   spinner) from looking cramped. The container's shared `max-height: 90vh` is
+   the only cap, and `.checklist-explorer-container` scrolls past it — so one
+   outer scrollbar replaces several nested ones. */
 .confirm-checklist-step,
 .saving-checklist-step {
-  height: 400px;
+  min-height: 400px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.checklist-explorer-modal-container:has(.confirm-checklist-step),
-.checklist-explorer-modal-container:has(.saving-checklist-step) {
-  height: 500px;
-  max-height: 500px;
+/* The step centres a single column; give it the full width so the details
+   block and the file-preview alert inside can actually use it. */
+.confirm-checklist-step > div,
+.saving-checklist-step > div {
+  width: 100%;
 }
 
 /* ========== Fixed footer for Generate button ========== */
@@ -189,16 +188,17 @@
 /* ========== Selected categories display ========== */
 
 .selected-categories {
-  max-height: 200px;
-  overflow-y: auto;
   padding: 0.5rem;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
   margin: 0.5rem 0;
 }
 
+/* Was capped at 500px, which wrapped the AI-match reasons into an unreadable
+   column while the modal around it stayed empty. Let it use the modal width. */
 .checklist-details {
-  max-width: 500px;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* ========== Badge styling ========== */
@@ -230,14 +230,17 @@
   animation: slideDown 0.3s ease-out;
 }
 
+/* Animates opacity and offset rather than max-height: a category with more
+   items than the old 500px cap (Version Issues has 67) was visibly clipped for
+   the length of the animation and then snapped open. */
 @keyframes slideDown {
   from {
     opacity: 0;
-    max-height: 0;
+    transform: translateY(-4px);
   }
   to {
     opacity: 1;
-    max-height: 500px;
+    transform: translateY(0);
   }
 }
 
