@@ -111,6 +111,9 @@ const OLLAMA_NOT_AVAILABLE_MESSAGE = [
   '*Switching back to default model for now.*'
 ].join('\n')
 
+/** Minimum time the thinking indicator stays up once raised. */
+const THINKING_MIN_VISIBLE_MS = 2000
+
 export const RemixUiRemixAiAssistant = React.forwardRef<
   RemixUiRemixAiAssistantHandle,
   RemixUiRemixAiAssistantProps
@@ -126,6 +129,15 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
     firstPromptStateRef.current = { count: messages.length, conversationId: props.currentConversationId }
   }, [messages, props.currentConversationId])
   const [isThinking, setIsThinking] = useState(false)
+  /**
+   * `isThinking` held on screen for a minimum dwell so it cannot flicker.
+   *
+   * The model flips the flag many times in a turn — between tool calls it can
+   * be true for a few hundred ms — which read as a strobe. Every raise restarts
+   * the dwell, so a burst of rapid toggles shows as one steady indicator.
+   */
+  const [thinkingVisible, setThinkingVisible] = useState(false)
+  const thinkingHoldUntilRef = useRef(0)
   const [runModel, setRunModel] = useState<string | null>(null)
   // Read from event handlers, which are memoized without `runModel`.
   const runModelRef = useRef<string | null>(null)
@@ -2792,6 +2804,31 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
     }
   }, [showOllamaModelSelector, recalcOllamaModelOpt])
 
+  // Minimum dwell for the thinking indicator. Each raise pushes the deadline
+  // out, so rapid true/false bursts between tool calls read as one indicator
+  // instead of a strobe; it clears only once the model has stopped AND the
+  // dwell has elapsed.
+  useEffect(() => {
+    if (isThinking) {
+      thinkingHoldUntilRef.current = Date.now() + THINKING_MIN_VISIBLE_MS
+      setThinkingVisible(true)
+      return
+    }
+    if (!thinkingVisible) return
+    const remaining = Math.max(0, thinkingHoldUntilRef.current - Date.now())
+    const timer = setTimeout(() => setThinkingVisible(false), remaining)
+    return () => clearTimeout(timer)
+  }, [isThinking, thinkingVisible])
+
+  // Sits directly above the auto-accept banner in every layout, so the user
+  // always finds it in the same place instead of chasing it down the transcript.
+  const thinkingBannerEl = thinkingVisible && (
+    <div className="ai-thinking-banner" data-id="remix-ai-thinking">
+      <i className="fa fa-spinner fa-spin ai-thinking-banner__icon" aria-hidden="true"></i>
+      <span className="ai-thinking-banner__text">Thinking</span>
+    </div>
+  )
+
   const autoAcceptBannerEl = hitlAutoAccept && pendingApprovals.length === 0 && (
     <div
       className="hitl-auto-accept-banner"
@@ -3049,7 +3086,6 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
                     <ChatHistoryComponent
                       messages={messages}
                       isStreaming={isStreaming}
-                      isThinking={isThinking}
                       sendPrompt={sendPrompt}
                       recordFeedback={recordFeedback}
                       historyRef={historyRef}
@@ -3097,6 +3133,7 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
                       </div>
                     ))}
                   </section>
+                  {thinkingBannerEl}
                   {autoAcceptBannerEl}
                 </div>
               ) : (
@@ -3139,6 +3176,7 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
                         theme={themeTracker?.name}
                       />
                     </div>
+                    {thinkingBannerEl}
                     {autoAcceptBannerEl}
                   </div>
                 ) : (
@@ -3166,7 +3204,6 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
                       <ChatHistoryComponent
                         messages={messages}
                         isStreaming={isStreaming}
-                        isThinking={isThinking}
                         sendPrompt={sendPrompt}
                         recordFeedback={recordFeedback}
                         historyRef={historyRef}
@@ -3214,6 +3251,7 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
                         </div>
                       ))}
                     </section>
+                    {thinkingBannerEl}
                     {autoAcceptBannerEl}
                   </div>
                 )

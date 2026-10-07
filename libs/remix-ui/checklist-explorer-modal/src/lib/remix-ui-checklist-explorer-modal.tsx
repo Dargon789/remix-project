@@ -484,6 +484,12 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
       return
     }
     setError(null)
+    // Audit mode has no confirm screen: the button already says what it will do
+    // and names the contract, so a second screen restating it just adds a click.
+    if (isAuditMode) {
+      handleConfirmChecklist()
+      return
+    }
     setWizardStep('confirm')
   }
 
@@ -512,8 +518,15 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
       setWizardStep('browse')
       return
     }
-    setWizardStep('saving')
-    setSaving(true)
+    // Audit mode never shows the generate-checklist screens. The user asked for
+    // an audit, not for files, so writing them is an implementation detail:
+    // close immediately and let the writes finish in the background. Checklist
+    // mode keeps the wizard, where the files ARE the deliverable.
+    if (isAuditMode) onClose()
+    else {
+      setWizardStep('saving')
+      setSaving(true)
+    }
 
     try {
       await ensureDirectoryExists('audits')
@@ -546,15 +559,28 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
         // assistant panel unavailable — the files are still created
       }
 
-      setSaving(false)
+      // No state updates in audit mode — the modal unmounted when we closed it.
+      if (!isAuditMode) setSaving(false)
       // Checklist mode stops here: the files are the deliverable.
       // The audit covers the whole folder, so it is named with the full scope —
       // the checklists just written plus any that were already saved.
       if (isAuditMode) startAudit(auditInstruction(auditScopeLabels.join(', '), newRunId()))
       else onClose()
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save checklist'
+      // The modal is already gone in audit mode, so the chat is the only place
+      // left to report this — failing silently would start no audit and say
+      // nothing about why.
+      if (isAuditMode) {
+        try {
+          await plugin.call('remixaiassistant', 'handleExternalMessage', `Could not save the checklists in \`${contractDir}/\`: ${message}. The audit was not started.`)
+        } catch (e) {
+          // assistant panel unavailable too — nothing more we can surface
+        }
+        return
+      }
       setSaving(false)
-      setError(err instanceof Error ? err.message : 'Failed to save checklist')
+      setError(message)
       setWizardStep('confirm')
     }
   }
@@ -585,11 +611,11 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   /**
    * Skip the selection step and audit against what is already saved.
    *
-   * Offered only when the selected contract's folder already holds checklists:
-   * at that point picking categories again is busywork. This ends the same way
-   * the Generate Checklist path does — summary into the chat, then handleOk —
-   * so both routes hand off to the audit run and its report identically. The
-   * only thing it skips is writing files that are already there.
+   * Offered only when the contract's folder already holds checklists and the
+   * user has picked nothing new: at that point selecting categories again is
+   * busywork. It hands off exactly like the footer's audit button — summary
+   * into the chat, then startAudit — so both routes produce the same run and
+   * report. The only thing it skips is writing files that are already there.
    */
   const handleAuditExisting = async () => {
     if (!plugin || !contractDir) return
@@ -601,14 +627,9 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
       isClick: true
     })
 
-    // Anything ticked on top of what is saved still has to reach disk before the
-    // agent reads the folder, so hand over to the save path — it writes the new
-    // picks and then audits the same full scope this button describes.
-    if (selectedCategories.size > 0) {
-      await handleConfirmChecklist()
-      return
-    }
-
+    // Only reachable with nothing newly ticked — the button hides as soon as the
+    // user picks a category, because from then on the footer's audit button
+    // carries the whole scope (and writes the new picks before auditing).
     try {
       const itemCount = auditScopePaths.reduce((total, path) => total + countItemsForCategory(path), 0)
       const summary = `Reusing ${auditScopeLabels.length} checklist${auditScopeLabels.length === 1 ? '' : 's'} already saved for \`${contractName}\` (${matchTarget}) in \`${contractDir}/\` — ${auditScopeLabels.join(', ')} (${itemCount} item${itemCount === 1 ? '' : 's'} total).`
@@ -843,7 +864,10 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                         {loadedCategories.size} already in workspace
                       </span>
                     )}
-                    {loadedCategories.size > 0 && isAuditMode && (
+                    {/* Only while nothing new is ticked: once it is, the footer
+                        button carries the whole scope and two buttons offering
+                        the same run would just be noise. */}
+                    {loadedCategories.size > 0 && isAuditMode && selectedCategories.size === 0 && (
                       <>
                         {/* Nothing left to pick: the contract already has
                             checklists, so offer the audit straight away. */}
@@ -851,9 +875,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                           data-id="checklist-explorer-audit-existing"
                           className="btn btn-sm btn-primary text-nowrap"
                           onClick={handleAuditExisting}
-                          title={selectedCategories.size > 0
-                            ? `Save the ${selectedCategories.size} newly picked checklist${selectedCategories.size === 1 ? '' : 's'}, then audit ${contractName} against all ${auditScopePaths.length} in ${contractDir}/`
-                            : `Audit ${contractName} against the ${auditScopePaths.length} checklist${auditScopePaths.length === 1 ? '' : 's'} already saved in ${contractDir}/`}
+                          title={`Audit ${contractName} against the ${auditScopePaths.length} checklist${auditScopePaths.length === 1 ? '' : 's'} already saved in ${contractDir}/`}
                         >
                           <i className="fa-solid fa-shield-halved me-1"></i>
                           Audit with these {auditScopePaths.length} checklist{auditScopePaths.length === 1 ? '' : 's'}
@@ -1131,14 +1153,17 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
               disabled={!contractDir}
               title={contractDir
                 ? isAuditMode
-                  ? `Save the checklists in ${contractDir}/ and audit ${selectedFileName} against them`
+                  ? `Save the ${selectedCategories.size} newly picked checklist${selectedCategories.size === 1 ? '' : 's'} in ${contractDir}/ and audit ${selectedFileName} against all ${auditScopePaths.length}`
                   : `Checklists will be saved in ${contractDir}/`
                 : 'Select the contract these checklists belong to first'}
             >
               <i className={`fa-solid ${isAuditMode ? 'fa-shield-halved' : 'fa-list-check'} me-2`}></i>
+              {/* Audit mode counts the full scope — newly picked plus whatever is
+                  already saved — because that is what the run covers. Checklist
+                  mode only writes the new picks, so it counts just those. */}
               {isAuditMode
-                ? `Audit ${selectedFileName || 'contract'}`
-                : 'Generate Checklist'} ({selectedCategories.size} categories
+                ? `Audit ${selectedFileName || 'contract'} (${auditScopePaths.length} checklist${auditScopePaths.length === 1 ? '' : 's'}`
+                : `Generate Checklist (${selectedCategories.size} categories`}
               {aiMatchedPaths.size > 0 && ` · ${aiMatchedPaths.size} AI-matched`})
             </button>
             {!contractDir && (
