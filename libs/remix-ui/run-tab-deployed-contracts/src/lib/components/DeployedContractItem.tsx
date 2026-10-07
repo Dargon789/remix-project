@@ -307,6 +307,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
     trackMatomoEvent?.({ category: 'udapp', action: 'autoFillWithAI', name: 'deployedContract', isClick: true })
     const funcABI = functionABIs[funcIndex]
     if (!funcABI || !funcABI.inputs || funcABI.inputs.length === 0) return
+    if (!(await plugin.call('planManager' as any, 'requireAICredits' as any))) return
 
     const devdoc = contract.contractData?.devdoc || contract.contractData?.object?.devdoc
     const userdoc = contract.contractData?.userdoc || contract.contractData?.object?.userdoc
@@ -346,6 +347,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
       })
     } catch (e) {
       console.error('Auto fill with AI failed:', e)
+      plugin.call('notification', 'toast', `Auto-fill with AI failed: ${e?.message || e}`)
     } finally {
       setAutoFillingFuncIndex(null)
     }

@@ -268,6 +268,7 @@ function DeployPortraitView() {
     trackMatomoEvent?.({ category: 'udapp', action: 'autoFillWithAI', name: 'deploy', isClick: true })
     const inputs = constructorInterface?.inputs
     if (!inputs || inputs.length === 0) return
+    if (!(await plugin.call('planManager' as any, 'requireAICredits' as any))) return
 
     const abi = selectedContract?.contractData?.object?.abi
     const devdoc = selectedContract?.contractData?.object?.devdoc
@@ -311,6 +312,7 @@ function DeployPortraitView() {
       })
     } catch (e) {
       console.error('Auto fill with AI failed:', e)
+      plugin.call('notification', 'toast', `Auto-fill with AI failed: ${e?.message || e}`)
     } finally {
       setIsAutoFilling(false)
     }
