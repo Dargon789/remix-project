@@ -325,3 +325,41 @@ export function computeLoadedCategories(data: AuditChecklistNode[] | undefined, 
   })
   return loaded
 }
+
+/* -------------------------------------------------------------------------- */
+/* Audience variants for a finished audit report                              */
+/* -------------------------------------------------------------------------- */
+
+export interface AuditReportAudience {
+  label: string
+  /** What changes for this reader — keeps a rewrite from being a retitle. */
+  focus: string
+}
+
+/**
+ * Audiences offered once an audit run has produced its report.
+ *
+ * One technical report rarely serves everyone who must act on it: the person
+ * approving the budget, the one scheduling the work and the one writing the fix
+ * need the same findings at different depths. Shared by the modal's audit
+ * instruction and the auditor subagent prompt so the two can never drift.
+ */
+export const AUDIT_REPORT_AUDIENCES: AuditReportAudience[] = [
+  { label: 'Beginners', focus: 'plain language, every term explained, why each issue matters' },
+  { label: 'Decision makers', focus: 'risk posture, business impact, cost of fixing vs not, clear go/no-go' },
+  { label: 'Project managers', focus: 'work breakdown, effort estimates, dependencies and suggested sequencing' },
+  { label: 'Developers', focus: 'exact files and lines, concrete patches, tests to add' },
+  { label: 'Investors / due diligence', focus: 'overall risk rating, red flags, comparison against common standards' },
+  { label: 'End users / community', focus: 'short public-facing note on what was checked and what it means for funds' },
+  { label: 'Compliance / risk officers', focus: 'controls coverage, residual risk, evidence trail and sign-off checklist' }
+]
+
+/** `"Beginners (plain language …); Decision makers (…)"` — for prompt text. */
+export function renderAudienceOptions(audiences: AuditReportAudience[] = AUDIT_REPORT_AUDIENCES): string {
+  return audiences.map(a => `${a.label} (${a.focus})`).join('; ')
+}
+
+/** `"Beginners, Decision makers, …"` — labels only, where focus would bloat. */
+export function renderAudienceLabels(audiences: AuditReportAudience[] = AUDIT_REPORT_AUDIENCES): string {
+  return audiences.map(a => a.label).join(', ')
+}
