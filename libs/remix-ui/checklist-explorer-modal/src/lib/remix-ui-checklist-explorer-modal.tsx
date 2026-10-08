@@ -8,6 +8,7 @@ import {
   AuditMatch,
   AuditMatchResult
 } from '@remix/remix-ai-core/audit-taxonomy'
+import { frontierAlternativesFor } from '@remix/remix-ai-core/model-tiers'
 import {
   ChecklistItem,
   ChecklistCategory,
@@ -56,7 +57,20 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [loadedCategories, setLoadedCategories] = useState<Set<string>>(new Set())
-  const [wizardStep, setWizardStep] = useState<'browse' | 'confirm' | 'saving'>('browse')
+  const [wizardStep, setWizardStep] = useState<'browse' | 'model' | 'confirm' | 'saving'>('browse')
+  /**
+   * Frontier models offered before an audit starts, and which launch path is
+   * waiting on that choice.
+   *
+   * On Auto the router often lands on a small route that skims an audit, and
+   * the user only finds out from a thin report. Asking here is the one moment
+   * a switch is safe: once the run is going, changing model rebuilds the
+   * DeepAgent and orphans it. A tag rather than a stashed callback, so the pick
+   * dispatches into the current closure.
+   */
+  const [modelChoices, setModelChoices] = useState<any[]>([])
+  const [pendingAudit, setPendingAudit] = useState<'new' | 'existing' | null>(null)
+  const [switchingModel, setSwitchingModel] = useState<boolean>(false)
   const [saving, setSaving] = useState<boolean>(false)
   // AI match. `aiMatchedPaths` is a provenance overlay on selectedCategories,
   // which stays the single source of truth so the whole save path is untouched.
@@ -476,6 +490,70 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
     return subCategory ? countTotalItems(subCategory.data) : 0
   }
 
+  /**
+   * Frontier models worth offering, or [] when there is nothing to ask about.
+   *
+   * Only speaks up on Auto: a user who already picked a concrete model has made
+   * the choice. Fails open — a catalogue hiccup must never block an audit.
+   */
+  const loadAuditModelChoices = async (): Promise<any[]> => {
+    if (!plugin) return []
+    try {
+      const currentId = await plugin.call('remixAI', 'getSelectedModel')
+      const models = await plugin.call('assistantState', 'getAvailableModels')
+      return frontierAlternativesFor(currentId, models)
+    } catch (e) {
+      return []
+    }
+  }
+
+  /** Both audit launch paths funnel through here so neither can skip the prompt. */
+  const gateAudit = async (which: 'new' | 'existing', launch: () => void | Promise<void>) => {
+    const choices = await loadAuditModelChoices()
+    if (!choices.length) {
+      await launch()
+      return
+    }
+    setModelChoices(choices)
+    setPendingAudit(which)
+    setWizardStep('model')
+  }
+
+  /**
+   * Apply the pick (or keep Auto) and resume the audit that was waiting.
+   *
+   * `setModel` is awaited before launching: it rebuilds the DeepAgent, and
+   * firing chatPipe in parallel would race that teardown and drop the audit.
+   */
+  const handleAuditModelPick = async (model: any | null) => {
+    if (switchingModel) return
+    setSwitchingModel(true)
+    if (model) {
+      try {
+        await plugin.call('remixAI', 'setModel', model.id, model.provider)
+        trackMatomoEvent(plugin, {
+          category: 'ai', action: 'remixAI', name: 'audit_model_switch',
+          value: `${model.provider}::${model.id}`, isClick: true
+        })
+      } catch (e) {
+        // A failed switch must not swallow the audit — carry on with Auto.
+        trackMatomoEvent(plugin, {
+          category: 'ai', action: 'remixAI', name: 'audit_model_switch_failed',
+          value: `${model.provider}::${model.id}`, isClick: false
+        })
+      }
+    } else {
+      trackMatomoEvent(plugin, {
+        category: 'ai', action: 'remixAI', name: 'audit_model_keep_auto', value: 'auto', isClick: true
+      })
+    }
+    const which = pendingAudit
+    setPendingAudit(null)
+    setSwitchingModel(false)
+    if (which === 'new') await handleConfirmChecklist()
+    else if (which === 'existing') await runAuditExisting()
+  }
+
   const handleLoadSelected = () => {
     if (selectedCategories.size === 0) return
     // The contract names the folder, so it is required before anything is written.
@@ -487,7 +565,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
     // Audit mode has no confirm screen: the button already says what it will do
     // and names the contract, so a second screen restating it just adds a click.
     if (isAuditMode) {
-      handleConfirmChecklist()
+      void gateAudit('new', handleConfirmChecklist)
       return
     }
     setWizardStep('confirm')
@@ -615,7 +693,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
    * into the chat, then startAudit — so both routes produce the same run and
    * report. The only thing it skips is writing files that are already there.
    */
-  const handleAuditExisting = async () => {
+  const runAuditExisting = async () => {
     if (!plugin || !contractDir) return
     trackMatomoEvent(plugin, {
       category: 'ai',
@@ -640,6 +718,8 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   }
 
   const handleBack = () => {
+    setPendingAudit(null)
+    setModelChoices([])
     setWizardStep('browse')
     setError(null)
   }
@@ -691,7 +771,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   if (!isOpen) return null
 
   const showBackButton = wizardStep !== 'browse'
-  const isProcessing = saving
+  const isProcessing = saving || switchingModel
 
   return (
     <section data-id="checklist-explorer-modal-react" className="checklist-explorer-modal-background" style={{ zIndex: 8888 }}>
@@ -704,6 +784,9 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
               <button className="btn" onClick={handleBack} disabled={isProcessing}>
                 <i className="fa-solid fa-arrow-left"></i>
               </button>
+              {wizardStep === 'model' && (
+                <span className="text-body align-self-center">Choose the audit model</span>
+              )}
               {wizardStep === 'confirm' && (
                 <span className="text-body align-self-center">
                   Generate Audit Checklist
@@ -872,7 +955,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                         <button
                           data-id="checklist-explorer-audit-existing"
                           className="btn btn-sm btn-primary text-nowrap"
-                          onClick={handleAuditExisting}
+                          onClick={() => void gateAudit('existing', runAuditExisting)}
                           title={`Audit ${contractName} against the ${auditScopePaths.length} checklist${auditScopePaths.length === 1 ? '' : 's'} already saved in ${contractDir}/`}
                         >
                           <i className="fa-solid fa-shield-halved me-1"></i>
@@ -1046,6 +1129,52 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                 </>
               )}
             </>
+          )}
+
+          {/* Step 1b: pick a model (Auto only) */}
+          {wizardStep === 'model' && (
+            <div className="confirm-checklist-step">
+              <div className="d-flex flex-column align-items-center py-5">
+                <i className="fa-solid fa-microchip fa-3x mb-4 text-primary"></i>
+                <h3 className="mb-3">Choose the audit model</h3>
+                <div className="checklist-details mb-4 text-center">
+                  <p className="text-muted mb-4">
+                    You are on <strong>Auto</strong>, which often routes to a small model.
+                    An audit reasons over {selectedFileName || 'the contract'} against every
+                    checklist item at once — a frontier model catches noticeably more.
+                    Your pick becomes your model selection everywhere.
+                  </p>
+                  <div className="d-flex flex-column gap-2 align-items-stretch">
+                    {modelChoices.map(model => (
+                      <button
+                        key={`${model.provider}::${model.id}`}
+                        data-id={`audit-model-choice-${model.id}`}
+                        className="btn btn-primary d-flex justify-content-between align-items-center"
+                        onClick={() => handleAuditModelPick(model)}
+                        disabled={switchingModel}
+                      >
+                        <span>{model.displayName || model.id}</span>
+                        <span className="badge bg-light text-dark small ms-2">{model.provider}</span>
+                      </button>
+                    ))}
+                    <button
+                      data-id="audit-model-keep-auto"
+                      className="btn btn-secondary"
+                      onClick={() => handleAuditModelPick(null)}
+                      disabled={switchingModel}
+                    >
+                      Keep Auto
+                    </button>
+                  </div>
+                  {switchingModel && (
+                    <div className="text-muted small mt-3">
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Switching model and starting the audit...
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Step 2: Confirm */}

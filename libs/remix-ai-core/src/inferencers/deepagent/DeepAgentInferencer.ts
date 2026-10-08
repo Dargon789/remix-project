@@ -1051,7 +1051,7 @@ export class DeepAgentInferencer implements ICompletions, IGeneration {
       // Create agent configuration with selected tools
       // Cast tools and model to any to handle @langchain/core version mismatch between root and deepagents
       const mainAgentTool = this.tools.filter(tool =>
-        ['render_ui'].includes(tool.name)
+        ['render_ui', 'list_models', 'switch_model'].includes(tool.name)
       )
       const agentConfig: CreateDeepAgentParams = {
         backend: this.filesystemBackend as any,

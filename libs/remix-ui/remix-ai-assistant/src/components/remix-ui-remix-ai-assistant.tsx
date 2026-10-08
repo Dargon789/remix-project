@@ -6,6 +6,7 @@ import '../css/remix-ai-assistant.css'
 
 import { ChatCommandParser, GenerationParams, ChatHistory, HandleStreamResponse, AIModel, ANONYMOUS_FALLBACK_MODELS, remixAILogger, modelKey, parseModelKey, findModel, applyByokKeyPolicy, BYOK_API_KEY_SETTINGS, modelTransportProvider, onApiKeysChange, isAutoModelId, isCheapModel, type ModelTransport } from '@remix/remix-ai-core'
 import { ToolApprovalRequest, ApiKeyErrorEvent } from '@remix/remix-ai-core'
+import { isFrontierModelId } from '@remix/remix-ai-core/model-tiers'
 import { HandleOpenAICompatibleResponse, HandleOllamaResponse } from '@remix/remix-ai-core'
 //@ts-ignore
 import '../css/color.css'
@@ -92,20 +93,6 @@ const isQuickDappAgentName = (name?: string): boolean =>
 /** `Comprehensive_Auditor`, however the harness spells it. */
 const isAuditorAgentName = (name?: string): boolean =>
   !!name && name.toLowerCase().replace(/[_\s-]/g, '').includes('comprehensiveauditor')
-
-/**
- * Model tiers that hold up on a full audit.
- *
- * An audit asks the model to reason over a whole contract against dozens of
- * checklist items at once; the small routes Auto often lands on skim it. Kept
- * as a substring list rather than an exact catalogue so a new point release
- * (`claude-sonnet-4-6`, `gpt-5.1`) still matches without a code change.
- */
-const FRONTIER_MODEL_MARKERS = ['claude-opus', 'claude-sonnet', 'opus-', 'sonnet-', 'gpt-5', 'gpt-4o', 'gpt-4.1', 'o3-', 'o4-', 'gemini-2', 'gemini-1.5-pro']
-const isFrontierModelId = (id: string): boolean => {
-  const normalized = id.toLowerCase()
-  return FRONTIER_MODEL_MARKERS.some(marker => normalized.includes(marker))
-}
 
 /** Anthropic, direct or routed through OpenRouter (`anthropic/...`). */
 const isAnthropicModelId = (id: string): boolean => {
@@ -254,6 +241,14 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
   // low-cost model has actually been applied (the catalogue is refreshed
   // asynchronously after the purchase, so the switch can't happen inline).
   const [pendingCheapSwitch, setPendingCheapSwitch] = useState(false)
+  /**
+   * A switch_model request waiting for the current turn to end.
+   *
+   * The tool cannot apply the switch itself: ModelManager.setModel rebuilds the
+   * DeepAgent, which closes the very inferencer running the tool call. So the
+   * tool emits and we drain it here once the stream is done.
+   */
+  const [pendingModelSwitch, setPendingModelSwitch] = useState<{ modelId: string; provider?: string; displayName?: string; reason?: string } | null>(null)
   // Composer toggle: narrows the model menu to the `ai:cheapModels` tier.
   const [cheapModelsOnly, setCheapModelsOnly] = useState(false)
   // The armed-switch effect re-runs on every catalogue refresh; this keeps the
@@ -1368,6 +1363,12 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
     }
     props.plugin.on('remixAI', 'renderUI', handleRenderUI)
 
+    const handleModelSwitchRequested = (data: { modelId: string; provider?: string; displayName?: string; reason?: string }) => {
+      if (!data?.modelId) return
+      setPendingModelSwitch(data)
+    }
+    props.plugin.on('remixAI', 'modelSwitchRequested', handleModelSwitchRequested)
+
     return () => {
       props.plugin.off('remixAI', 'onStreamResult')
       props.plugin.off('remixAI', 'onStreamComplete')
@@ -1385,6 +1386,7 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
       props.plugin.off('remixAI', 'onToolApprovalRequired')
       props.plugin.off('remixAI', 'onDappUpdateCompleted')
       props.plugin.off('remixAI', 'renderUI')
+      props.plugin.off('remixAI', 'modelSwitchRequested')
       try { props.plugin.off('assistantState' as any, 'stateChanged') } catch { /* noop */ }
     }
   }, [props.plugin])
@@ -2483,6 +2485,35 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
       props.plugin.off('planManager' as any, 'purchaseConfirmed')
     }
   }, [props.plugin])
+
+  /**
+   * Drain a queued switch_model request once the turn is over.
+   *
+   * Waiting for `isStreaming` to clear is the whole point: applying it earlier
+   * rebuilds the DeepAgent and kills the answer in flight. Routed through
+   * handleModelSelection so the BYOK, locked-model and Matomo handling of a
+   * normal pick all apply.
+   */
+  useEffect(() => {
+    if (!pendingModelSwitch || isStreaming) return
+    const request = pendingModelSwitch
+    setPendingModelSwitch(null)
+
+    const model = findModel(availableModels, request.modelId, request.provider)
+    if (!model) return
+
+    void handleModelSelection(modelKey(model)).then(() => {
+      setChatNotice({
+        severity: 'info',
+        code: 'MODEL_SWITCHED_BY_AGENT',
+        title: `Switched to ${model.displayName}`,
+        message: request.reason
+          ? `${request.reason} Pick any other model from the selector whenever you want.`
+          : `The assistant switched models for the next message. Pick any other model from the selector whenever you want.`,
+        actionable: false
+      })
+    })
+  }, [pendingModelSwitch, isStreaming, availableModels, handleModelSelection])
 
   // Apply the armed switch as soon as the refreshed catalogue actually offers a
   // low-cost model, then tell the user what changed and why.
