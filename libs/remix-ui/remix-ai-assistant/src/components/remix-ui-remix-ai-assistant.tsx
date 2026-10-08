@@ -89,6 +89,24 @@ function getSystemThemeFallback(): string {
 const isQuickDappAgentName = (name?: string): boolean =>
   !!name && name.toLowerCase().replace(/[_\s-]/g, '').includes('quickdapp')
 
+/** `Comprehensive_Auditor`, however the harness spells it. */
+const isAuditorAgentName = (name?: string): boolean =>
+  !!name && name.toLowerCase().replace(/[_\s-]/g, '').includes('comprehensiveauditor')
+
+/**
+ * Model tiers that hold up on a full audit.
+ *
+ * An audit asks the model to reason over a whole contract against dozens of
+ * checklist items at once; the small routes Auto often lands on skim it. Kept
+ * as a substring list rather than an exact catalogue so a new point release
+ * (`claude-sonnet-4-6`, `gpt-5.1`) still matches without a code change.
+ */
+const FRONTIER_MODEL_MARKERS = ['claude-opus', 'claude-sonnet', 'opus-', 'sonnet-', 'gpt-5', 'gpt-4o', 'gpt-4.1', 'o3-', 'o4-', 'gemini-2', 'gemini-1.5-pro']
+const isFrontierModelId = (id: string): boolean => {
+  const normalized = id.toLowerCase()
+  return FRONTIER_MODEL_MARKERS.some(marker => normalized.includes(marker))
+}
+
 /** Anthropic, direct or routed through OpenRouter (`anthropic/...`). */
 const isAnthropicModelId = (id: string): boolean => {
   const normalized = id.toLowerCase()
@@ -145,6 +163,10 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
   const quickDappHintShownRef = useRef(false)
   // QuickDapp is running this request — the model often lands after it starts.
   const quickDappRunningRef = useRef(false)
+  // Same pair for the auditor: one hint per request, and the flag that says the
+  // audit is the thing running when the resolved model finally arrives.
+  const auditHintShownRef = useRef(false)
+  const auditRunningRef = useRef(false)
   const [showModelSelector, setShowModelSelector] = useState(false)
   // OpenRouter is the router every hosted model arrives on, so it is the only
   // sensible value before a selection resolves from /permissions.
@@ -413,6 +435,28 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
       code: 'QUICKDAPP_MODEL_HINT',
       title: 'Better on Anthropic',
       message: `Auto picked ${model}. QuickDapp works best with a Sonnet-class model.`,
+      actionable: false
+    })
+  }, [])
+
+  /**
+   * Mirrors hintQuickDappModel for audits.
+   *
+   * `runModelRef` is only populated while the user is on Auto (handleModelUsed
+   * bails otherwise), so reaching here already means Auto picked the route —
+   * we only speak up when what it picked is below frontier class.
+   */
+  const hintAuditModel = useCallback(() => {
+    const model = runModelRef.current
+    if (!auditRunningRef.current || auditHintShownRef.current) return
+    if (!model || isFrontierModelId(model)) return
+
+    auditHintShownRef.current = true
+    setChatNotice({
+      severity: 'info',
+      code: 'AUDIT_MODEL_HINT',
+      title: 'Better on a frontier model',
+      message: `Auto picked ${model}. Audits reason over a whole contract against every checklist item — a frontier model (Claude Opus/Sonnet, GPT-5, GLM 5) catches noticeably more.`,
       actionable: false
     })
   }, [])
@@ -893,6 +937,10 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
         quickDappRunningRef.current = true
         hintQuickDappModel()
       }
+      if (isAuditorAgentName(data.name)) {
+        auditRunningRef.current = true
+        hintAuditModel()
+      }
       if (streamingAssistantIdRef.current) {
         setMessages(prev =>
           prev.map(m =>
@@ -950,6 +998,7 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
       // that started first sees the model immediately.
       runModelRef.current = data?.model || null
       hintQuickDappModel()
+      hintAuditModel()
     }
 
     // Handle thinking events from Ollama (DeepAgent path)
@@ -1863,6 +1912,8 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
       setRunModel(null)
       quickDappHintShownRef.current = false
       quickDappRunningRef.current = false
+      auditHintShownRef.current = false
+      auditRunningRef.current = false
       // Reset the per-turn "stream consumed" flag — it gates the
       // post-await duplicate-bubble guard further down.
       streamConsumedThisTurnRef.current = false
