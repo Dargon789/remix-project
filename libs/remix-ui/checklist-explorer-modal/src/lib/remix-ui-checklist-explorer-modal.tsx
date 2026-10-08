@@ -5,7 +5,6 @@ import {
   categoryFileToken,
   deriveContractName,
   computeLoadedCategories,
-  renderAudienceOptions,
   AuditMatch,
   AuditMatchResult
 } from '@remix/remix-ai-core/audit-taxonomy'
@@ -500,16 +499,12 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
     return `run-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
   }
 
-  const auditInstruction = (checklistLabels: string, runId: string): string => {
-    const runDir = `audit_reports/${contractName}/${runId}`
-    return `Audit the contract ${contractName} in ${matchTarget} against every checklist file in ${contractDir}/ (${checklistLabels}) using the Comprehensive_Auditor agent. `
-      + `\nThe contract and its checklists are already chosen — do not ask me which contract to audit or which checklists to use. `
-      + `\nThis is one audit run: write everything under ${runDir}/ and nothing outside it. `
-      + `\nOne report per checklist at ${runDir}/<checklist>_security_audit_report.md, then the condensed ${runDir}/summary.md. `
-      + `\nDo not touch or overwrite earlier run folders under audit_reports/${contractName}/.`
-      + `\n\nWhen the report is finished, do not stop at the summary: ask me whether I want the same findings rewritten for a specific audience, and offer the choices with render_ui as a radio_group (plus a "No thanks" option) so I can pick in one click. Offer at least these audiences: ${renderAudienceOptions()}. `
-      + `\nIf I pick one, derive it from the report you just wrote — do not re-run the audit — and save it as ${runDir}/summary_<audience>.md, keeping the same findings and severities but changing depth, vocabulary and emphasis for that reader.`
-  }
+  const auditInstruction = (checklistLabels: string, runId: string): string =>
+    `Use the Comprehensive_Auditor subagent to audit this contract, passing it these values verbatim:\n`
+    + `\nCONTRACT: ${contractName}\n`
+    + `\nFILE: ${matchTarget}\n`
+    + `\nCHECKLISTS: ${contractDir}/ (${checklistLabels})\n`
+    + `\nRUN: ${runId}`
 
   const handleConfirmChecklist = async () => {
     if (!plugin) {

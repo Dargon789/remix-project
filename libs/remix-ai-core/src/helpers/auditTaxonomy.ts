@@ -334,6 +334,8 @@ export interface AuditReportAudience {
   label: string
   /** What changes for this reader — keeps a rewrite from being a retitle. */
   focus: string
+  /** Filename stem, so the model is never left to invent one. */
+  slug: string
 }
 
 /**
@@ -345,21 +347,26 @@ export interface AuditReportAudience {
  * instruction and the auditor subagent prompt so the two can never drift.
  */
 export const AUDIT_REPORT_AUDIENCES: AuditReportAudience[] = [
-  { label: 'Beginners', focus: 'plain language, every term explained, why each issue matters' },
-  { label: 'Decision makers', focus: 'risk posture, business impact, cost of fixing vs not, clear go/no-go' },
-  { label: 'Project managers', focus: 'work breakdown, effort estimates, dependencies and suggested sequencing' },
-  { label: 'Developers', focus: 'exact files and lines, concrete patches, tests to add' },
-  { label: 'Investors / due diligence', focus: 'overall risk rating, red flags, comparison against common standards' },
-  { label: 'End users / community', focus: 'short public-facing note on what was checked and what it means for funds' },
-  { label: 'Compliance / risk officers', focus: 'controls coverage, residual risk, evidence trail and sign-off checklist' }
+  { label: 'Beginners', slug: 'beginners', focus: 'plain language, every term explained, why each issue matters' },
+  { label: 'Decision makers', slug: 'decision_makers', focus: 'risk posture, business impact, cost of fixing vs not, clear go/no-go' },
+  { label: 'Project managers', slug: 'project_managers', focus: 'work breakdown, effort estimates, dependencies and suggested sequencing' },
+  { label: 'Developers', slug: 'developers', focus: 'exact files and lines, concrete patches, tests to add' },
+  { label: 'Investors / due diligence', slug: 'investors', focus: 'overall risk rating, red flags, comparison against common standards' },
+  { label: 'End users / community', slug: 'end_users', focus: 'short public-facing note on what was checked and what it means for funds' },
+  { label: 'Compliance / risk officers', slug: 'compliance', focus: 'controls coverage, residual risk, evidence trail and sign-off checklist' }
 ]
-
-/** `"Beginners (plain language …); Decision makers (…)"` — for prompt text. */
-export function renderAudienceOptions(audiences: AuditReportAudience[] = AUDIT_REPORT_AUDIENCES): string {
-  return audiences.map(a => `${a.label} (${a.focus})`).join('; ')
-}
 
 /** `"Beginners, Decision makers, …"` — labels only, where focus would bloat. */
 export function renderAudienceLabels(audiences: AuditReportAudience[] = AUDIT_REPORT_AUDIENCES): string {
   return audiences.map(a => a.label).join(', ')
+}
+
+/**
+ * `"Project managers -> summary_project_managers.md (work breakdown, …)"`.
+ *
+ * Pairs each choice with the exact filename and what to emphasise, so the model
+ * has nothing left to invent and cannot answer "the existing summary covers it".
+ */
+export function renderAudienceTargets(audiences: AuditReportAudience[] = AUDIT_REPORT_AUDIENCES): string {
+  return audiences.map(a => `${a.label} -> summary_${a.slug}.md (${a.focus})`).join('; ')
 }
