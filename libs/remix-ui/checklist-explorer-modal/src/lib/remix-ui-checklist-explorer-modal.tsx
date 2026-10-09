@@ -8,7 +8,7 @@ import {
   AuditMatch,
   AuditMatchResult
 } from '@remix/remix-ai-core/audit-taxonomy'
-import { frontierAlternativesFor } from '@remix/remix-ai-core/model-tiers'
+import { frontierAlternativesFor, frontierFamilyOf } from '@remix/remix-ai-core/model-tiers'
 import {
   ChecklistItem,
   ChecklistCategory,
@@ -1154,7 +1154,7 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
                         disabled={switchingModel}
                       >
                         <span>{model.displayName || model.id}</span>
-                        <span className="badge bg-light text-dark small ms-2">{model.provider}</span>
+                        <span className="badge bg-light text-dark small ms-2">{frontierFamilyOf(model.id) || model.provider}</span>
                       </button>
                     ))}
                     <button

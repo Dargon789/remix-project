@@ -2489,10 +2489,6 @@ export const RemixUiRemixAiAssistant = React.forwardRef<
   /**
    * Drain a queued switch_model request once the turn is over.
    *
-   * Waiting for `isStreaming` to clear is the whole point: applying it earlier
-   * rebuilds the DeepAgent and kills the answer in flight. Routed through
-   * handleModelSelection so the BYOK, locked-model and Matomo handling of a
-   * normal pick all apply.
    */
   useEffect(() => {
     if (!pendingModelSwitch || isStreaming) return
