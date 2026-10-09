@@ -227,7 +227,7 @@ function RenderNode({
           defaultChecked={node.defaultChecked}
           onChange={e => onChange?.(node.name, e.target.checked)}
         />
-        <label htmlFor={`chk-${node.name}`} className="form-check-label small">{node.label}</label>
+        <label htmlFor={`chk-${node.name}`} className="form-check-label small">{node.label || node.name}</label>
       </div>
     )
   }

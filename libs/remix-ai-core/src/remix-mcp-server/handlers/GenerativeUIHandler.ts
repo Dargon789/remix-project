@@ -146,7 +146,7 @@ const UI_NODE_SCHEMA = {
     // card
     title:       { type: 'string' },
     // button / form
-    label:       { type: 'string' },
+    label:       { type: 'string', description: 'Visible text. Required for: button (button text), checkbox (text shown beside the box), input (field label), select (dropdown label), radio_group (group heading).' },
     action:      { type: 'string' },
     style:       { type: 'string', enum: ['primary', 'secondary', 'danger']},
     disabled:    { type: 'boolean' },
