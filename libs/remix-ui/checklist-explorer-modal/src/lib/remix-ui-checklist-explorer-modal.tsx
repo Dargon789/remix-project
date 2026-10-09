@@ -798,70 +798,106 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
               )}
             </div>
           ) : (
-            <div className="d-flex flex-row gap-2 w-100 mx-3 my-2">
-              <input
-                type="text"
-                data-id="checklist-explorer-search-input"
-                placeholder="Search audit items..."
-                className="form-control checklist-explorer-modal-search-input ps-5 fw-light"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              {solCandidates.length > 0 && (
-                <div
-                  className={`ai-match-target align-self-center${highlightTarget ? ' needs-contract' : ''}`}
-                  style={{ width: '13rem' }}
-                >
-                  <select
-                    data-id="checklist-explorer-ai-match-target"
-                    className="form-select"
-                    value={matchTarget}
-                    onChange={(e) => { setMatchTarget(e.target.value); setHighlightTarget(false) }}
-                    onFocus={() => setHighlightTarget(false)}
-                    disabled={matching}
-                    title={matchTarget
-                      ? `Checklists will be saved in ${contractDir}/, and AI match runs against ${matchTarget}. Pick another file to change the contract.`
-                      : 'Select the contract to save the checklists for'}
-                    aria-label="Select the contract to save the checklists for"
+            <div className="d-flex flex-column gap-2 w-100 mx-3 my-2">
+              {/* Row 1 — search. It filters the checklist below and nothing
+                  else, so it owns its own row: sharing one with the contract
+                  picker made the picker read as a search scope. */}
+              <div className="checklist-explorer-search">
+                <i className="fa-solid fa-magnifying-glass checklist-explorer-search-icon" aria-hidden="true"></i>
+                <input
+                  type="text"
+                  data-id="checklist-explorer-search-input"
+                  placeholder="Search audit items..."
+                  className="form-control checklist-explorer-modal-search-input ps-5 fw-light"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    data-id="checklist-explorer-search-clear"
+                    className="checklist-explorer-search-clear"
+                    onClick={() => setSearchTerm('')}
+                    title="Clear search"
+                    aria-label="Clear search"
                   >
-                    <option value="" disabled>Select a contract…</option>
-                    {solCandidates.map(file => (
-                      <option key={file} value={file} title={file}>
-                        {candidateLabel(file, solCandidates)}{file === currentSolFile ? ' (current)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <i className="fa-solid fa-caret-down ai-match-target-caret" aria-hidden="true"></i>
-                </div>
-              )}
-              <button
-                data-id="checklist-explorer-ai-match"
-                className="btn btn-sm btn-primary text-nowrap align-self-center"
-                onClick={handleAiMatch}
-                disabled={matching || loading || !!error || !matchTarget}
-                title={matchTarget
-                  ? `Let AI preselect categories for ${matchTarget.split('/').pop()}`
-                  : solCandidates.length > 0
-                    ? 'Select a Solidity file first to use AI match'
-                    : 'Open a Solidity file in the workspace to use AI match'}
-              >
-                {matching ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    {matchSlow ? 'Still working…' : 'Matching…'}
-                  </>
-                ) : (
-                  <>
-                    <i className="fa-solid fa-wand-magic-sparkles me-1"></i>
-                    AI match
-                  </>
+                    <i className="fa-solid fa-xmark" aria-hidden="true"></i>
+                  </button>
                 )}
-              </button>
+              </div>
+
+              {/* Row 2 — the contract the checklists are saved for and that AI
+                  match runs against. Bonded into one labelled cluster so the
+                  dropdown reads as the button's target, not a search filter. */}
+              <div className="checklist-explorer-target-bar d-flex flex-row align-items-center gap-2">
+                <span className="checklist-explorer-target-label text-nowrap">
+                  <i className="fa-solid fa-file-code me-1" aria-hidden="true"></i>
+                  Contract
+                </span>
+                {solCandidates.length > 0 && (
+                  <div
+                    className={`ai-match-target align-self-center${highlightTarget ? ' needs-contract' : ''}`}
+                    style={{ width: '13rem' }}
+                  >
+                    <select
+                      data-id="checklist-explorer-ai-match-target"
+                      className="form-select"
+                      value={matchTarget}
+                      onChange={(e) => { setMatchTarget(e.target.value); setHighlightTarget(false) }}
+                      onFocus={() => setHighlightTarget(false)}
+                      disabled={matching}
+                      title={matchTarget
+                        ? `Checklists will be saved in ${contractDir}/, and AI match runs against ${matchTarget}. Pick another file to change the contract.`
+                        : 'Select the contract to save the checklists for'}
+                      aria-label="Select the contract to save the checklists for"
+                    >
+                      <option value="" disabled>Select a contract…</option>
+                      {solCandidates.map(file => (
+                        <option key={file} value={file} title={file}>
+                          {candidateLabel(file, solCandidates)}{file === currentSolFile ? ' (current)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <i className="fa-solid fa-caret-down ai-match-target-caret" aria-hidden="true"></i>
+                  </div>
+                )}
+                <button
+                  data-id="checklist-explorer-ai-match"
+                  className="btn btn-sm btn-primary text-nowrap align-self-center"
+                  onClick={handleAiMatch}
+                  disabled={matching || loading || !!error || !matchTarget}
+                  title={matchTarget
+                    ? `Let AI preselect categories for ${matchTarget.split('/').pop()}`
+                    : solCandidates.length > 0
+                      ? 'Select a Solidity file first to use AI match'
+                      : 'Open a Solidity file in the workspace to use AI match'}
+                >
+                  {matching ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      {matchSlow ? 'Still working…' : 'Matching…'}
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-wand-magic-sparkles me-1"></i>
+                      AI match
+                    </>
+                  )}
+                </button>
+                {matchTarget && (
+                  <span
+                    className="checklist-explorer-target-hint text-truncate"
+                    title={`Checklists will be saved in ${contractDir}/`}
+                  >
+                    saved in {contractDir}/
+                  </span>
+                )}
+              </div>
             </div>
           )}
           <button
             data-id="checklist-explorer-modal-close-button"
-            className="checklist-explorer-modal-close-button"
+            className={`checklist-explorer-modal-close-button${showBackButton ? '' : ' align-self-start mt-2'}`}
             onClick={onClose}
             disabled={isProcessing}
           >
