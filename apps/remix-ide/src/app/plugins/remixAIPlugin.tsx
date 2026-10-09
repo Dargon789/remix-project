@@ -7,7 +7,7 @@ import { MCPInferencer, DeepAgentInferencer, onApiKeysChange, DeepAgentErrorType
 import { IMCPServer, IMCPConnectionStatus } from '@remix/remix-ai-core';
 import { RemixMCPServer, createRemixMCPServer } from '@remix/remix-ai-core';
 import { AIModel, isBedrockModel, BEDROCK_API_KEY_SETTING } from '@remix/remix-ai-core';
-import { aiErrorFromException, parseAIErrorEnvelope } from '@remix/remix-ai-core';
+import { aiErrorFromException, parseAIErrorEnvelope, isInsufficientCreditsError, type AIError } from '@remix/remix-ai-core';
 import { buildAuditMatchSchema, buildAuditMatchPrompt, filterAuditMatches, parseLooseJson, AUDIT_CATEGORY_MATCH_PROMPT } from '@remix/remix-ai-core';
 import type { AuditMatchRequest, AuditMatchResult } from '@remix/remix-ai-core';
 import axios from 'axios';
@@ -649,6 +649,8 @@ export class RemixAIPlugin extends Plugin {
         ? parseAIErrorEnvelope(responseBody, status)
         : aiErrorFromException(e)
       try { await this.call('assistantState' as any, 'reportError', aiError) } catch { /* noop */ }
+      // Inline completion fires per keystroke — never pop the panel from it.
+      if (feature !== Features.AI_COMPLETION) void this.openTopUpOnCreditError(aiError)
       // Stamp the parsed envelope on the thrown error so the UI catch
       // block (and any other consumer) doesn't need to re-parse the raw
       // response. Critical for inferencer paths that throw plain Errors
@@ -674,8 +676,21 @@ export class RemixAIPlugin extends Plugin {
     option.stream = false
     option.stream_result = false
     option.return_stream_response = false
-    // return await this.remoteInferencer.basic_prompt(prompt, option)
-    return this.deepAgentInferencer?.basic_inference(prompt) ?? this.remoteInferencer.basic_prompt(prompt, option)
+    try {
+      return await (this.deepAgentInferencer?.basic_inference(prompt) ?? this.remoteInferencer.basic_prompt(prompt, option))
+    } catch (e) {
+      void this.openTopUpOnCreditError(aiErrorFromException(e))
+      throw e
+    }
+  }
+
+  private async openTopUpOnCreditError(aiError: AIError): Promise<void> {
+    if (!isInsufficientCreditsError(aiError)) return
+    try {
+      await this.call('planManager' as any, 'open', { reason: 'quota-exhausted', initialSection: 'topup' })
+    } catch (e) {
+      remixAILogger.warn('[RemixAI Plugin] failed to open planManager for credit error', e)
+    }
   }
 
   /**
