@@ -46,8 +46,8 @@ import { InactivityTimeoutManager } from './InactivityTimeoutManager'
 import { CONVERSATION_THREAD_PREFIX, DAPP_MAX_TOKENS } from '@remix/remix-ai-core'
 import { Features } from '@remix-api'
 import { flattenJSON, renderTree, toAbsolutePath } from './helpers/project'
-import { clearAllQuickDappWorkspaceLocks } from '@remix-ui/helper'
-import { clearAllQuickDappGenerationContexts } from '../../helpers/quickDappGenerationContext'
+import { finishQuickDappWorkspaceLock, onQuickDappWorkspaceLockCreated, QuickDappWorkspaceLock } from '@remix-ui/helper'
+import { clearQuickDappGenerationContext } from '../../helpers/quickDappGenerationContext'
 import { clearQuickDappDocsContext } from '../../helpers/quickDappDocsContext'
 
 /**
@@ -69,6 +69,7 @@ export class DeepAgentInferencer implements ICompletions, IGeneration {
   private tools: DynamicStructuredTool[] = []
   private approvalGate: ToolApprovalGate | undefined
   private currentAbortController: AbortController | null = null
+  private quickDappLock: QuickDappWorkspaceLock | undefined
   /** Model-independent agent pieces, built once and reused across model swaps. */
   private checkpointer: IndexedDBCheckpointSaver | null = null
   private hasSkillsPermission: boolean | null = null
@@ -670,6 +671,15 @@ export class DeepAgentInferencer implements ICompletions, IGeneration {
     const localAbortController = new AbortController()
     thisRunControllers.add(localAbortController)
     this.currentAbortController = localAbortController
+    this.quickDappLock = undefined
+    let runLock: QuickDappWorkspaceLock | undefined
+    const stopTrackingLock = onQuickDappWorkspaceLockCreated(lock => {
+      // Reinitialized/closed inferencers must not claim a new instance's work.
+      if (!this.__closed && this.currentAbortController && thisRunControllers.has(this.currentAbortController) && lock.operation !== 'publish') {
+        runLock = lock
+        this.quickDappLock = lock
+      }
+    })
     let fullResponse = ''
 
     const runTimeoutMs = this.config.timeout
@@ -942,6 +952,7 @@ export class DeepAgentInferencer implements ICompletions, IGeneration {
 
       throw error
     } finally {
+      stopTrackingLock()
       stallTimeout.clear()
       clearQuickDappDocsContext()
       // Best-effort trace delivery: the SDK drains only a slice of its queue
@@ -951,6 +962,18 @@ export class DeepAgentInferencer implements ICompletions, IGeneration {
       // Only null out if still one of this run's controllers (a new request might have started)
       if (this.currentAbortController && thisRunControllers.has(this.currentAbortController)) {
         this.currentAbortController = null
+      }
+      if (runLock) {
+        const lock = runLock
+        finishQuickDappWorkspaceLock(lock, () => {
+          clearQuickDappGenerationContext(lock.workspaceName)
+          this.plugin.emit('dappGenerationError', {
+            workspaceName: lock.workspaceName,
+            slug: lock.slug,
+            isUpdate: lock.operation === 'update',
+            error: 'AI stopped before the DApp was finalized. Your files have been kept; you can retry from RemixAI.'
+          })
+        })
       }
       this.event.emit('onToolCall', { toolName: '', toolInput: '', toolUIString: '', status: 'end', threadId: this.sessionThreadId })
     }
@@ -1236,11 +1259,15 @@ export class DeepAgentInferencer implements ICompletions, IGeneration {
     this.event.emit('onInferenceDone')
 
     try {
-      clearAllQuickDappWorkspaceLocks()
-      clearAllQuickDappGenerationContexts()
+      const lock = this.quickDappLock
+      if (lock) {
+        finishQuickDappWorkspaceLock(lock, () => {
+          clearQuickDappGenerationContext(lock.workspaceName)
+          this.plugin.emit('generationProgress', null)
+        })
+      }
       clearQuickDappDocsContext()
-      remixAILogger.log('[QuickDapp][WorkspaceLock] cleared on AI cancel')
-      this.plugin.emit('generationProgress', null)
+      remixAILogger.log('[QuickDapp][WorkspaceLock] cleanup requested on AI cancel')
     } catch (_) { /* best-effort cleanup */ }
   }
 
