@@ -675,9 +675,10 @@ export function RemixUiChecklistExplorerModal(props: RemixUiChecklistExplorerMod
   const startAudit = (instruction: string) => {
     onClose()
     Promise.resolve(
-      plugin?.call('remixaiassistant', 'chatPipe', instruction, true, {
+      plugin?.call('remixaiassistant', 'chatPipe', instruction, false, {
         source: 'checklist-explorer',
-        presetId: 'audit-contract'
+        presetId: 'audit-contract',
+        displayText: `Auditing \`${contractName}\` (${matchTarget}) with ${auditScopeLabels.length} checklist${auditScopeLabels.length === 1 ? '' : 's'} (${auditScopeLabels.join(', ')})...`
       })
     ).catch(() => {
       // assistant plugin unavailable — modal is already closed
