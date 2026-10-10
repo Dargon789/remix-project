@@ -25,7 +25,6 @@ const txHelper = remixLib.execution.txHelper
 const txFormat = remixLib.execution.txFormat
 const highlightedContracts = new Set<string>()
 
-
 const REMIX_VM_DAPP_WORKSPACE_MESSAGE = 'Creating another DApp from a DApp workspace is not supported with Remix VM. Switch to a persistent network, deploy the contract there, and try again.'
 interface DeployedContractItemProps {
   contract: DeployedContract
@@ -308,6 +307,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
     trackMatomoEvent?.({ category: 'udapp', action: 'autoFillWithAI', name: 'deployedContract', isClick: true })
     const funcABI = functionABIs[funcIndex]
     if (!funcABI || !funcABI.inputs || funcABI.inputs.length === 0) return
+    if (!(await plugin.call('planManager' as any, 'requireAICredits' as any))) return
 
     const devdoc = contract.contractData?.devdoc || contract.contractData?.object?.devdoc
     const userdoc = contract.contractData?.userdoc || contract.contractData?.object?.userdoc
@@ -316,7 +316,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
     const paramLines = funcABI.inputs.map((input: any, i: number) =>
       `  ${i + 1}. ${input.name || `param${i}`}: ${input.type}`
     ).join('\n')
-    let prompt = `Generate one random but realistic example value per parameter and return them as a JSON array with exactly ${n} element(s).\n\nRules:\n- The outer array must have exactly ${n} element(s) — one per parameter, in order\n- For Solidity array types (e.g. bytes32[], uint256[], address[]) the element must itself be a JSON array (e.g. for bytes32[] use ["0xaaa...","0xbbb..."])\n- For tuple/struct types use a JSON object\n- For simple scalar types (address, uint256, bool, string, bytes32 …) use a plain value\n\nFunction: ${funcABI.name}\nParameters (${n} total):\n${paramLines}\n\nReturn ONLY the raw JSON array. No explanation, no markdown.`
+    let prompt = `Generate one random but realistic example value per parameter and return them as a JSON array with exactly ${n} element(s).\n\nRules:\n- The outer array must have exactly ${n} element(s) — one per parameter, in order\n- For Solidity array types (e.g. bytes32[], uint256[], address[]) the element must itself be a JSON array (e.g. for bytes32[] use ["0xaaa...","0xbbb..."])\n- For tuple/struct types use a JSON array holding one value per struct member, in declaration order (e.g. for a struct {address p; uint k;} use ["0xAddress...", 123]). Do NOT use a JSON object with named keys.\n- For arrays of tuples/structs (tuple[]) use a JSON array of such arrays (e.g. [["0xAddress...", 123], ["0xOther...", 456]])\n- For simple scalar types (address, uint256, bool, string, bytes32 …) use a plain value\n\nFunction: ${funcABI.name}\nParameters (${n} total):\n${paramLines}\n\nReturn ONLY the raw JSON array. No explanation, no markdown.`
     if (devdoc && Object.keys(devdoc).length > 0) {
       prompt += `\n\nNatSpec devdoc:\n${JSON.stringify(devdoc, null, 2)}`
     }
@@ -347,6 +347,7 @@ export function DeployedContractItem({ contract, index, registerRef, isKebabMenu
       })
     } catch (e) {
       console.error('Auto fill with AI failed:', e)
+      plugin.call('notification', 'toast', `Auto-fill with AI failed: ${e?.message || e}`)
     } finally {
       setAutoFillingFuncIndex(null)
     }
