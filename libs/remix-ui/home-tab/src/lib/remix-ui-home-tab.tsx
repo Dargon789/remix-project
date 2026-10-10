@@ -118,7 +118,9 @@ contract HelloWorld {
 
   const openAuditsSelection = async () => {
     if (!hasAuditorPermission) { plugin.call('planManager', 'open', { reason: 'feature-required', requiredFeature: Features.AI_AUDITOR }) } else {
-      appContext.appStateDispatch({ type: appActionTypes.showChecklistModal, payload: true })
+      // "Explore Audits" mirrors "Explore Skills": browse and save checklists,
+      // without starting an audit run.
+      appContext.appStateDispatch({ type: appActionTypes.showChecklistModal, payload: 'checklist' })
       trackMatomoEvent({ category: 'hometab', action: 'header', name: 'Explore Audits', isClick: true })
     }
   }
@@ -163,7 +165,7 @@ contract HelloWorld {
             </div>
 
             {/* Start */}
-            <div className="ht-section">
+            <div className="ht-section pb-0">
               <div className="ht-section-header">
                 <span className="ht-section-title"><FormattedMessage id="home.start" defaultMessage="Start" /></span>
               </div>
@@ -178,7 +180,7 @@ contract HelloWorld {
                 <span className="ht-cta-secondary-icon"><i className="fa-solid fa-play"></i></span>
                 <span className="ht-cta-secondary-text">
                   <strong><FormattedMessage id="home.startCoding" defaultMessage="Start coding" /></strong>
-                  <span>Open a blank Playground workspace</span>
+                  <span>Open a Playground workspace</span>
                 </span>
               </button>
               <button className="ht-cta-secondary" onClick={startLearnEth}>
@@ -191,7 +193,7 @@ contract HelloWorld {
             </div>
 
             {/* Open */}
-            <div className="ht-section">
+            <div className="ht-section pb-0">
               <div className="ht-section-header">
                 <span className="ht-section-title"><FormattedMessage id="home.open" defaultMessage="Open" /></span>
               </div>
@@ -225,7 +227,7 @@ contract HelloWorld {
             </div>
 
             {/* Desktop download */}
-            <div className="ht-section">
+            <div className="ht-section pb-0">
               <div className="ht-section-header">
                 <span className="ht-section-title"><FormattedMessage id="home.desktop" defaultMessage="Desktop App" /></span>
               </div>
@@ -239,7 +241,7 @@ contract HelloWorld {
             </div>
 
             {/* AI */}
-            <div className="ht-section">
+            <div className="ht-section pb-0">
               <div className="ht-section-header">
                 <span className="ht-section-title">AI</span>
               </div>
@@ -267,7 +269,7 @@ contract HelloWorld {
             </div>
 
             {/* Terms and conditions */}
-            <div className="ht-section">
+            <div className="ht-section pb-0">
               <a href="https://remix.live/termsandconditions" target="_blank" rel="noreferrer" className="ht-terms-link">
                 <FormattedMessage id="home.termsAndConditions" defaultMessage="Terms and Conditions" />
               </a>

@@ -1505,6 +1505,29 @@ body.light .message-copy-btn:hover {
    Fixed above the prompt area, never scrolls with chat.
    -------------------------------------------------------- */
 
+.ai-thinking-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 0 8px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+  flex-shrink: 0;
+  color: var(--bs-body-color);
+  background: color-mix(in srgb, var(--custom-ai-color) 10%, var(--bs-body-bg));
+  border: 1px solid color-mix(in srgb, var(--custom-ai-color) 25%, var(--bs-body-bg));
+}
+
+.ai-thinking-banner__icon {
+  color: var(--custom-ai-color);
+}
+
+.ai-thinking-banner__text {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
 .hitl-auto-accept-banner {
   display: flex;
   align-items: center;
@@ -1535,6 +1558,45 @@ body.light .message-copy-btn:hover {
 
 .hitl-auto-accept-banner__btn:hover {
   background: color-mix(in srgb, var(--bs-body-color) 8%, transparent);
+}
+
+/* --------------------------------------------------------
+   "Using <model>" strip — same geometry as the auto-accept
+   banner above it so the two stack as one column.
+
+   The banner and this line hang off different parents, and
+   this one's parent paints a lighter strip: the full-bleed
+   row covers it with the panel background so only the inner
+   rounded box shows.
+   -------------------------------------------------------- */
+
+.rai-panel-strip {
+  background: var(--bs-body-bg);
+  flex-shrink: 0;
+}
+
+.rai-run-model {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  margin: 0 8px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+  min-width: 0;
+  color: var(--bs-success);
+  background: color-mix(in srgb, var(--bs-success) 10%, var(--bs-body-bg));
+  border: 1px solid color-mix(in srgb, var(--bs-success) 22%, var(--bs-body-bg));
+}
+
+.rai-run-model__icon {
+  font-size: 0.7rem;
+  margin-right: 6px;
+}
+
+.rai-run-model__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --------------------------------------------------------
@@ -1719,4 +1781,299 @@ code {
 
 .ai-assistant-prompt-flat::before {
   display: none !important;
+}
+
+/* ===== Dark-themed AI model / provider selector ===== */
+.remix-ai-model-selector {
+  background-color: #1b1c2b !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  color: #e7e8f0;
+}
+
+.remix-ai-model-selector .rai-selector-heading {
+  color: #9b9db4;
+  letter-spacing: 0.04em;
+}
+
+/* Sticky search bar */
+.remix-ai-model-selector .rai-search-bar {
+  background-color: #1b1c2b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.remix-ai-model-selector .form-control {
+  background-color: #26273a;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e7e8f0;
+}
+.remix-ai-model-selector .form-control:focus {
+  background-color: #26273a;
+  color: #e7e8f0;
+  border-color: var(--custom-ai-color);
+  box-shadow: none;
+}
+.remix-ai-model-selector .form-control::placeholder { color: #797b95; }
+
+/* Provider headers and model rows are GroupListMenu's .btn.btn-light */
+.remix-ai-model-selector .btn-light {
+  background-color: transparent !important;
+  color: #e7e8f0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+.remix-ai-model-selector .btn-light:hover,
+.remix-ai-model-selector .btn-light:focus {
+  background-color: #2a2b40 !important;
+}
+.remix-ai-model-selector .btn-light:disabled { opacity: 1; }
+
+.remix-ai-model-selector .text-muted { color: #9b9db4 !important; }
+.remix-ai-model-selector .text-primary { color: var(--custom-ai-color) !important; }
+.remix-ai-model-selector .badge.bg-secondary {
+  background-color: #34364e !important;
+  color: #c9cbe0 !important;
+}
+
+/* One card per provider, separated by a divider */
+.remix-ai-model-selector .rai-provider-group {
+  border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Provider header that owns the currently active model */
+.remix-ai-model-selector [data-owns-selection="true"] {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: inset 3px 0 0 var(--custom-ai-color);
+}
+
+/* The menu body scrolls only as a safety net (many providers on a short
+   panel); its scrollbar is hidden so the sole visible one belongs to the open
+   provider's model list below. */
+.remix-ai-model-selector .rai-model-scroll {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.remix-ai-model-selector .rai-model-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Nesting guide: models sit indented under their provider with a connector
+   line + inset surface, making the provider→models relationship obvious. */
+.remix-ai-model-selector .rai-model-list {
+  margin-left: 1.4rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: rgba(0, 0, 0, 0.18);
+  /* Capped at 6 rows by ProviderModelList; the nested scrollbar stays slim so
+     it reads as the model list's own, distinct from the popover's. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.remix-ai-model-selector .rai-model-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.remix-ai-model-selector .rai-model-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.remix-ai-model-selector .rai-model-list::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+}
+
+.remix-ai-model-selector .rai-model-list::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.35);
+}
+
+/* Selected model row */
+.remix-ai-model-selector [data-selected="true"] {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: inset 3px 0 0 var(--custom-ai-color);
+}
+
+/* "Auto Mode": the first entry of the model list, at the same level as the
+   provider headers. Sticky so it stays put while the list scrolls, and tinted
+   with the theme accent so it reads as the recommended choice. */
+.remix-ai-model-selector .rai-auto-row {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  border-bottom: 1px solid var(--custom-ai-color) !important;
+  box-shadow: inset 3px 0 0 var(--custom-ai-color);
+  background-color: #1b1c2b;
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--custom-ai-color) 22%, transparent),
+    color-mix(in srgb, var(--custom-ai-color) 6%, transparent)
+  );
+  transition: background-image 0.15s ease;
+}
+
+.remix-ai-model-selector .rai-auto-row:hover,
+.remix-ai-model-selector .rai-auto-row:focus {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--custom-ai-color) 36%, transparent),
+    color-mix(in srgb, var(--custom-ai-color) 14%, transparent)
+  );
+}
+
+.remix-ai-model-selector .rai-auto-icon {
+  color: var(--custom-ai-color);
+}
+
+.remix-ai-model-selector .rai-auto-title {
+  color: var(--custom-ai-color);
+}
+
+.remix-ai-model-selector .rai-auto-subtitle {
+  color: rgba(231, 232, 240, 0.7);
+}
+
+.remix-ai-model-selector .rai-auto-badge {
+  background-color: color-mix(in srgb, var(--custom-ai-color) 18%, transparent);
+  border: 1px solid var(--custom-ai-color);
+  color: var(--custom-ai-color);
+  font-size: 0.6rem;
+  padding: 1px 6px;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------
+   AI mode (chat maximized into the center panel)
+   Root is a row: [.ai-chat-main] [history sidebar].
+   -------------------------------------------------------- */
+
+/* One background for the whole chat (both modes): .ai-chat-main
+   gets .ai-assistant-bg for an empty chat and its ::before spans
+   header → prompt, so the prompt and strips must not paint their
+   own gradient/background over it. */
+.ai-chat-main.ai-assistant-bg .ai-assistant-prompt-bg {
+  background: transparent !important;
+}
+
+.ai-chat-main.ai-assistant-bg .ai-assistant-prompt-bg::before {
+  display: none !important;
+}
+
+.ai-chat-main.ai-assistant-bg .rai-panel-strip {
+  background: transparent;
+}
+
+/* AI mode: centered reading column. Content is capped at 860px
+   while the background and scrollbar still span the full width.
+   (!important beats the Bootstrap p-2 utility on the section.) */
+.ai-mode #remix-ai-chat-history,
+.ai-mode #remix-ai-prompt-area,
+.ai-mode .rai-panel-strip {
+  padding-left: max(0.5rem, calc((100% - 860px) / 2)) !important;
+  padding-right: max(0.5rem, calc((100% - 860px) / 2)) !important;
+}
+
+/* AI mode header: line "New chat" and the icons up with the input
+   box edges (column padding + the prompt box's .mx-2). */
+.ai-mode .ai-mode-heading {
+  padding-left: calc(max(0.5rem, calc((100% - 860px) / 2)) + 0.5rem) !important;
+  padding-right: calc(max(0.5rem, calc((100% - 860px) / 2)) + 0.5rem) !important;
+}
+
+/* Banners that paint their own box (auto-accept, cooldown): margins rather
+   than padding, so the box itself lines up with the input box edges. */
+.ai-mode .hitl-auto-accept-banner,
+.ai-mode [data-id="ai-cooldown-banner"] {
+  margin-left: calc(max(0.5rem, calc((100% - 860px) / 2)) + 0.5rem) !important;
+  margin-right: calc(max(0.5rem, calc((100% - 860px) / 2)) + 0.5rem) !important;
+}
+
+/* Header: codicon glyph sized/centered like its FontAwesome siblings */
+.ai-mode-exit-icon {
+  font-size: 16px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* History sidebar: full-height column on the right of the chat */
+.chat-history-sidebar-maximized {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  border-left: 1px solid var(--bs-border-color) !important;
+}
+
+/* History header actions (both modes): compact, one line */
+.chat-history-sidebar .chat-history-action {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  white-space: nowrap;
+}
+
+.chat-history-sidebar .chat-history-sidebar-header .sidebar-title {
+  font-size: 0.95rem;
+}
+
+/* --------------------------------------------------------
+   Prompt spotlight (AI mode): played once when a RemixAI icon
+   focuses the chat. A light travels one turn around the prompt
+   box border, then the box holds a soft glow that fades out.
+   Class added/removed by focusInput({ highlight: true }).
+   -------------------------------------------------------- */
+
+@property --ai-spot-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.prompt-area.ai-input-spotlight {
+  animation: ai-spot-glow 1.6s ease-out forwards;
+}
+
+/* Border-only ring (masked to a 2px band), following the box radius */
+.prompt-area.ai-input-spotlight::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--ai-spot-angle),
+    transparent 0deg,
+    transparent 250deg,
+    color-mix(in srgb, var(--custom-ai-color) 60%, transparent) 320deg,
+    var(--custom-ai-color) 352deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+  z-index: 1;
+  animation:
+    ai-spot-sweep 1s cubic-bezier(0.45, 0, 0.25, 1) forwards,
+    ai-spot-fade 0.6s ease-out 1s forwards;
+}
+
+@keyframes ai-spot-sweep {
+  from { --ai-spot-angle: 0deg; }
+  to { --ai-spot-angle: 360deg; }
+}
+
+@keyframes ai-spot-fade {
+  to { opacity: 0; }
+}
+
+@keyframes ai-spot-glow {
+  0% { box-shadow: 0 0 0 0 transparent; }
+  55% { box-shadow: 0 0 16px 1px color-mix(in srgb, var(--custom-ai-color) 40%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Reduced motion: no travelling light, just the brief glow */
+@media (prefers-reduced-motion: reduce) {
+  .prompt-area.ai-input-spotlight::before {
+    display: none;
+  }
 }

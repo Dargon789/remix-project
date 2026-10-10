@@ -7,7 +7,10 @@ import { remixAILogger,
   getBestAvailableModel,
   listModels,
   modelSupportsTools,
-  getModelById
+  getModelById,
+  findModel,
+  ANONYMOUS_FALLBACK_MODELS,
+  setModelCatalog
 } from '@remix/remix-ai-core'
 import type { AIModel } from '@remix/remix-ai-core'
 import type { IRemixAIPlugin } from './types'
@@ -21,28 +24,55 @@ export interface ModelManagerDeps {
 
 export class ModelManager {
   private deps: ModelManagerDeps
+  /** The selection in place before the current one. Target of revertToPreviousModel. */
+  private previousModel: AIModel | null = null
 
   constructor(deps: ModelManagerDeps) {
     this.deps = deps
   }
 
-  async setModel(modelId: string, allowedModels: string[] = []): Promise<void> {
+  async revertToPreviousModel(): Promise<AIModel | null> {
     const plugin = this.deps.plugin
-    // The static `getModelById` only knows the anonymous fallback list
-    // (placeholder + ollama). Real model metadata lives in the
-    // assistantState plugin, fed by /permissions.ai_models. Look it up
-    // there first; only fall back to the static helper for the bootstrap
-    // / ollama cases.
+    const currentId = plugin.selectedModelId
+
+    const candidates: (AIModel | null)[] = [this.previousModel]
+    try {
+      candidates.push(await plugin.call('assistantState' as any, 'getDefaultModel'))
+    } catch (e) {
+      remixAILogger.warn('[ModelManager] getDefaultModel failed while reverting', e)
+    }
+
+    const target = candidates.find(
+      (m): m is AIModel => !!m && !!m.id && m.id !== currentId && m.available !== false
+    )
+    if (!target) {
+      remixAILogger.warn('[ModelManager] nothing to revert to — keeping', currentId)
+      return null
+    }
+
+    remixAILogger.log(`[ModelManager] reverting ${currentId} → ${target.id}`)
+    await this.setModel(target.id, [], target.provider)
+    return target
+  }
+
+  async setModel(modelId: string, allowedModels: string[] = [], provider?: string): Promise<void> {
+    const plugin = this.deps.plugin
     let model: AIModel | undefined
     try {
       const dynamic: AIModel[] = await plugin.call('assistantState', 'getAvailableModels')
       if (Array.isArray(dynamic)) {
-        model = dynamic.find(m => m.id === modelId)
+        remixAILogger.log(`[ModelManager] catalogue: ${dynamic.length} models`)
+        // Mirror the catalogue so ModelFactory can read each model's token
+        // budget / temperature instead of falling back to provider defaults.
+        setModelCatalog(dynamic)
+        model = findModel(dynamic, modelId, provider)
+        remixAILogger.log(`[ModelManager] resolved "${modelId}" →`, model)
       }
     } catch (e) {
       remixAILogger.warn('[ModelManager] assistantState.getAvailableModels failed', e)
     }
-    if (!model) model = getModelById(modelId)
+
+    if (!model) model = findModel(ANONYMOUS_FALLBACK_MODELS, modelId, provider) ?? getModelById(modelId)
     if (!model) {
       // No silent fallback. The picker is fed by /permissions — if a
       // caller asks for a model id that isn't in any catalogue we have a
@@ -55,16 +85,21 @@ export class ModelManager {
     // Store previous model for comparison
     const previousModelId = plugin.selectedModelId
 
+    if (previousModelId && previousModelId !== modelId && plugin.selectedModel) {
+      this.previousModel = plugin.selectedModel
+    }
+
     plugin.selectedModelId = modelId
     plugin.selectedModel = model
 
     // Update inference parameters
     GenerationParams.provider = model.provider
     GenerationParams.model = modelId
-    CompletionParams.provider = model.provider
-    CompletionParams.model = modelId
     AssistantParams.provider = model.provider
     AssistantParams.model = modelId
+    // CompletionParams deliberately gets neither: inline completion targets
+    // the `/ai/completion` proxy, which pins its own FIM model server-side.
+    // Stamping the chat selection here routed completions at a chat model.
 
     // Clear thread IDs when switching models
     if (previousModelId !== modelId) {
@@ -180,7 +215,7 @@ export class ModelManager {
       throw new Error(`[ModelManager.setAssistantProvider] No available model for provider "${provider}" in /permissions ai_models. Backend must advertise at least one row for this provider.`)
     }
     const chosen = candidates.find(m => m.isDefault) ?? candidates[0]
-    await this.setModel(chosen.id)
+    await this.setModel(chosen.id, [], chosen.provider)
   }
 
   async getOllamaModels(): Promise<{ name: string; supported: boolean }[]> {

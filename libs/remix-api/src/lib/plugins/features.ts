@@ -63,6 +63,11 @@ export const AI_SONNET_4_6 = 'ai:sonnet-4.6' as const
 /** Opus 4.6 model access. */
 export const AI_OPUS_4_6 = 'ai:opus-4.6' as const
 
+/** Marks a model as belonging to the cheap/low-cost tier. Attached to models
+ *  across providers, so it doubles as the filter key for the picker's
+ *  "cheap models only" toggle. */
+export const AI_CHEAP_MODELS = 'ai:cheap_models' as const
+
 // ─── AI Provider Features ───────────────────────────────────────────────────────
 
 /** Mistral provider access. */
@@ -73,6 +78,9 @@ export const AI_PROVIDER_ANTHROPIC = 'ai:Anthropic' as const
 
 /** OpenAI provider access. */
 export const AI_PROVIDER_OPENAI = 'ai:OpenAI' as const
+
+/** AWS Bedrock provider access. */
+export const AI_PROVIDER_BEDROCK = 'ai:bedrock' as const
 
 // ─── MCP Features ───────────────────────────────────────────────────────────────
 
@@ -162,11 +170,13 @@ export const Features = {
   AI_CODESTRAL,
   AI_SONNET_4_6,
   AI_OPUS_4_6,
+  AI_CHEAP_MODELS,
 
   // AI Providers
   AI_PROVIDER_MISTRAL,
   AI_PROVIDER_ANTHROPIC,
   AI_PROVIDER_OPENAI,
+  AI_PROVIDER_BEDROCK,
 
   // MCP
   MCP_BASIC_EXTERNAL,
@@ -222,10 +232,12 @@ export const FEATURE_LABELS: Partial<Record<FeatureKey, string>> = {
   [AI_CODESTRAL]:           'Codestral',
   [AI_SONNET_4_6]:          'Claude Sonnet',
   [AI_OPUS_4_6]:            'Claude Opus',
+  [AI_CHEAP_MODELS]:        'Low-cost Models',
   // AI Providers
   [AI_PROVIDER_MISTRAL]:    'Mistral',
   [AI_PROVIDER_ANTHROPIC]:  'Anthropic',
   [AI_PROVIDER_OPENAI]:     'OpenAI',
+  [AI_PROVIDER_BEDROCK]:    'AWS Bedrock',
   // MCP
   [MCP_BASIC_EXTERNAL]:     'External MCP Integrations',
   [MCP_THEGRAPH]:           'The Graph',

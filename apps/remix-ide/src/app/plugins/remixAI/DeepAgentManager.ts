@@ -88,8 +88,9 @@ export class DeepAgentManager {
         remixAILogger.log('[RemixAI Plugin] Using user-provided API keys for DeepAgent')
       }
       const resolvedModelId = await this.resolveOllamaModelId(plugin.selectedModel.provider, plugin.selectedModelId)
-      // Don't use remote fallback for Ollama - user explicitly chose local models
-      const fallbackInferencer = plugin.selectedModel.provider === 'ollama' ? null : plugin.remoteInferencer
+      // Solcoder fallback disabled: DeepAgent errors surface to the user
+      // instead of silently retrying against the remote (solcoder) path.
+      const fallbackInferencer = null
 
       // Clean up old instance if it exists
       if (plugin.deepAgentInferencer && typeof plugin.deepAgentInferencer.cleanup === 'function') {
@@ -107,7 +108,7 @@ export class DeepAgentManager {
         },
         fallbackInferencer,
         plugin.mcpInferencer,
-        { provider: plugin.selectedModel.provider as 'anthropic' | 'mistralai' | 'openai' | 'moonshot' | 'ollama', modelId: resolvedModelId }
+        { provider: plugin.selectedModel.provider, modelId: resolvedModelId, routeProvider: plugin.selectedModel.routeProvider }
       )
 
       await plugin.deepAgentInferencer.initialize()
@@ -172,35 +173,6 @@ export class DeepAgentManager {
     return this.deps.plugin.deepAgentEnabled
   }
 
-  async setAutoMode(enabled: boolean): Promise<void> {
-    // const plugin = this.deps.plugin
-    // remixAILogger.log(`[RemixAI Plugin] ${enabled ? 'Enabling' : 'Disabling'} auto mode for DeepAgent`)
-
-    // if (plugin.deepAgentInferencer) {
-    //   plugin.deepAgentInferencer.setAutoMode(enabled)
-    //   remixAILogger.log(`[RemixAI Plugin] Auto mode ${enabled ? 'enabled' : 'disabled'} for existing DeepAgent instance`)
-    // } else {
-    //   remixAILogger.warn('[RemixAI Plugin] DeepAgent not initialized, auto mode setting will apply when initialized')
-    // }
-
-    // // Store the auto mode preference
-    // localStorage.setItem('deepagent_auto_mode', enabled ? 'true' : 'false')
-    remixAILogger.log('[RemixAI Plugin] Auto mode is disabled')
-
-  }
-
-  getAutoModeStatus(): boolean {
-    // const plugin = this.deps.plugin
-
-    // if (plugin.deepAgentInferencer) {
-    //   return plugin.deepAgentInferencer.isAutoModeEnabled()
-    // }
-
-    // // Return stored preference if DeepAgent not initialized
-    // return localStorage.getItem('deepagent_auto_mode') === 'true'
-    return false
-  }
-
   /**
    * Set DeepAgent thread for an existing conversation.
    * Uses conversationId as part of thread_id so MemorySaver restores that conversation's context.
@@ -243,7 +215,10 @@ export class DeepAgentManager {
 
   async isUsingOwnApiKey(): Promise<boolean> {
     const plugin = this.deps.plugin
-    const currentProvider = plugin.selectedModel.provider
+    // Keys belong to the transport, not the brand: a Claude row routed through
+    // OpenRouter is unlocked by the OpenRouter key, not an Anthropic one. Same
+    // resolution order ModelFactory uses.
+    const currentProvider = plugin.selectedModel.routeProvider ?? plugin.selectedModel.provider
     return this.apiKeyHelper.isUsingOwnApiKeyForProvider(currentProvider)
   }
 
@@ -283,6 +258,7 @@ export class DeepAgentManager {
   }
 
   private async doReinitialize(): Promise<void> {
+    console.log('[DeepAgentManager] doReinitialize: starting reinitialization of DeepAgentInferencer')
     const plugin = this.deps.plugin
     const hasSelectedModel = !!(plugin.selectedModel && plugin.selectedModelId)
 
@@ -308,8 +284,9 @@ export class DeepAgentManager {
           remixAILogger.log('[RemixAI Plugin] Using user-provided API keys for DeepAgent (reinitialize)')
         }
         const resolvedModelId = await this.resolveOllamaModelId(plugin.selectedModel.provider, plugin.selectedModelId)
-        // Don't use remote fallback for Ollama - user explicitly chose local models
-        const fallbackInferencer = plugin.selectedModel.provider === 'ollama' ? null : plugin.remoteInferencer
+        // Solcoder fallback disabled: DeepAgent errors surface to the user
+        // instead of silently retrying against the remote (solcoder) path.
+        const fallbackInferencer = null
 
         // Clean up old instance if it exists
         if (plugin.deepAgentInferencer && typeof plugin.deepAgentInferencer.cleanup === 'function') {
@@ -327,7 +304,7 @@ export class DeepAgentManager {
           },
           fallbackInferencer,
           plugin.mcpInferencer,
-          { provider: plugin.selectedModel.provider as 'anthropic' | 'mistralai' | 'openai' | 'moonshot' | 'ollama', modelId: resolvedModelId }
+          { provider: plugin.selectedModel.provider, modelId: resolvedModelId, routeProvider: plugin.selectedModel.routeProvider }
         )
         await plugin.deepAgentInferencer.initialize()
         plugin.deepAgentEnabled = true
@@ -357,6 +334,7 @@ export class DeepAgentManager {
         remixAILogger.log('[RemixAI Plugin] DeepAgent reinitialized successfully')
       } catch (error) {
         remixAILogger.error('[RemixAI Plugin] Failed to reinitialize DeepAgent:', error)
+        console.error('[DeepAgentManager] doReinitialize: caught error', error)
         plugin.deepAgentEnabled = false
         plugin.deepAgentInferencer = null
         ;(plugin as any).traceDeepAgentLifecycle?.('manager.reinitialize:failed', 'caught error inside DeepAgentManager.reinitialize()', {

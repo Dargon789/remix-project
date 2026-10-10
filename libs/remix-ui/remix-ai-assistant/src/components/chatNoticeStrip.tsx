@@ -65,24 +65,29 @@ const ACTION_STYLE_TO_CLASS: Record<ChatNoticeActionStyle, string> = {
 }
 
 export const ChatNoticeStrip: React.FC<ChatNoticeStripProps> = ({ notice, onDismiss, onAction }) => {
+  const showCode = !!notice.code && notice.severity !== 'info'
+
   return (
     <div
-      className={`alert mb-0 py-2 px-3 d-flex align-items-start gap-2 ${SEVERITY_TO_CLASS[notice.severity]}`}
+      className={`alert mx-2 mb-1 py-2 px-3 d-flex align-items-start gap-2 ${SEVERITY_TO_CLASS[notice.severity]}`}
       role="alert"
       data-id="ai-chat-notice"
       data-error-code={notice.code}
       style={{ borderRadius: 8, fontSize: '0.85rem' }}
     >
-      <i className={`fa-solid ${SEVERITY_TO_ICON[notice.severity]} mt-1`} aria-hidden="true" />
-      <div className="flex-grow-1">
+      <i
+        className={`fa-solid ${SEVERITY_TO_ICON[notice.severity]} flex-shrink-0`}
+        aria-hidden="true"
+        style={{ marginTop: '0.15rem', lineHeight: 1 }}
+      />
+      <div className="flex-grow-1" style={{ minWidth: 0 }}>
         <div className="fw-bold">{notice.title}</div>
-        <div className="small">{notice.message}</div>
-        {(notice.code || notice.actionable) && (
-          <div className="small text-muted mt-1">
-            {notice.code && <code>{notice.code}</code>}
-            {notice.actionable && (
-              <span className="ms-2">· You can try sending again.</span>
-            )}
+        {notice.message && <div className="small mt-1">{notice.message}</div>}
+        {(showCode || notice.actionable) && (
+          <div className="d-flex align-items-center flex-wrap gap-2 small text-muted mt-2">
+            {showCode && <code className="m-0">{notice.code}</code>}
+            {showCode && notice.actionable && <span aria-hidden="true">·</span>}
+            {notice.actionable && <span>You can try sending again.</span>}
           </div>
         )}
         {notice.actions && notice.actions.length > 0 && (
@@ -106,10 +111,11 @@ export const ChatNoticeStrip: React.FC<ChatNoticeStripProps> = ({ notice, onDism
       </div>
       <button
         type="button"
-        className="btn btn-sm btn-link text-decoration-none p-0"
+        className="btn btn-sm btn-link text-decoration-none p-0 flex-shrink-0 lh-1"
         aria-label="Dismiss"
         data-id="ai-chat-notice-dismiss"
         onClick={onDismiss}
+        style={{ marginTop: '0.1rem' }}
       >
         <i className="fa-solid fa-xmark" aria-hidden="true" />
       </button>
